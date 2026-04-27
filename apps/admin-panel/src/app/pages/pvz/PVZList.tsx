@@ -196,7 +196,23 @@ export function PVZList() {
           <option value="paused">Пауза</option>
           <option value="closed">Закрыт</option>
         </select>
-        <button onClick={() => { import('sonner').then(m => m.toast.success(`Экспортировано ПВЗ: ${filteredPVZ.length}`)); }}
+        <button onClick={() => {
+            import('../../utils/downloads').then(({ exportToCsv }) => {
+              import('sonner').then(({ toast }) => {
+                if (filteredPVZ.length === 0) { toast.info('Нет ПВЗ для экспорта'); return; }
+                exportToCsv(filteredPVZ as any[], [
+                  { key: 'code',        label: 'Код' },
+                  { key: 'name',        label: 'Название' },
+                  { key: 'city',        label: 'Город' },
+                  { key: 'address',     label: 'Адрес' },
+                  { key: 'status',      label: 'Статус' },
+                  { key: 'capacity',    label: 'Вместимость' },
+                  { key: 'currentLoad', label: 'Загрузка' },
+                ], 'pvz');
+                toast.success(`Скачан CSV: ${filteredPVZ.length} ПВЗ`);
+              });
+            });
+          }}
           className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-sm font-medium transition-colors">
           <Download className="w-4 h-4" />Экспорт
         </button>

@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { exportToCsv } from '../../utils/downloads';
 import { useState, useMemo } from 'react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -205,7 +206,19 @@ export function LogisticsDashboard() {
             <RefreshCw className="w-3.5 h-3.5" />Обновить
           </button>
           <button
-            onClick={() => toast.success('Экспорт запущен', { description: 'Отчёт по логистике формируется' })}
+            onClick={() => {
+              exportToCsv(COURIERS as any[], [
+                { key: 'id',             label: 'ID' },
+                { key: 'name',           label: 'Имя' },
+                { key: 'phone',          label: 'Телефон' },
+                { key: 'zone',           label: 'Зона' },
+                { key: 'status',         label: 'Статус' },
+                { key: 'activeOrders',   label: 'Активные заказы' },
+                { key: 'completedToday', label: 'Доставлено сегодня' },
+                { key: 'rating',         label: 'Рейтинг' },
+              ], 'couriers-logistics');
+              toast.success(`Скачан CSV: ${COURIERS.length} курьеров`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-medium transition-colors"
           >
             <Download className="w-3.5 h-3.5" />Экспорт

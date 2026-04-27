@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -440,6 +440,7 @@ export function MerchantsList() {
   const [regionFilter, setRegionFilter]       = useState<string>('all');
   const [fulfillmentFilter, setFulfillmentFilter] = useState<FulfillmentType | 'all'>('all');
   const [problemsOnly, setProblemsOnly]       = useState(false);
+  const navigate = useNavigate();
   const [showFilters, setShowFilters]         = useState(false);
   const [sortField, setSortField]             = useState<SortField>('gmv30d');
   const [sortDir, setSortDir]                 = useState<SortDir>('desc');
@@ -580,20 +581,30 @@ export function MerchantsList() {
       {/* Summary KPI Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Всего продавцов', value: String(stats.total),            sub: `${stats.active} активных`,         color: 'text-gray-900',   bg: 'bg-white',     filterType: 'all'      },
-          { label: 'GMV (30д)',       value: formatCurrency(stats.totalGmv), sub: '+12.4%',                           color: 'text-blue-700',   bg: 'bg-blue-50',   filterType: null       },
-          { label: 'Заказы (30д)',    value: formatNumber(stats.totalOrders),sub: '+8.2%',                            color: 'text-green-700',  bg: 'bg-green-50',  filterType: null       },
-          { label: 'Ср. отмены (7д)',value: `${stats.avgCancel}%`,           sub: '+0.3%',                            color: 'text-gray-900',   bg: 'bg-white',     filterType: null       },
-          { label: 'Проблемные',     value: String(stats.problems),          sub: 'высокие отмены/stock-out',         color: 'text-orange-600', bg: 'bg-orange-50', filterType: 'problems' },
+          { label: 'Всего продавцов', value: String(stats.total),            sub: `${stats.active} активных`,         color: 'text-gray-900',   bg: 'bg-white',     action: 'reset'    },
+          { label: 'GMV (30д)',       value: formatCurrency(stats.totalGmv), sub: '+12.4%',                           color: 'text-blue-700',   bg: 'bg-blue-50',   action: 'finance'  },
+          { label: 'Заказы (30д)',    value: formatNumber(stats.totalOrders),sub: '+8.2%',                            color: 'text-green-700',  bg: 'bg-green-50',  action: 'orders'   },
+          { label: 'Ср. отмены (7д)', value: `${stats.avgCancel}%`,          sub: '+0.3%',                            color: 'text-gray-900',   bg: 'bg-white',     action: 'refunds'  },
+          { label: 'Проблемные',      value: String(stats.problems),         sub: 'высокие отмены/stock-out',         color: 'text-orange-600', bg: 'bg-orange-50', action: 'problems' },
         ].map(stat => (
           <button
             key={stat.label}
             onClick={() => {
-              if (stat.filterType === 'problems') setProblemsOnly(v => !v);
-              else if (stat.filterType === null) toast?.info ? toast.info(stat.label, { description: stat.sub }) : undefined;
+              switch (stat.action) {
+                case 'reset':
+                  // Visible: clears all filters, list snaps to full set.
+                  setCategoryTab('all'); setStatusFilter('all'); setTypeFilter('all');
+                  setSearchQuery(''); setRiskFilter('all'); setRegionFilter('all');
+                  setFulfillmentFilter('all'); setProblemsOnly(false);
+                  break;
+                case 'finance':  navigate('/finance');          break;
+                case 'orders':   navigate('/orders');           break;
+                case 'refunds':  navigate('/finance/refunds');  break;
+                case 'problems': setProblemsOnly(v => !v);      break;
+              }
             }}
             className={`${stat.bg} p-3 rounded-xl border transition-all text-left hover:shadow-md active:scale-[0.97] cursor-pointer ${
-              stat.filterType === 'problems' && problemsOnly ? 'border-orange-400 ring-2 ring-orange-200 ring-offset-1' : 'border-gray-200 hover:border-gray-300'
+              stat.action === 'problems' && problemsOnly ? 'border-orange-400 ring-2 ring-orange-200 ring-offset-1' : 'border-gray-200 hover:border-gray-300'
             }`}
           >
             <p className="text-xs text-gray-500 mb-1">{stat.label}</p>

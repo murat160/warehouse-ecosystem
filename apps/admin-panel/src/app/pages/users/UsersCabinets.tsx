@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { exportToCsv } from '../../utils/downloads';
 import {
   Layers, Search, X, Check, Pencil as Edit2, Shield, ChevronDown, Download,
   Globe, CheckCircle2, AlertTriangle, MapPin,
@@ -210,7 +211,19 @@ export function UsersCabinets() {
           <h1 className="text-2xl font-black text-gray-900">Кабинеты и доступ</h1>
           <p className="text-sm text-gray-500 mt-0.5">Управление Scope и разделами личных кабинетов · {users.length} пользователей</p>
         </div>
-        <button onClick={() => { import('sonner').then(m => m.toast.success(`Экспортировано кабинетов: ${users.length}`)); }}
+        <button onClick={() => {
+            if (filtered.length === 0) { toast.info('Нет кабинетов для экспорта'); return; }
+            exportToCsv(filtered as any[], [
+              { key: 'id',         label: 'ID' },
+              { key: 'name',       label: 'Имя' },
+              { key: 'email',      label: 'Email' },
+              { key: 'role',       label: 'Роль' },
+              { key: 'scopeType',  label: 'Scope' },
+              { key: 'scopeValue', label: 'Объект' },
+              { key: 'cabinetModules', label: 'Кастомный набор' },
+            ], 'cabinets');
+            toast.success(`Скачан CSV: ${filtered.length} кабинетов`);
+          }}
           className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
           <Download className="w-4 h-4" />Экспорт
         </button>

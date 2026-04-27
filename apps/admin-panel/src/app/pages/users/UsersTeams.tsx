@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { exportToCsv } from '../../utils/downloads';
 import {
   Building2, Users, Plus, Search, X, Check, Pencil as Edit2, ChevronDown,
   ChevronRight, UserCheck, UserMinus, Briefcase, MapPin, Clock,
@@ -295,7 +296,17 @@ export function UsersTeams() {
           <p className="text-sm text-gray-500 mt-0.5">Организационная структура · {totalStats.totalDepts} отделов · {totalStats.totalMembers} сотрудников</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { import('sonner').then(m => m.toast.success(`Экспорт ${totalStats.totalDepts} отделов`)); }}
+          <button onClick={() => {
+              if (filteredDepts.length === 0) { toast.info('Нет отделов для экспорта'); return; }
+              exportToCsv(filteredDepts as any[], [
+                { key: 'id',          label: 'ID' },
+                { key: 'name',        label: 'Название' },
+                { key: 'description', label: 'Описание' },
+                { key: 'memberCount', label: 'Сотрудников' },
+                { key: 'managerId',   label: 'Руководитель' },
+              ], 'departments');
+              toast.success(`Скачан CSV: ${filteredDepts.length} отделов`);
+            }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />Экспорт
           </button>

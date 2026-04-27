@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { exportToCsv } from '../../utils/downloads';
 import { Search, Download, Eye, AlertCircle, Clock, Package, Truck, MapPin, ShoppingBag } from 'lucide-react';
 import {
   ORDERS,
@@ -100,7 +101,19 @@ export function OrdersList() {
             ))}
           </select>
           <button
-            onClick={() => toast.success('Экспорт запущен', { description: `${filteredOrders.length} заказов в CSV` })}
+            onClick={() => {
+              if (filteredOrders.length === 0) { toast.info('Нет заказов для экспорта'); return; }
+              exportToCsv(filteredOrders as any[], [
+                { key: 'id',            label: 'ID' },
+                { key: 'customerName',  label: 'Клиент' },
+                { key: 'customerPhone', label: 'Телефон' },
+                { key: 'merchant',      label: 'Продавец' },
+                { key: 'status',        label: 'Статус' },
+                { key: 'total',         label: 'Сумма' },
+                { key: 'createdAt',     label: 'Создан' },
+              ], 'orders');
+              toast.success(`Скачан CSV: ${filteredOrders.length} заказов`);
+            }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Download className="w-5 h-5" />
