@@ -185,14 +185,36 @@ export function OrdersReport() {
               </button>
             ))}
           </div>
-          <button onClick={() => { import('sonner').then(m => m.toast.success('Экспорт XLS запущен')); }}
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
-            <Download className="w-3.5 h-3.5" />XLS
-          </button>
-          <button onClick={() => { import('sonner').then(m => m.toast.success('Экспорт PDF запущен')); }}
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
-            <FileText className="w-3.5 h-3.5" />PDF
-          </button>
+          {([
+            { kind: 'xls' as const, icon: Download,  label: 'XLS' },
+            { kind: 'pdf' as const, icon: FileText,  label: 'PDF' },
+          ]).map(({ kind, icon: Icon, label }) => (
+            <button
+              key={kind}
+              onClick={() => {
+                const rows = [
+                  { metric: 'Период',          value: period },
+                  { metric: 'Всего заказов',   value: String(totals.orders) },
+                  { metric: 'Доставлено',      value: String(totals.delivered) },
+                  { metric: 'Отменено',        value: String(totals.cancelled) },
+                  { metric: 'Возвраты',        value: String(totals.refunds) },
+                  { metric: 'Delivery rate %', value: String(deliveryRate) },
+                  { metric: 'Cancel rate %',   value: String(cancelRate) },
+                  { metric: 'Refund rate %',   value: String(refundRate) },
+                ];
+                const csv = '﻿Метрика;Значение\n' + rows.map(r => `"${r.metric}";"${r.value}"`).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `orders-report-${period}-${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+                import('sonner').then(m => m.toast.success(`Скачан CSV (метка ${label})`));
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
+              <Icon className="w-3.5 h-3.5" />{label}
+            </button>
+          ))}
         </div>
       </div>
 

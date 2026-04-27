@@ -497,11 +497,45 @@ export function PromotionsPage() {
           <p className="text-sm text-gray-500 mt-0.5">Управление рекламными кампаниями мерчантов и ПВЗ · Согласование и аудит</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { import('sonner').then(m => m.toast.success('Экспорт кампаний в CSV запущен')); }}
+          <button
+            onClick={() => {
+              if (filtered.length === 0) { showToast('Нет кампаний для экспорта'); return; }
+              const header = '"ID";"Партнёр";"Тип партнёра";"Тип акции";"Название";"Бюджет";"Статус";"Создана";"Кем создана"';
+              const body = filtered.map(p => [
+                p.id, p.partnerName, p.partnerType, p.type, p.title, p.budget, p.status, p.createdAt, p.createdByName,
+              ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
+              const csv = '﻿' + header + '\n' + body;
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `promotions-${new Date().toISOString().slice(0,10)}.csv`;
+              document.body.appendChild(a); a.click(); a.remove();
+              URL.revokeObjectURL(url);
+              showToast(`Скачан CSV: ${filtered.length} кампаний`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
             <Download className="w-3.5 h-3.5" />Экспорт
           </button>
-          <button onClick={() => { import('sonner').then(m => m.toast.info('Новая кампания', { description: 'Откроется форма создания акции' })); }}
+          <button
+            onClick={() => {
+              const title = window.prompt('Название кампании');
+              if (!title || !title.trim()) return;
+              const budgetStr = window.prompt('Бюджет (₽)', '50000');
+              const budget = parseInt(budgetStr ?? '0', 10);
+              if (!Number.isFinite(budget) || budget <= 0) { showToast('❌ Некорректный бюджет'); return; }
+              const now = new Date().toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+              setPromos(prev => [{
+                id: `PROMO-${Date.now()}`,
+                partnerName: 'Текущий пользователь', partnerType: 'merchant', partnerId: 'me',
+                type: 'banner', title: title.trim(), description: '',
+                productName: title.trim(), budget,
+                status: 'pending',
+                createdByName: 'Администратор Системы', createdByRole: 'Руководитель маркетинга', createdAt: now,
+                impressions: 0, clicks: 0, ctr: 0,
+                auditTrail: [{ action: 'Заявка создана', actor: 'Администратор Системы', actorRole: 'Руководитель маркетинга', at: now }],
+              } as Promotion, ...prev]);
+              showToast(`Кампания «${title.trim()}» создана. Статус: На проверке`);
+            }}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
             <Plus className="w-4 h-4" />Новая кампания
           </button>
@@ -712,7 +746,11 @@ export function PromotionsPage() {
                           </>
                         )}
                         {p.status === 'active' && (
-                          <button onClick={() => { import('sonner').then(m => m.toast.success(`Кампания «${p.title}» приостановлена`)); }}
+                          <button onClick={() => {
+                            const now = new Date().toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+                            setPromos(prev => prev.map(x => x.id === p.id ? { ...x, status: 'paused' as PromoStatus, auditTrail: [...x.auditTrail, { action: 'Приостановлено', actor: 'Администратор Системы', actorRole: 'Руководитель маркетинга', at: now }] } : x));
+                            showToast(`Кампания «${p.title}» приостановлена`);
+                          }}
                             className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors" title="Приостановить">
                             <Clock className="w-3.5 h-3.5" />
                           </button>

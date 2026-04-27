@@ -1597,6 +1597,7 @@ function ChatWindow({
 
   const [text, setText] = useState('');
   const [isNoteMode, setIsNoteMode] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
   const [showQuick, setShowQuick] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const [showPriority, setShowPriority] = useState(false);
@@ -1625,9 +1626,13 @@ function ChatWindow({
   }, [conv.messages, conv.orderRef]);
 
   function handleSend() {
-    if (!text.trim() || !perms.canReply) return;
-    onSend(text.trim(), isNoteMode);
+    if ((!text.trim() && !pendingAttachment) || !perms.canReply) return;
+    const finalText = pendingAttachment
+      ? `${text.trim()}${text.trim() ? '\n' : ''}📎 ${pendingAttachment}`
+      : text.trim();
+    onSend(finalText, isNoteMode);
     setText('');
+    setPendingAttachment(null);
     setShowQuick(false);
   }
 
@@ -1895,6 +1900,14 @@ function ChatWindow({
                 <button onClick={() => setIsNoteMode(false)} className="p-0.5 hover:bg-amber-200 rounded text-amber-600"><X className="w-3.5 h-3.5" /></button>
               </div>
             )}
+            {/* Pending attachment chip */}
+            {pendingAttachment && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl">
+                <Paperclip className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <p className="text-xs text-blue-800 font-medium flex-1 truncate">📎 {pendingAttachment}</p>
+                <button onClick={() => setPendingAttachment(null)} className="p-0.5 hover:bg-blue-200 rounded text-blue-600"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
             <div className="flex items-end gap-2">
               <div className={`flex-1 border rounded-2xl px-4 py-2.5 focus-within:ring-2 transition-all ${
                 isNoteMode
@@ -1911,10 +1924,25 @@ function ChatWindow({
                     className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors">
                     <ZapIcon className="w-3.5 h-3.5" />Шаблоны
                   </button>
-                  <button onClick={() => { import('sonner').then(m => m.toast.info('Прикрепить файл', { description: 'Поддерживаются PNG/JPG/PDF до 10 MB' })); }}
-                    className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition-colors" title="Прикрепить файл">
+                  <label className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition-colors cursor-pointer flex items-center" title="Прикрепить файл">
                     <Paperclip className="w-3.5 h-3.5" />
-                  </button>
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.pdf"
+                      className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (f.size > 10 * 1024 * 1024) {
+                          import('sonner').then(m => m.toast.error('Файл больше 10 MB'));
+                        } else {
+                          setPendingAttachment(f.name);
+                          import('sonner').then(m => m.toast.success(`Прикреплён: ${f.name}`, { description: 'Будет отправлен со следующим сообщением' }));
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
                   {/* Internal note toggle */}
                   <button onClick={() => setIsNoteMode(p => !p)}
                     title={isNoteMode ? 'Обычное сообщение' : 'Добавить внутреннюю заметку'}

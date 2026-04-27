@@ -243,9 +243,25 @@ export function Analytics() {
           </div>
           <button
             onClick={() => {
-              import('sonner').then(m => m.toast.info('Экспорт отчёта', {
-                description: 'Готовится PDF/Excel выгрузка по выбранному периоду…',
-              }));
+              const rangeLabel = ranges.find(r => r.id === range)?.label ?? range;
+              const rows = [
+                { metric: 'Период',     value: rangeLabel },
+                { metric: 'Заказов',    value: String(kpis.orders) },
+                { metric: 'GMV',        value: String(kpis.gmv) },
+                { metric: 'Доставлено', value: String(kpis.delivered) },
+                { metric: 'Возвратов',  value: String(kpis.returns) },
+                { metric: 'On-Time SLA %', value: String(kpis.avgOnTime) },
+                { metric: 'Return Rate %', value: String(kpis.returnRate) },
+              ];
+              const header = 'Метрика;Значение';
+              const csv = '﻿' + header + '\n' + rows.map(r => `"${r.metric}";"${r.value}"`).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `analytics-${range}-${new Date().toISOString().slice(0,10)}.csv`;
+              document.body.appendChild(a); a.click(); a.remove();
+              URL.revokeObjectURL(url);
+              import('sonner').then(m => m.toast.success(`Отчёт скачан: analytics-${range}.csv`));
             }}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-medium transition-colors">
             <Download className="w-3.5 h-3.5" />Экспорт

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard, MapPin, Package, Bike, Warehouse, Store,
   DollarSign, MessageSquare, BarChart3, Settings, Shield, Route, Users,
@@ -268,9 +268,9 @@ function SupportWidget() {
   return (
     <div className="space-y-2">
       {tickets.map(t => (
-        <div key={t.id}
-          onClick={() => { import('sonner').then(m => m.toast.info(`Тикет ${t.id}`, { description: t.title })); }}
-          role="button" tabIndex={0}
+        <Link
+          key={t.id}
+          to={`/support/tickets/${t.id}`}
           className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer">
           <span className="text-xs font-mono text-gray-400 w-16 shrink-0">{t.id}</span>
           <p className="text-sm text-gray-700 flex-1 truncate">{t.title}</p>
@@ -278,7 +278,7 @@ function SupportWidget() {
             {plbl[t.priority as keyof typeof plbl]}
           </span>
           <span className="text-xs text-gray-400 shrink-0">{t.time}</span>
-        </div>
+        </Link>
       ))}
     </div>
   );
@@ -732,6 +732,8 @@ export function PersonalCabinet({ previewRole, previewName, previewModules, scop
   const { user } = useAuth();
   const [tab, setTab] = useState<'home' | 'access' | 'inbox'>('home');
   const [notifCount, setNotifCount] = useState(() => unreadCount());
+  const [widgetKey, setWidgetKey] = useState(0);
+  const [widgetRefreshedAt, setWidgetRefreshedAt] = useState<Date | null>(null);
 
   // Reactive: re-count unread when store changes
   useEffect(() => {
@@ -858,12 +860,18 @@ export function PersonalCabinet({ previewRole, previewName, previewModules, scop
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">{WIDGET_TITLE[role] ?? 'Активность'}</h2>
-              <button onClick={() => { import('sonner').then(m => m.toast.success('Виджет обновлён')); }}
+              <button
+                onClick={() => {
+                  setWidgetKey(k => k + 1);
+                  const t = new Date();
+                  setWidgetRefreshedAt(t);
+                  import('sonner').then(m => m.toast.success('Виджет обновлён', { description: `Перерисовано в ${t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` }));
+                }}
                 className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors">
-                <RefreshCw className="w-3.5 h-3.5" />Обновить
+                <RefreshCw className="w-3.5 h-3.5" />Обновить{widgetRefreshedAt && <span className="text-[10px] text-gray-400 ml-1">{widgetRefreshedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>}
               </button>
             </div>
-            <div className="p-5">
+            <div className="p-5" key={widgetKey}>
               <RoleWidget role={role} />
             </div>
           </div>
