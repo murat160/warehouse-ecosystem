@@ -37,6 +37,8 @@ import { ApprovalCenter } from "./pages/approvals/ApprovalCenter";
 import { UsersInvitations } from "./pages/users/UsersInvitations";
 import { UsersTeams } from "./pages/users/UsersTeams";
 import { UsersCabinets } from "./pages/users/UsersCabinets";
+import { IncidentsList } from "./pages/safety/IncidentsList";
+import { DevicesList } from "./pages/devices/DevicesList";
 
 // basename "/admin" so the SPA works behind nginx at https://<host>/admin/
 export const router = createBrowserRouter([
@@ -81,6 +83,9 @@ export const router = createBrowserRouter([
       { path: "analytics", Component: Analytics },
       { path: "settings", Component: Settings },
       { path: "system/architecture", Component: ArchitecturePage },
+      // Stage-4 additions: physical warehouse safety + device management
+      { path: "safety", Component: IncidentsList },
+      { path: "devices", Component: DevicesList },
     ],
   },
 ], {
