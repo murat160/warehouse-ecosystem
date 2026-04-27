@@ -1,5 +1,5 @@
 // ============================================================
-//  Seller Portal — Stage 1+2 scaffold.
+//  Seller App — Stage 1+2 scaffold.
 //  Working: real login → API /auth/login → /kpi/dashboard.
 //  Stage 4 will add full CRUD pages (users, warehouses, etc.).
 // ============================================================
@@ -48,7 +48,7 @@ export function App() {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <form onSubmit={handleLogin} className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-8 space-y-4">
-          <h1 className="text-2xl font-bold">WMS Seller Portal</h1>
+          <h1 className="text-2xl font-bold">WMS Seller App</h1>
           <p className="text-sm text-slate-500">Войдите в систему для управления складом.</p>
           <input
             className="w-full border rounded-lg px-3 py-2"
@@ -78,7 +78,7 @@ export function App() {
     <div className="min-h-screen p-6 max-w-6xl mx-auto">
       <header className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold">WMS Seller Portal</h1>
+          <h1 className="text-2xl font-bold">WMS Seller App</h1>
           <p className="text-sm text-slate-500">{user.fullName} · {user.employeeId}</p>
         </div>
         <button onClick={handleLogout} className="text-sm text-slate-600 hover:underline">Выйти</button>

@@ -1,27 +1,40 @@
-# Warehouse Management System (WMS) — Ecosystem
+# Warehouse + Marketplace Ecosystem
 
-Профессиональная WMS для маркетплейса одежды. Монорепо: один backend + 5 связанных frontend-приложений + общие пакеты + deploy-инфраструктура.
+Профессиональная WMS-экосистема: один backend + **7 frontend-приложений** + общие пакеты + deploy-инфраструктура.
+
+Архитектура и правила зафиксированы в [`docs/`](./docs/):
+[ARCHITECTURE](./docs/ARCHITECTURE.md) ·
+[APPS](./docs/APPS.md) ·
+[PARTNER_API](./docs/PARTNER_API.md) ·
+[DEPLOYMENT](./docs/DEPLOYMENT.md) ·
+[DEVELOPMENT_RULES](./docs/DEVELOPMENT_RULES.md)
 
 ```
 warehouse-ecosystem/
-├── apps/
-│   ├── staff-app/           # Сотрудники склада (picking, packing, qc, ...)
-│   ├── admin-panel/         # Админ: управление всем
-│   ├── supervisor-panel/    # Старший смены
-│   ├── seller-portal/       # Продавцы (товары, ASN, returns)
-│   └── courier-dispatch/    # Логистика, выдача курьерам
 ├── backend/
-│   └── api/                 # Fastify + Prisma + SQLite (готов к PostgreSQL)
+│   └── api/                 # Fastify + Prisma + SQLite (готов к PostgreSQL) — единый центр
+├── apps/
+│   ├── admin-panel/         # /admin/      — управление всей системой
+│   ├── customer-app/        # /customer/   — покупатель (mobile-ready)
+│   ├── seller-app/          # /seller/     — продавец / сетевой магазин
+│   ├── courier-app/         # /courier/    — курьер (mobile-ready)
+│   ├── staff-app/           # /staff/      — сотрудник склада
+│   ├── pickup-point-app/    # /pickup/     — оператор ПВЗ
+│   └── supervisor-panel/    # /supervisor/ — старший смены
 ├── packages/
-│   ├── shared-types/        # TS-типы + API client
-│   ├── ui/                  # Общие UI-компоненты (Stage 3+)
-│   └── warehouse-core/      # State machines, генераторы кодов
-├── deploy/                  # Docker / nginx / deploy.sh
+│   ├── shared-types/        # TS DTOs + enums shared across apps
+│   ├── api-client/          # JWT-aware fetch client (relative /api only)
+│   ├── ui/                  # design primitives (Stage 5+)
+│   └── warehouse-core/      # state machines, code generators
+├── docs/                    # архитектура и правила
+├── deploy/                  # nginx / Dockerfile / deploy.sh
 ├── .github/workflows/       # GH Actions auto-deploy
 ├── package.json             # npm workspaces
-├── README.md                # этот файл
 └── README_DEPLOY.md         # пошаговый деплой на Hostinger VPS
 ```
+
+Большие сетевые магазины (BIM-style) подключаются **не дубликатом
+seller-app**, а через [Partner API](./docs/PARTNER_API.md).
 
 ## Стэк
 

@@ -30,6 +30,7 @@ import { hardwareRoutes } from './modules/hardware/routes.js';
 import { kpiRoutes } from './modules/kpi/routes.js';
 import { supervisorRoutes } from './modules/supervisor/routes.js';
 import { scansRoutes } from './modules/scans/routes.js';
+import { partnerRoutes } from './modules/partner/routes.js';
 
 async function buildServer() {
   const app = Fastify({
@@ -70,6 +71,7 @@ async function buildServer() {
     await api.register(kpiRoutes,           { prefix: '/kpi' });
     await api.register(supervisorRoutes,    { prefix: '/supervisor' });
     await api.register(scansRoutes,         { prefix: '/scans' });
+    await api.register(partnerRoutes,       { prefix: '/partner' });
   }, { prefix: '/api' });
 
   return app;

@@ -107,12 +107,14 @@ build_app() {
   c_log "Building $pkg with base=$base…"
   ( cd "apps/$pkg" && VITE_BASE="$base" npx vite build --base="$base" )
 }
-build_app staff-app        /staff/
 build_app admin-panel      /admin/
+build_app staff-app        /staff/
 build_app supervisor-panel /supervisor/
-build_app seller-portal    /seller/
-build_app courier-dispatch /courier/
-c_ok "All frontends built"
+build_app seller-app       /seller/
+build_app courier-app      /courier/
+build_app customer-app     /customer/
+build_app pickup-point-app /pickup/
+c_ok "All 7 frontends built"
 
 # ---------- Start / restart API via pm2 ----------
 c_log "(Re)starting API with pm2…"
