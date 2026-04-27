@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react';
 import { MapPin, Package, Bike, Clock, AlertTriangle, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChartWrapper } from '../components/ui/ChartWrapper';
-import { kpiApi } from '../lib/api';
 
-// Mock fallback values used when the backend is unreachable.
-// Design rule: KPI cards must always render; no broken numbers.
-const fallbackKpi = [
-  { label: 'Активные заказы', value: '2,847', change: '+12%', trend: 'up' as const, icon: Package, color: 'blue',   href: '/orders' },
-  { label: 'Просрочки SLA',   value: '23',    change: '-8%',  trend: 'down' as const, icon: AlertTriangle, color: 'red',    href: '/orders' },
-  { label: 'ПВЗ онлайн',     value: '156/162',change: '96%',  trend: 'up' as const, icon: MapPin, color: 'green',  href: '/pvz' },
-  { label: 'Курьеры в работе',value: '342/450',change: '76%',  trend: 'up' as const, icon: Bike, color: 'purple', href: '/couriers' },
+const kpiData = [
+  { label: 'Активные заказы', value: '2,847', change: '+12%', trend: 'up', icon: Package, color: 'blue',   href: '/orders' },
+  { label: 'Просрочки SLA',   value: '23',    change: '-8%',  trend: 'down', icon: AlertTriangle, color: 'red',    href: '/orders' },
+  { label: 'ПВЗ онлайн',     value: '156/162',change: '96%',  trend: 'up', icon: MapPin, color: 'green',  href: '/pvz' },
+  { label: 'Курьеры в работе',value: '342/450',change: '76%',  trend: 'up', icon: Bike, color: 'purple', href: '/couriers' },
 ];
 
 const hourlyData = [
@@ -51,21 +47,6 @@ const urgentActions = [
 
 export function Dashboard() {
   const navigate = useNavigate();
-
-  // Live KPI from /api/kpi/dashboard. On any error we silently fall back to
-  // the mock numbers so the page still renders.
-  const [kpiData, setKpiData] = useState(fallbackKpi);
-  useEffect(() => {
-    kpiApi.dashboard().then(remote => {
-      if (!remote) return; // keep mock fallback
-      setKpiData([
-        { label: 'Заказов всего',  value: String(remote.orders),                change: '',  trend: 'up' as const, icon: Package, color: 'blue',   href: '/orders' },
-        { label: 'Открытых задач', value: String(remote.openTasks),             change: '',  trend: 'up' as const, icon: Clock,   color: 'red',    href: '/orders' },
-        { label: 'Открытых проблем',value: String(remote.problems),             change: '',  trend: 'down' as const, icon: AlertTriangle, color: 'green',  href: '/approvals' },
-        { label: 'Готово к отправке',value: String(remote.ordersReadyForDispatch), change: '', trend: 'up' as const, icon: Bike,   color: 'purple', href: '/couriers' },
-      ]);
-    });
-  }, []);
 
   return (
     <div className="space-y-6">

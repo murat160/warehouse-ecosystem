@@ -1020,31 +1020,7 @@ export function UsersList() {
             <p className="text-sm text-gray-400 mt-0.5">Управление доступом и личными кабинетами · {stats.total} сотрудников</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                // Frontend CSV export of currently filtered users.
-                const rows = filtered;
-                if (rows.length === 0) {
-                  toast.info('Нет пользователей для экспорта');
-                  return;
-                }
-                const headers = ['ID', 'Email', 'Имя', 'Роль', 'Статус', 'Отдел', 'Последний вход'];
-                const csv = [
-                  headers.join(','),
-                  ...rows.map(u => [
-                    u.id, u.email, u.name, u.role, u.status, (u as any).department ?? '', (u as any).lastLogin ?? '',
-                  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')),
-                ].join('\n');
-                const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
-                document.body.appendChild(a); a.click(); a.remove();
-                URL.revokeObjectURL(url);
-                toast.success(`Экспортировано: ${rows.length} пользователей`);
-              }}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               <Download className="w-4 h-4" />Экспорт
             </button>
             <button onClick={() => setAddEditModal({ mode: 'add' })}
