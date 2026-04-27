@@ -1,12 +1,12 @@
 /**
  * Typed API client for Staff App.
- * Wraps the shared @wms/shared-types/api-client and exposes a method per
- * backend endpoint that Staff App actually uses.
+ * Wraps the shared @wms/api-client and exposes one method per backend
+ * endpoint that Staff App actually uses.
  *
  * Stage-3 contract: every store mutation goes through here.
  */
 
-import { createApiClient } from '@wms/shared-types/api-client';
+import { createApiClient } from '@wms/api-client';
 
 export const api = createApiClient();
 

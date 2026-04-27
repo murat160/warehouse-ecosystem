@@ -81,17 +81,42 @@ reassignment, KPI per worker, escalation up to Admin Panel.
 
 ## 5. seller-app
 
-Two operating modes — **same app**:
+**One app — five operating modes.** The mode is detected from the
+merchant record in the backend; the UI flips capabilities accordingly.
 
-**Mode A — small seller / single store.** Manages own products,
-inventory, prices, ASN/shipments, orders, returns, support.
+| Mode | Audience                                  | What's shown                                        |
+|------|-------------------------------------------|-----------------------------------------------------|
+|  A   | Маленький магазин (one stall, one owner)  | products, inventory, orders, returns                |
+|  B   | Обычный продавец (single legal entity)    | + ASN/shipments, prices, documents, QC issues       |
+|  C   | Большая сеть магазинов                    | + organization, branches, branch employees, reports |
+|  D   | Сеть со своими складами                   | + own warehouses, branch-level inventory routing    |
+|  E   | Сеть со своим приложением / ERP           | + Partner API keys panel, webhooks, sync status     |
 
-**Mode B — chain HQ.** Manages a `MerchantOrganization` with multiple
-`MerchantBranch` rows (each is a store/warehouse), with branch-level
-inventory and order routing.
+The data model that powers modes C–E (added in Stage 6+):
 
-Big chains that already have their own ERP / mobile app **don't fork
-this app**. They plug into the platform via the [Partner API](./PARTNER_API.md).
+| Entity                  | Purpose                                                |
+|-------------------------|--------------------------------------------------------|
+| `MerchantOrganization`  | top-level merchant; holds tax data, billing email      |
+| `MerchantBranch`        | one row per store; address, lat/lng, externalId        |
+| `MerchantWarehouse`     | own warehouse owned by the merchant (mode D/E)         |
+| `MerchantIntegration`   | mode-E config: ERP type, sync schedule, last status    |
+| `PartnerApiKey`         | hashed API key, scopes, lastUsedAt, revokedAt          |
+| `PartnerWebhook`        | event, url, secret, retryPolicy                        |
+| `BranchInventory`       | branchId, skuId, qty, reserved, updatedAt              |
+| `BranchOrderRouting`    | rules: which branch fulfils which delivery zone        |
+
+Big chains (BIM, Biedronka, Пятёрочка, supermarket networks) that
+already run their own ERP / mobile app **don't fork this app and don't
+get a copy**. They use Mode E:
+
+1. Super Admin issues a `PartnerApiKey` for their `MerchantOrganization`.
+2. The chain's existing ERP calls `/api/partner/*` to sync products,
+   inventory, branches.
+3. Inbound order events are pushed to the chain's webhook URL.
+4. The chain's seller-app login still works for human operators in
+   parallel — both surfaces see the same DB rows.
+
+Full integrator contract: [Partner API](./PARTNER_API.md).
 
 ---
 

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@wms/shared-types": "*",
+    "@wms/api-client": "*",
     "clsx": "^2.1.1",
     "input-otp": "^1.4.2",
     "jsqr": "^1.4.0",

@@ -5,7 +5,7 @@
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import { createApiClient } from '@wms/shared-types/api-client';
+import { createApiClient } from '@wms/api-client';
 
 const api = createApiClient();
 

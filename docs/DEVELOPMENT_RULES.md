@@ -94,6 +94,37 @@ Required actions to log:
 - Manual inventory adjustment requires Admin/Supervisor and writes
   audit log with `reason`.
 
+## 7.1 Numbered ground rules (the canonical list)
+
+Stated explicitly so they can be cited verbatim in code review:
+
+1.  **Don't mix apps.** Each app has one purpose, one path, one team-of-one.
+2.  **Don't duplicate apps.** No `seller-app-bim`, no fork-per-customer.
+3.  **Seller App supports modes A–E** (see [APPS.md §5](./APPS.md)) —
+    small seller and large chain in one codebase.
+4.  **Big chains plug in via Partner API**, not via a copied app.
+5.  **One backend / one DB / one API.** All apps go through it.
+6.  **Single VPS / single IP**, traffic split by URL path in nginx.
+7.  **Subdomains later** are a nginx-only change. App code doesn't move.
+8.  **Code is for the next maintainer.** Plain TS, predictable layout, no
+    cleverness without a comment that explains why.
+9.  **Every app has a README** pointing at `/docs`.
+10. **Shared code lives in `packages/`** — `shared-types`, `api-client`,
+    `ui`, `warehouse-core`. App-only code stays in the app.
+11. **`package@version` imports are forbidden.** Static (`from 'sonner@2.0.3'`)
+    and dynamic (`import('sonner@2.0.3')`) alike. CI greps for both.
+12. **`localhost` and `127.0.0.1` are forbidden in `apps/*/src`.** Vite's
+    dev-only proxy target may live in `vite.config.ts`; that's the single
+    legitimate exception.
+13. **`/api/api` is a bug.** All client calls are relative `/api/...`.
+14. **All changes ship via GitHub.** No manual file copy to the VPS, no
+    "I'll edit it on the server real quick", no SSH-only fixes.
+15. **The VPS only pulls.** `./deploy/deploy.sh` runs `git reset --hard
+    origin/main` + build + reload. If a change isn't in `origin/main`,
+    it doesn't exist.
+
+---
+
 ## 8. Static checks before every commit
 
 ```bash
