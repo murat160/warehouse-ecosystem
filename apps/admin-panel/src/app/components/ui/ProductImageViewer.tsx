@@ -228,7 +228,18 @@ function Lightbox({
           <button onClick={resetTransform} className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 hover:text-white transition-colors" title="Сбросить">
             <RotateCcw className="w-4 h-4" />
           </button>
-          <button onClick={() => {}} className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 hover:text-white transition-colors" title="Скачать">
+          <button
+            onClick={() => {
+              // Trigger browser download of the currently displayed image.
+              if (!img?.url) return;
+              const a = document.createElement('a');
+              a.href = img.url;
+              a.download = (img.label ?? img.id ?? 'product-image').replace(/\s+/g, '-');
+              a.target = '_blank';
+              a.rel = 'noopener';
+              document.body.appendChild(a); a.click(); a.remove();
+            }}
+            className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 hover:text-white transition-colors" title="Скачать">
             <Download className="w-4 h-4" />
           </button>
           <button onClick={onClose} className="p-2 hover:bg-red-900/40 rounded-xl text-gray-400 hover:text-red-400 transition-colors">
