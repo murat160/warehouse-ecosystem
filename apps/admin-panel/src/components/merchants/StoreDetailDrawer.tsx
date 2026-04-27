@@ -890,17 +890,17 @@ function StoreDiscountsPanel({ store }: { store: SellerStore }) {
     setDiscounts(prev => [...prev, nd]);
     setShowAdd(false);
     setForm({ title: '', type: 'percentage', value: '', minOrder: '', endDate: '', promoCode: '', reason: '' });
-    import('sonner@2.0.3').then(m => m.toast.success(`Скидка добавлена: ${nd.title}`, { description: 'Отправлено на согласование суперадмину' })).catch(() => {});
+    import('sonner').then(m => m.toast.success(`Скидка добавлена: ${nd.title}`, { description: 'Отправлено на согласование суперадмину' })).catch(() => {});
   };
 
   const handleToggle = (id: string, isPause: boolean) => {
     setDiscounts(prev => prev.map(d => d.id === id ? { ...d, status: isPause ? 'paused' : 'active', updatedBy: 'Администратор Системы' } : d));
-    import('sonner@2.0.3').then(m => m.toast.success(isPause ? 'Скидка приостановлена' : 'Скидка возобновлена')).catch(() => {});
+    import('sonner').then(m => m.toast.success(isPause ? 'Скидка приостановлена' : 'Скидка возобновлена')).catch(() => {});
   };
 
   const handleDelete = (id: string) => {
     setDiscounts(prev => prev.filter(d => d.id !== id));
-    import('sonner@2.0.3').then(m => m.toast.success('Скидка удалена из магазина')).catch(() => {});
+    import('sonner').then(m => m.toast.success('Скидка удалена из магазина')).catch(() => {});
   };
 
   const inputCls = (err?: string) =>
