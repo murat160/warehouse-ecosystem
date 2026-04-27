@@ -1,0 +1,40 @@
+{
+  "name": "warehouse-ecosystem",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Warehouse Management System (WMS) — clothing marketplace warehouse ecosystem",
+  "workspaces": [
+    "apps/*",
+    "backend/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace backend/api run dev",
+    "dev:staff": "npm --workspace apps/staff-app run dev",
+    "dev:admin": "npm --workspace apps/admin-panel run dev",
+    "dev:supervisor": "npm --workspace apps/supervisor-panel run dev",
+    "dev:seller": "npm --workspace apps/seller-portal run dev",
+    "dev:courier": "npm --workspace apps/courier-dispatch run dev",
+    "dev": "npm-run-all --parallel dev:api dev:staff dev:admin dev:supervisor dev:seller dev:courier",
+    "build:api": "npm --workspace backend/api run build",
+    "build:apps": "npm-run-all --parallel build:staff build:admin build:supervisor build:seller build:courier",
+    "build:staff": "npm --workspace apps/staff-app run build",
+    "build:admin": "npm --workspace apps/admin-panel run build",
+    "build:supervisor": "npm --workspace apps/supervisor-panel run build",
+    "build:seller": "npm --workspace apps/seller-portal run build",
+    "build:courier": "npm --workspace apps/courier-dispatch run build",
+    "build": "npm-run-all build:api build:apps",
+    "db:generate": "npm --workspace backend/api run db:generate",
+    "db:migrate": "npm --workspace backend/api run db:migrate",
+    "db:seed": "npm --workspace backend/api run db:seed",
+    "db:reset": "npm --workspace backend/api run db:reset"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+FROM node:20-alpine AS builder
+WORKDIR /repo
+COPY package.json package-lock.json* ./
+COPY tsconfig.base.json ./
+COPY backend ./backend
+COPY packages ./packages
+RUN npm install --no-audit --no-fund
+RUN npm --workspace backend/api run db:generate
+RUN npm --workspace backend/api run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /repo/backend/api/dist ./dist
+COPY --from=builder /repo/backend/api/node_modules ./node_modules
+COPY --from=builder /repo/backend/api/prisma ./prisma
+COPY --from=builder /repo/backend/api/package.json ./package.json
+COPY --from=builder /repo/node_modules ./root_node_modules
+ENV NODE_ENV=production
+EXPOSE 4000
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

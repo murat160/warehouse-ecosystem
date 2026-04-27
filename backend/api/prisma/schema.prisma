@@ -1,0 +1,346 @@
+// ============================================================
+//  Warehouse Management System — Prisma schema
+//  Default datasource: SQLite (file:./wms.db)
+//  For PostgreSQL switch provider to "postgresql" and update
+//  DATABASE_URL in .env. Schema itself is portable.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- RBAC ----------
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  permissions String  // JSON-stringified Record<string, boolean>
+  users       User[]
+  createdAt   DateTime @default(now())
+}
+
+model User {
+  id          String   @id @default(cuid())
+  employeeId  String   @unique
+  pinHash     String
+  fullName    String
+  phone       String?
+  email       String?
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id])
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  zoneId      String?
+  zone        Zone?    @relation(fields: [zoneId], references: [id])
+  status      String   @default("ACTIVE") // ACTIVE/BLOCKED/ON_BREAK/OFFLINE
+  shift       String?
+  createdAt   DateTime @default(now())
+
+  tasksAssigned Task[]      @relation("TaskAssignee")
+  scans         ScanLog[]
+  auditLogs     AuditLog[]
+  problemsReported ProblemTask[] @relation("ProblemReporter")
+  problemsResolved ProblemTask[] @relation("ProblemResolver")
+
+  @@index([roleId])
+  @@index([warehouseId])
+}
+
+// ---------- Locations / structure ----------
+
+model Warehouse {
+  id        String  @id @default(cuid())
+  code      String  @unique
+  name      String
+  address   String?
+  zones     Zone[]
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+model Zone {
+  id          String   @id @default(cuid())
+  code        String
+  name        String
+  type        String   // ZoneType enum value
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  locations   Location[]
+  users       User[]
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  barcode     String   @unique
+  zoneId      String
+  zone        Zone     @relation(fields: [zoneId], references: [id])
+  aisle       String?
+  rack        String?
+  section     String?
+  shelf       String?
+  bin         String?
+  capacity    Int?
+  status      String   @default("ACTIVE")
+  inventory   InventoryItem[]
+
+  @@index([zoneId])
+}
+
+// ---------- Catalog ----------
+
+model Seller {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  email     String?
+  products  Product[]
+  asns      ASN[]
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String   @unique
+  name        String
+  brand       String?
+  category    String?
+  gender      String?
+  season      String?
+  material    String?
+  country     String?
+  description String?
+  sellerId    String?
+  seller      Seller?  @relation(fields: [sellerId], references: [id])
+  variants    SKU[]
+  createdAt   DateTime @default(now())
+
+  @@index([sellerId])
+}
+
+model SKU {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  barcode     String   @unique
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  color       String?
+  size        String?
+  weight      Float?
+  storageType String   @default("FOLDED")
+  inventory   InventoryItem[]
+  asnItems    ASNItem[]
+  orderItems  OrderItem[]
+
+  @@index([productId])
+}
+
+// ---------- Inventory ----------
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  skuId       String
+  sku         SKU      @relation(fields: [skuId], references: [id])
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id])
+  quantity    Int
+  reserved    Int      @default(0)
+  status      String   @default("AVAILABLE")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([skuId, locationId, status])
+  @@index([skuId])
+  @@index([locationId])
+}
+
+// ---------- Inbound (ASN) ----------
+
+model ASN {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  sellerId      String
+  seller        Seller   @relation(fields: [sellerId], references: [id])
+  status        String   @default("CREATED")
+  expectedDate  DateTime?
+  vehicleNumber String?
+  driverInfo    String?
+  boxCount      Int?
+  items         ASNItem[]
+  createdAt     DateTime @default(now())
+
+  @@index([sellerId])
+  @@index([status])
+}
+
+model ASNItem {
+  id          String  @id @default(cuid())
+  asnId       String
+  asn         ASN     @relation(fields: [asnId], references: [id], onDelete: Cascade)
+  skuId       String
+  sku         SKU     @relation(fields: [skuId], references: [id])
+  expectedQty Int
+  receivedQty Int     @default(0)
+  status      String  @default("PENDING")
+
+  @@index([asnId])
+}
+
+// ---------- Orders ----------
+
+model Order {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  status        String   @default("NEW")
+  customerName  String?
+  customerPhone String?
+  shippingAddr  String?
+  city          String?
+  zone          String?
+  priority      String   @default("NORMAL")
+  items         OrderItem[]
+  tasks         Task[]
+  rmas          RMA[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([priority])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  skuId     String
+  sku       SKU     @relation(fields: [skuId], references: [id])
+  quantity  Int
+  picked    Int     @default(0)
+  packed    Int     @default(0)
+
+  @@index([orderId])
+}
+
+// ---------- Tasks ----------
+
+model Task {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  type        String
+  status      String   @default("CREATED")
+  priority    String   @default("NORMAL")
+  assignedToId String?
+  assignedTo  User?    @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  payload     String   @default("{}") // JSON
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  problem     ProblemTask?
+
+  @@index([assignedToId])
+  @@index([status])
+  @@index([type])
+  @@index([orderId])
+}
+
+model ProblemTask {
+  id         String   @id @default(cuid())
+  taskId     String   @unique
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reason     String
+  notes      String?
+  reportedById String
+  reportedBy User     @relation("ProblemReporter", fields: [reportedById], references: [id])
+  resolvedById String?
+  resolvedBy User?    @relation("ProblemResolver", fields: [resolvedById], references: [id])
+  resolvedAt DateTime?
+  status     String   @default("OPEN") // OPEN/RESOLVED/ESCALATED
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+}
+
+// ---------- Returns ----------
+
+model RMA {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  reason      String
+  status      String   @default("CREATED")
+  decision    String?
+  receivedAt  DateTime?
+  decidedAt   DateTime?
+  decidedBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([status])
+  @@index([orderId])
+}
+
+// ---------- Logs ----------
+
+model ScanLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  scanType  String
+  value     String
+  taskId    String?
+  result    String   // OK/ERROR
+  errorCode String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([taskId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  payload   String?  // JSON
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// ---------- Hardware ----------
+
+model Device {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  type        String   // SCANNER/SCALE/PRINTER/CAMERA/RFID
+  name        String
+  assignedTo  String?
+  status      String   @default("ACTIVE")
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([type])
+}
+
+// ---------- Sequence counters (for human-readable codes) ----------
+
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}

@@ -1,0 +1,39 @@
+# ============================================================
+#  GitHub Actions — auto-deploy to Hostinger VPS on push to main.
+#
+#  Required GitHub repo secrets:
+#    VPS_HOST       — IP or hostname (e.g. 123.45.67.89)
+#    VPS_USER       — SSH user (e.g. deploy)
+#    VPS_SSH_KEY    — private SSH key with access to VPS
+#    VPS_APP_DIR    — absolute path on VPS (e.g. /var/www/wms)
+#
+#  How it works: SSH into VPS, run deploy.sh which pulls + builds
+#  + restarts. Build happens on the server, not in CI — keeps the
+#  CI minimal and avoids artifact transfer.
+# ============================================================
+
+name: Deploy to Hostinger VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger remote deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.VPS_APP_DIR }}
+            ./deploy/deploy.sh
