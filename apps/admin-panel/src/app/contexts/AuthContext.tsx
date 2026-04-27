@@ -1,21 +1,21 @@
 /**
  * AuthContext — wired to the real backend (/api/auth/login + /api/auth/me).
  *
- * Same public API as the previous mock so all 7 consumer components keep
- * working without changes:
+ * Public API kept identical to the ZIP version so all existing pages
+ * keep working untouched:
  *   useAuth() → { user, login, logout, hasPermission, canAccessScope }
  *
  * Behaviour:
  *  - On first mount: if a JWT is in localStorage, restore session via /api/auth/me.
- *  - Until the session resolves (or if there's no token / no backend yet) we keep
- *    a DEMO admin user so the dashboard never renders empty.
- *  - login(email, password): the "email" field is treated as employeeId by the
- *    backend (W-002 / W-001 / W-204 …). On success the JWT is persisted in
- *    localStorage and the real user replaces the demo one.
- *  - logout(): drops the token and returns to the demo user.
+ *  - Until that resolves (or if no token / no backend yet) we keep a
+ *    DEMO admin user so the dashboard never renders empty.
+ *  - login(email, password): the "email" field is treated as employeeId
+ *    by the backend (W-002, W-001, W-204 …). On success the JWT is
+ *    persisted in localStorage and the real user replaces the demo one.
+ *  - logout(): drops the token, returns to the demo user.
  *
- * The frontend only ever talks to /api (relative path). Vite dev proxy and
- * nginx in production forward /api → backend.
+ * The frontend only ever talks to /api (relative path). Vite dev proxy
+ * and nginx in production forward /api → backend.
  */
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
