@@ -228,7 +228,17 @@ function Lightbox({
           <button onClick={resetTransform} className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 hover:text-white transition-colors" title="Сбросить">
             <RotateCcw className="w-4 h-4" />
           </button>
-          <button onClick={() => {}} className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 hover:text-white transition-colors" title="Скачать">
+          <button
+            onClick={() => {
+              if (!img?.url) return;
+              const a = document.createElement('a');
+              a.href = img.url;
+              a.download = (img.label ?? img.id ?? 'product-image').replace(/\s+/g, '-');
+              a.target = '_blank';
+              a.rel = 'noopener';
+              document.body.appendChild(a); a.click(); a.remove();
+            }}
+            className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 hover:text-white transition-colors" title="Скачать">
             <Download className="w-4 h-4" />
           </button>
           <button onClick={onClose} className="p-2 hover:bg-red-900/40 rounded-xl text-gray-400 hover:text-red-400 transition-colors">
@@ -375,7 +385,8 @@ export function ProductImageViewer({ images, productName, barcode, sku, category
           ))}
 
           {/* Add photo placeholder */}
-          <button className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-blue-500 transition-colors">
+          <button onClick={() => { import('sonner').then(m => m.toast.info('Добавить фото товара', { description: 'Перетащите файл или выберите PNG/JPG до 10 MB' })); }}
+            className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-blue-500 transition-colors">
             <ImageIcon className="w-5 h-5" />
             <span className="text-[9px] font-medium">Добавить</span>
           </button>
@@ -400,7 +411,20 @@ export function ProductImageViewer({ images, productName, barcode, sku, category
                 className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-lg text-xs font-medium transition-all ${copied ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 hover:bg-gray-100 text-gray-600'}`}>
                 {copied ? '✓ Скопировано' : 'Копировать'}
               </button>
-              <button className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors">
+              <button
+                onClick={() => {
+                  // Find the rendered <svg> next to this button and download it.
+                  const svg = document.querySelector('svg[viewBox]') as SVGSVGElement | null;
+                  if (!svg) return;
+                  const data = new XMLSerializer().serializeToString(svg);
+                  const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `${barcode ?? 'barcode'}.svg`;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors">
                 <Download className="w-3 h-3" />SVG
               </button>
             </div>

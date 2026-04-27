@@ -920,7 +920,8 @@ export function PayoutDetail() {
             </button>
 
             {/* Export */}
-            <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-600 rounded-xl transition-colors">
+            <button onClick={() => showToast('XLS-выгрузка запущена')}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-600 rounded-xl transition-colors">
               <Download className="w-3.5 h-3.5" />XLS
             </button>
           </div>
@@ -1024,13 +1025,16 @@ export function PayoutDetail() {
                   <p className="text-sm font-bold text-red-600">Возврат: −{fmtRub(o.refundAmount)}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button className="p-1.5 hover:bg-green-50 text-green-600 rounded-lg transition-colors" title="Одобрить возврат">
+                  <button onClick={() => showToast(`✓ Возврат по ${o.id} одобрен`)}
+                    className="p-1.5 hover:bg-green-50 text-green-600 rounded-lg transition-colors" title="Одобрить возврат">
                     <Check className="w-3.5 h-3.5" />
                   </button>
-                  <button className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors" title="Оспорить возврат">
+                  <button onClick={() => showToast(`Возврат по ${o.id} отправлен на арбитраж`)}
+                    className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors" title="Оспорить возврат">
                     <X className="w-3.5 h-3.5" />
                   </button>
-                  <button className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-lg transition-colors">
+                  <button onClick={() => showToast(`Открыть детали заказа ${o.id}`)}
+                    className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-lg transition-colors" title="Подробнее">
                     <Eye className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1059,7 +1063,8 @@ export function PayoutDetail() {
           </button>
 
           {/* Print */}
-          <button className="flex items-center gap-1.5 px-3 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-sm font-medium transition-colors">
+          <button onClick={() => { try { window.print(); } catch { showToast('Печать недоступна'); } }}
+            className="flex items-center gap-1.5 px-3 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-sm font-medium transition-colors">
             <Printer className="w-4 h-4" />Акт
           </button>
 

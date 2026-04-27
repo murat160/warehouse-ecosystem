@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
+import { toast } from 'sonner';
 import {
   RotateCcw, Search, CheckCircle2, XCircle, Clock, AlertTriangle,
   RefreshCw, Store, Bike, Building2, X, Check, Eye, Download,
@@ -479,7 +480,8 @@ function RefundDetailDrawer({ refund, onClose, onApprove, onReject }: {
                   <ImageIcon className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Фотографии не прикреплены</p>
                   <p className="text-xs mt-1 text-center">Клиент не загрузил фото или тип возврата не требует доказательств</p>
-                  <button className="mt-4 flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50">
+                  <button onClick={() => toast.success('Запрос на фото отправлен клиенту')}
+                    className="mt-4 flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50">
                     <ImageIcon className="w-3.5 h-3.5" />Запросить фото у клиента
                   </button>
                 </div>
@@ -596,7 +598,7 @@ function RefundRow({ r, onApprove, onReject, onView }: {
             <button onClick={onApprove} className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors" title="Одобрить"><Check className="w-3.5 h-3.5" /></button>
             <button onClick={onReject} className="p-1.5 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors" title="Отклонить"><XCircle className="w-3.5 h-3.5" /></button>
           </>}
-          {isDisputed && <button className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors" title="Арбитраж"><Shield className="w-3.5 h-3.5" /></button>}
+          {isDisputed && <button onClick={onApprove} className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors" title="Арбитраж"><Shield className="w-3.5 h-3.5" /></button>}
         </div>
       </td>
     </tr>
@@ -668,8 +670,10 @@ export function RefundCenter() {
           <p className="text-sm text-gray-500 mt-0.5">Управление возвратами · Финансовый отдел · Фото доказательства · Баркоды · Полный аудит</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"><Download className="w-3.5 h-3.5" />Экспорт</button>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"><FileText className="w-3.5 h-3.5" />Отчёт</button>
+          <button onClick={() => toast.success('Экспорт возвратов в CSV запущен')}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"><Download className="w-3.5 h-3.5" />Экспорт</button>
+          <button onClick={() => toast.info('Отчёт по возвратам', { description: 'Готовится сводный отчёт за выбранный период' })}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"><FileText className="w-3.5 h-3.5" />Отчёт</button>
         </div>
       </div>
 

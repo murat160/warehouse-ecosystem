@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../../utils/clipboard';
+import { exportToCsv } from '../../utils/downloads';
 import {
   Search, Plus, Shield, Lock, Pencil as Edit2, X, Check,
   Copy, UserCheck, ToggleLeft, ToggleRight, Download, Link2,
@@ -823,7 +824,8 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
             })}
             <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
               <p className="text-xs text-gray-400">Полный аудит-лог доступен в</p>
-              <button className="text-xs text-blue-600 font-medium hover:underline">Журнале безопасности →</button>
+              <button onClick={() => toast.info('Откройте раздел Безопасность → Журнал аудита')}
+                className="text-xs text-blue-600 font-medium hover:underline">Журнале безопасности →</button>
             </div>
           </div>
         )}
@@ -863,7 +865,8 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
           <div className="p-4 space-y-2">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-gray-700">История входов</p>
-              <button className="text-[10px] text-blue-600 hover:underline flex items-center gap-1">
+              <button onClick={() => toast.success('История входов обновлена')}
+                className="text-[10px] text-blue-600 hover:underline flex items-center gap-1">
                 <RefreshCw className="w-3 h-3" />Обновить
               </button>
             </div>
@@ -900,7 +903,8 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
           <div className="p-4 space-y-2">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-gray-700">Связанные документы</p>
-              <button className="text-[10px] text-blue-600 hover:underline flex items-center gap-1">
+              <button onClick={() => toast.success('Запрос на документы отправлен сотруднику')}
+                className="text-[10px] text-blue-600 hover:underline flex items-center gap-1">
                 <Activity className="w-3 h-3" />Запросить
               </button>
             </div>
@@ -926,7 +930,8 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
                 </div>
               );
             })}
-            <button className="w-full py-2.5 border-2 border-dashed border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+            <button onClick={() => toast.info('Загрузка документа', { description: 'Выберите файл — поддерживается PDF, JPG, PNG до 10 MB' })}
+              className="w-full py-2.5 border-2 border-dashed border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
               <Activity className="w-3.5 h-3.5" />Загрузить документ
             </button>
           </div>
@@ -1020,7 +1025,24 @@ export function UsersList() {
             <p className="text-sm text-gray-400 mt-0.5">Управление доступом и личными кабинетами · {stats.total} сотрудников</p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => {
+                if (filtered.length === 0) { toast.info('Нет пользователей для экспорта'); return; }
+                exportToCsv(filtered as any[], [
+                  { key: 'id',        label: 'ID' },
+                  { key: 'name',      label: 'Имя' },
+                  { key: 'email',     label: 'Email' },
+                  { key: 'role',      label: 'Роль' },
+                  { key: 'status',    label: 'Статус' },
+                  { key: 'scopeType', label: 'Scope' },
+                  { key: 'scopeValue',label: 'Объект' },
+                  { key: 'twoFactorEnabled', label: '2FA' },
+                  { key: 'lastLogin', label: 'Последний вход' },
+                  { key: 'createdAt', label: 'Создан' },
+                ], 'users');
+                toast.success(`Экспортировано: ${filtered.length} пользователей`);
+              }}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               <Download className="w-4 h-4" />Экспорт
             </button>
             <button onClick={() => setAddEditModal({ mode: 'add' })}

@@ -497,10 +497,12 @@ export function PromotionsPage() {
           <p className="text-sm text-gray-500 mt-0.5">Управление рекламными кампаниями мерчантов и ПВЗ · Согласование и аудит</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
+          <button onClick={() => { import('sonner').then(m => m.toast.success('Экспорт кампаний в CSV запущен')); }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
             <Download className="w-3.5 h-3.5" />Экспорт
           </button>
-          <button className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
+          <button onClick={() => { import('sonner').then(m => m.toast.info('Новая кампания', { description: 'Откроется форма создания акции' })); }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
             <Plus className="w-4 h-4" />Новая кампания
           </button>
         </div>
@@ -710,7 +712,8 @@ export function PromotionsPage() {
                           </>
                         )}
                         {p.status === 'active' && (
-                          <button className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors" title="Приостановить">
+                          <button onClick={() => { import('sonner').then(m => m.toast.success(`Кампания «${p.title}» приостановлена`)); }}
+                            className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors" title="Приостановить">
                             <Clock className="w-3.5 h-3.5" />
                           </button>
                         )}

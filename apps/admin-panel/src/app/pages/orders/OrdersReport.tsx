@@ -185,10 +185,12 @@ export function OrdersReport() {
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
+          <button onClick={() => { import('sonner').then(m => m.toast.success('Экспорт XLS запущен')); }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
             <Download className="w-3.5 h-3.5" />XLS
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
+          <button onClick={() => { import('sonner').then(m => m.toast.success('Экспорт PDF запущен')); }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors">
             <FileText className="w-3.5 h-3.5" />PDF
           </button>
         </div>

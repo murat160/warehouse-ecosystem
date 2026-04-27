@@ -241,7 +241,13 @@ export function Analytics() {
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-medium transition-colors">
+          <button
+            onClick={() => {
+              import('sonner').then(m => m.toast.info('Экспорт отчёта', {
+                description: 'Готовится PDF/Excel выгрузка по выбранному периоду…',
+              }));
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-medium transition-colors">
             <Download className="w-3.5 h-3.5" />Экспорт
           </button>
         </div>
@@ -444,7 +450,9 @@ export function Analytics() {
             title="Топ мерчанты"
             sub="По объёму заказов"
             action={
-              <button className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+              <button
+                onClick={() => { window.location.assign('/admin/merchants'); }}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
                 Все мерчанты <ArrowUpRight className="w-3 h-3" />
               </button>
             }

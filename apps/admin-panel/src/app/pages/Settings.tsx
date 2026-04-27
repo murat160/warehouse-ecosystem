@@ -710,7 +710,8 @@ function IntegrationsTab() {
                   <div className={`w-2 h-2 rounded-full ${st.dot}`} />
                   <span className={`text-xs font-medium ${st.text}`}>{st.label}</span>
                 </div>
-                <button className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+                <button onClick={() => { import('sonner').then(m => m.toast.info(`Настройки интеграции «${i.name}»`)); }}
+                  className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-600 transition-colors" title="Настройки">
                   <Settings2 className="w-4 h-4" />
                 </button>
               </div>

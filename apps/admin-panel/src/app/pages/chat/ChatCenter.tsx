@@ -1911,7 +1911,8 @@ function ChatWindow({
                     className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors">
                     <ZapIcon className="w-3.5 h-3.5" />Шаблоны
                   </button>
-                  <button className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition-colors">
+                  <button onClick={() => { import('sonner').then(m => m.toast.info('Прикрепить файл', { description: 'Поддерживаются PNG/JPG/PDF до 10 MB' })); }}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition-colors" title="Прикрепить файл">
                     <Paperclip className="w-3.5 h-3.5" />
                   </button>
                   {/* Internal note toggle */}

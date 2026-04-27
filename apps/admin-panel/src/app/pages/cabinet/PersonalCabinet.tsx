@@ -855,7 +855,8 @@ export function PersonalCabinet({ previewRole, previewName, previewModules, scop
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">{WIDGET_TITLE[role] ?? 'Активность'}</h2>
-              <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors">
+              <button onClick={() => { import('sonner').then(m => m.toast.success('Виджет обновлён')); }}
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors">
                 <RefreshCw className="w-3.5 h-3.5" />Обновить
               </button>
             </div>

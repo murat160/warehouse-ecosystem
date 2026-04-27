@@ -139,13 +139,15 @@ export function OrderDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+          <button onClick={() => { if (order.customerPhone) window.location.href = `tel:${order.customerPhone}`; else toast.info('Телефон клиента не указан'); }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
             <Phone className="w-4 h-4" />
             Позвонить
           </button>
           {!isTerminal && (
             <div style={{display:'contents'}}>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+              <button onClick={() => toast.info('Редактирование заказа', { description: `Открывается форма для ${order.id}` })}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                 <Edit className="w-4 h-4" />
                 Изменить
               </button>

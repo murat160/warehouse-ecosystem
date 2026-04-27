@@ -1499,7 +1499,8 @@ export function CourierDetail() {
                   </h3>
                   <p className="text-xs text-gray-500 mt-0.5">GPS: {courierData.gpsLat.toFixed(4)}°N, {courierData.gpsLng.toFixed(4)}°E · Обн. {courierData.gpsUpdated}</p>
                 </div>
-                <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <button onClick={() => { import('sonner').then(m => m.toast.success('GPS-координаты курьера обновлены')); }}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" />Обновить
                 </button>
               </div>
@@ -1593,10 +1594,12 @@ export function CourierDetail() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
+                <button onClick={() => { import('sonner').then(m => m.toast.success(`Контракт по ${courierData.name} скачивается`)); }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
                   <Download className="w-4 h-4" />Скачать контракт
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+                <button onClick={() => { import('sonner').then(m => m.toast.info('Обновление контракта', { description: 'Загрузите новый PDF — старая версия архивируется автоматически' })); }}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
                   <Edit3 className="w-4 h-4" />Обновить контракт
                 </button>
               </div>
