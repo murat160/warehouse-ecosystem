@@ -1,24 +1,24 @@
 /**
- * AuthContext — wired to the real backend (/api/auth/login + /api/auth/me).
+ * AuthContext — wired to backend (/api/auth/login + /api/auth/me).
  *
- * Public API kept identical to the ZIP version so all existing pages
- * keep working untouched:
+ * Public API kept compatible with the ZIP version so all 7 consumer
+ * components keep working untouched:
  *   useAuth() → { user, login, logout, hasPermission, canAccessScope }
  *
- * Behaviour:
- *  - On first mount: if a JWT is in localStorage, restore session via /api/auth/me.
- *  - Until that resolves (or if no token / no backend yet) we keep a
- *    DEMO admin user so the dashboard never renders empty.
- *  - login(email, password): the "email" field is treated as employeeId
- *    by the backend (W-002, W-001, W-204 …). On success the JWT is
- *    persisted in localStorage and the real user replaces the demo one.
- *  - logout(): drops the token, returns to the demo user.
+ * Added (non-breaking):
+ *   useAuth().status → 'loading' | 'authenticated' | 'unauthenticated'
+ *   used by RequireAuth in routes.ts and by LoginPage to redirect.
  *
- * The frontend only ever talks to /api (relative path). Vite dev proxy
- * and nginx in production forward /api → backend.
+ * Behaviour:
+ *  - On first mount: try /api/auth/me with the JWT in localStorage.
+ *  - login(email, password): "email" maps to backend employeeId,
+ *    "password" to PIN. JWT persisted in localStorage on success.
+ *  - logout(): drops the token, status flips to 'unauthenticated'.
+ *  - Errors never leak stack traces. Token never logged.
  */
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { api } from '../lib/api';
 
 export type Role =
   | 'SuperAdmin'
@@ -51,8 +51,11 @@ export type User = {
   permissions: string[];
 };
 
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+
 type AuthContextType = {
   user: User | null;
+  status: AuthStatus;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
@@ -60,18 +63,6 @@ type AuthContextType = {
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const TOKEN_KEY = 'wms_jwt';
-
-const DEMO_USER: User = {
-  id: 'demo',
-  name: 'Администратор Системы',
-  email: 'admin@platform.com',
-  role: 'Admin',
-  scope: { type: 'ALL' },
-  twoFactorEnabled: true,
-  permissions: ['*'],
-};
 
 // Backend RBAC role names → frontend admin-panel Role enum.
 function mapBackendRole(name: string): Role {
@@ -112,52 +103,39 @@ function userFromApi(apiUser: any, apiRole: any): User {
   };
 }
 
-async function callApi(path: string, init?: RequestInit) {
-  const tok = localStorage.getItem(TOKEN_KEY);
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...((init?.headers as Record<string, string>) ?? {}),
-  };
-  if (tok) headers.Authorization = `Bearer ${tok}`;
-  const res = await fetch(path, { ...init, headers });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) {
-    throw new Error(data?.error ?? res.statusText);
-  }
-  return data;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Start with the demo user so the UI never flashes empty. The real user
-  // replaces it after /api/auth/me resolves (if a token exists).
-  const [user, setUser] = useState<User | null>(DEMO_USER);
+  const [user, setUser] = useState<User | null>(null);
+  const [status, setStatus] = useState<AuthStatus>('loading');
 
   useEffect(() => {
-    const tok = localStorage.getItem(TOKEN_KEY);
-    if (!tok) return;
-    callApi('/api/auth/me')
-      .then(({ user: u, role }) => setUser(userFromApi(u, role)))
+    if (!api.hasToken()) {
+      setStatus('unauthenticated');
+      return;
+    }
+    api.get<{ user: any; role: any }>('/api/auth/me')
+      .then(({ user: u, role }) => {
+        setUser(userFromApi(u, role));
+        setStatus('authenticated');
+      })
       .catch(() => {
-        // bad/expired token — drop it, fall back to demo user
-        localStorage.removeItem(TOKEN_KEY);
-        setUser(DEMO_USER);
+        api.clearToken();
+        setStatus('unauthenticated');
       });
   }, []);
 
   const login = async (email: string, password: string) => {
-    // The form's "email" maps to backend employeeId, "password" to pin.
-    const data = await callApi('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ employeeId: email, pin: password }),
-    });
-    localStorage.setItem(TOKEN_KEY, data.token);
+    const data = await api.post<{ token: string; user: any; role: any }>(
+      '/api/auth/login', { employeeId: email, pin: password }
+    );
+    api.setToken(data.token);
     setUser(userFromApi(data.user, data.role));
+    setStatus('authenticated');
   };
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    setUser(DEMO_USER);
+    api.clearToken();
+    setUser(null);
+    setStatus('unauthenticated');
   };
 
   const hasPermission = (permission: string): boolean => {
@@ -176,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, hasPermission, canAccessScope }}>
+    <AuthContext.Provider value={{ user, status, login, logout, hasPermission, canAccessScope }}>
       {children}
     </AuthContext.Provider>
   );

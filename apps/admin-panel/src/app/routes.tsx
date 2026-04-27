@@ -1,5 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
+import { RequireAuth } from "./components/layout/RequireAuth";
+import { LoginPage } from "./pages/auth/LoginPage";
 import { Dashboard } from "./pages/Dashboard";
 import { UsersList } from "./pages/users/UsersList";
 import { PersonalCabinet } from "./pages/cabinet/PersonalCabinet";
@@ -38,48 +40,52 @@ import { UsersInvitations } from "./pages/users/UsersInvitations";
 import { UsersTeams } from "./pages/users/UsersTeams";
 import { UsersCabinets } from "./pages/users/UsersCabinets";
 
+// /login renders without the dashboard shell. The rest of the admin
+// panel is wrapped in RequireAuth → DashboardLayout, so unauthenticated
+// users are bounced to /login while we wait for /api/auth/me.
 export const router = createBrowserRouter([
+  { path: "/login", element: <LoginPage /> },
   {
     path: "/",
-    Component: DashboardLayout,
+    element: <RequireAuth><DashboardLayout /></RequireAuth>,
     children: [
-      { index: true, Component: Dashboard },
-      { path: "cabinet", Component: PersonalCabinet },
-      { path: "chat", Component: ChatCenter },
-      { path: "chat/wallboard", Component: WallBoard },
-      { path: "users", Component: UsersList },
-      { path: "users/invitations", Component: UsersInvitations },
-      { path: "users/teams", Component: UsersTeams },
-      { path: "users/cabinets", Component: UsersCabinets },
-      { path: "pvz", Component: PVZList },
-      { path: "pvz/:id", Component: PVZDetail },
-      { path: "pvz/scan", Component: PVZScanTerminal },
-      { path: "orders", Component: OrdersList },
-      { path: "orders/:id", Component: OrderDetail },
-      { path: "orders/report", Component: OrdersReport },
-      { path: "couriers", Component: CouriersList },
-      { path: "couriers/:id", Component: CourierDetail },
-      { path: "compliance", Component: ComplianceCenter },
-      { path: "warehouses", Component: WarehousesList },
-      { path: "warehouses/:id", Component: WarehouseDetail },
-      { path: "logistics", Component: LogisticsDashboard },
-      { path: "merchants", Component: MerchantsList },
-      { path: "merchants/:id", Component: MerchantDetail },
-      { path: "finance", Component: FinanceDashboard },
-      { path: "finance/payouts", Component: PayoutsList },
-      { path: "finance/payouts/:id", Component: PayoutDetail },
-      { path: "finance/refunds", Component: RefundCenter },
-      { path: "products/promotions", Component: PromotionsPage },
-      { path: "products/discounts", Component: DiscountsPage },
-      { path: "approvals", Component: ApprovalCenter },
-      { path: "support/tickets", Component: TicketsList },
-      { path: "support/tickets/:id", Component: TicketDetail },
-      { path: "security/audit", Component: AuditLog },
-      { path: "security/rbac", Component: RBACManagement },
-      { path: "security/center", Component: SecurityCenter },
-      { path: "analytics", Component: Analytics },
-      { path: "settings", Component: Settings },
-      { path: "system/architecture", Component: ArchitecturePage },
+      { index: true, element: <Dashboard /> },
+      { path: "cabinet", element: <PersonalCabinet /> },
+      { path: "chat", element: <ChatCenter /> },
+      { path: "chat/wallboard", element: <WallBoard /> },
+      { path: "users", element: <UsersList /> },
+      { path: "users/invitations", element: <UsersInvitations /> },
+      { path: "users/teams", element: <UsersTeams /> },
+      { path: "users/cabinets", element: <UsersCabinets /> },
+      { path: "pvz", element: <PVZList /> },
+      { path: "pvz/:id", element: <PVZDetail /> },
+      { path: "pvz/scan", element: <PVZScanTerminal /> },
+      { path: "orders", element: <OrdersList /> },
+      { path: "orders/:id", element: <OrderDetail /> },
+      { path: "orders/report", element: <OrdersReport /> },
+      { path: "couriers", element: <CouriersList /> },
+      { path: "couriers/:id", element: <CourierDetail /> },
+      { path: "compliance", element: <ComplianceCenter /> },
+      { path: "warehouses", element: <WarehousesList /> },
+      { path: "warehouses/:id", element: <WarehouseDetail /> },
+      { path: "logistics", element: <LogisticsDashboard /> },
+      { path: "merchants", element: <MerchantsList /> },
+      { path: "merchants/:id", element: <MerchantDetail /> },
+      { path: "finance", element: <FinanceDashboard /> },
+      { path: "finance/payouts", element: <PayoutsList /> },
+      { path: "finance/payouts/:id", element: <PayoutDetail /> },
+      { path: "finance/refunds", element: <RefundCenter /> },
+      { path: "products/promotions", element: <PromotionsPage /> },
+      { path: "products/discounts", element: <DiscountsPage /> },
+      { path: "approvals", element: <ApprovalCenter /> },
+      { path: "support/tickets", element: <TicketsList /> },
+      { path: "support/tickets/:id", element: <TicketDetail /> },
+      { path: "security/audit", element: <AuditLog /> },
+      { path: "security/rbac", element: <RBACManagement /> },
+      { path: "security/center", element: <SecurityCenter /> },
+      { path: "analytics", element: <Analytics /> },
+      { path: "settings", element: <Settings /> },
+      { path: "system/architecture", element: <ArchitecturePage /> },
     ],
   },
 ], {
