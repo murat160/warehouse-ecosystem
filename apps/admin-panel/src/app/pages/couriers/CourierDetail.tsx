@@ -1056,16 +1056,16 @@ function StatsTab({ courier }: { courier: Courier }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {kpis.map((k, i) => (
-          <button
+        {kpis.map((k) => (
+          <div
             key={k.label}
-            onClick={() => toast.info(k.label, { description: `${k.value}${k.sub ? ' · ' + k.sub : ''}` })}
-            className={`rounded-xl border p-4 text-left transition-all cursor-pointer hover:shadow-md active:scale-[0.97] ${COLOR_MAP[k.color]}`}
+            className={`rounded-xl border p-4 text-left ${COLOR_MAP[k.color]}`}
+            title={`${k.label}: ${k.value}${k.sub ? ' · ' + k.sub : ''}`}
           >
             <p className="text-xl font-bold">{k.value}</p>
             <p className="text-xs font-semibold mt-0.5 opacity-80">{k.label}</p>
             {k.sub && <p className="text-[10px] opacity-60 mt-0.5">{k.sub}</p>}
-          </button>
+          </div>
         ))}
       </div>
 

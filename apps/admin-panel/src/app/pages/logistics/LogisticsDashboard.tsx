@@ -158,17 +158,21 @@ export function LogisticsDashboard() {
   const [courierSearch, setCourierSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CourierStatus | 'all'>('all');
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [zones, setZones]       = useState(ZONES);
+  const [routes, setRoutes]     = useState<DeliveryRoute[]>(ROUTES_DATA);
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const [viewingRoute, setViewingRoute] = useState<DeliveryRoute | null>(null);
 
   const stats = useMemo(() => {
     const activeCouriers = COURIERS.filter(c => c.status === 'active').length;
     const idleCouriers   = COURIERS.filter(c => c.status === 'idle').length;
     const totalOrders    = COURIERS.reduce((s, c) => s + c.activeOrders, 0);
     const totalDelivered = COURIERS.reduce((s, c) => s + c.completedToday, 0);
-    const criticalZones  = ZONES.filter(z => z.status === 'critical' || z.status === 'shortage').length;
-    const avgWaitTime    = Math.round(ZONES.reduce((s, z) => s + z.avgWaitTime, 0) / ZONES.length);
-    const delayedRoutes  = ROUTES_DATA.filter(r => r.status === 'delayed').length;
+    const criticalZones  = zones.filter(z => z.status === 'critical' || z.status === 'shortage').length;
+    const avgWaitTime    = Math.round(zones.reduce((s, z) => s + z.avgWaitTime, 0) / zones.length);
+    const delayedRoutes  = routes.filter(r => r.status === 'delayed').length;
     return { activeCouriers, idleCouriers, totalOrders, totalDelivered, criticalZones, avgWaitTime, delayedRoutes };
-  }, []);
+  }, [zones, routes]);
 
   const filteredCouriers = useMemo(() => {
     let list = COURIERS;
@@ -200,10 +204,14 @@ export function LogisticsDashboard() {
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />Live
           </div>
           <button
-            onClick={() => toast.success('Данные обновлены', { description: 'Синхронизация с флотом выполнена' })}
+            onClick={() => {
+              setRefreshedAt(new Date());
+              toast.success('Данные обновлены', { description: 'Синхронизация с флотом выполнена' });
+            }}
+            title={refreshedAt ? `Обновлено в ${refreshedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : undefined}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-medium transition-colors"
           >
-            <RefreshCw className="w-3.5 h-3.5" />Обновить
+            <RefreshCw className="w-3.5 h-3.5" />Обновить{refreshedAt && <span className="text-[10px] text-gray-400 ml-1">{refreshedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>}
           </button>
           <button
             onClick={() => {
@@ -235,7 +243,7 @@ export function LogisticsDashboard() {
           { label: 'Доставлено сегодня',value: stats.totalDelivered, total: null,            color: 'text-teal-700',  bg: 'bg-teal-50',  icon: CheckCircle2, tabTarget: 'overview' as const },
           { label: 'Активных маршрутов',value: ROUTES_DATA.filter(r=>r.status!=='completed').length, total: null, color: 'text-purple-700', bg: 'bg-purple-50', icon: RouteIcon, tabTarget: 'routes' as const },
           { label: 'Ср. ожидание',      value: `${stats.avgWaitTime} мин`, total: null,      color: stats.avgWaitTime > 40 ? 'text-red-700' : 'text-gray-700', bg: stats.avgWaitTime > 40 ? 'bg-red-50' : 'bg-gray-50', icon: Clock, tabTarget: 'overview' as const },
-          { label: 'Проблемных зон',    value: stats.criticalZones,  total: ZONES.length,   color: stats.criticalZones > 0 ? 'text-red-700' : 'text-green-700', bg: stats.criticalZones > 0 ? 'bg-red-50' : 'bg-green-50', icon: AlertTriangle, tabTarget: 'zones' as const },
+          { label: 'Проблемных зон',    value: stats.criticalZones,  total: zones.length,   color: stats.criticalZones > 0 ? 'text-red-700' : 'text-green-700', bg: stats.criticalZones > 0 ? 'bg-red-50' : 'bg-green-50', icon: AlertTriangle, tabTarget: 'zones' as const },
         ] as const).map((s, i) => {
           const Icon = s.icon;
           return (
@@ -265,7 +273,7 @@ export function LogisticsDashboard() {
           <div className="flex-1">
             <p className="text-sm font-bold text-red-800">Критическая ситуация в {stats.criticalZones} зонах!</p>
             <p className="text-xs text-red-600 mt-0.5">
-              {ZONES.filter(z => z.status === 'critical').map(z => z.name).join(' · ')} — требуется перераспределение курьеров
+              {zones.filter(z => z.status === 'critical').map(z => z.name).join(' · ')} — требуется перераспределение курьеров
             </p>
           </div>
           <button onClick={() => setTab('zones')}
@@ -502,7 +510,7 @@ export function LogisticsDashboard() {
                 </button>
               </div>
               <div className="space-y-2.5">
-                {ZONES.sort((a, b) => {
+                {[...zones].sort((a, b) => {
                   const p: Record<ZoneStatus, number> = { critical: 0, shortage: 1, overloaded: 2, good: 3 };
                   return p[a.status] - p[b.status];
                 }).slice(0, 6).map((z, i) => {
@@ -640,7 +648,7 @@ export function LogisticsDashboard() {
       {tab === 'zones' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {ZONES.sort((a, b) => {
+            {[...zones].sort((a, b) => {
               const p: Record<ZoneStatus, number> = { critical: 0, shortage: 1, overloaded: 2, good: 3 };
               return p[a.status] - p[b.status];
             }).map(z => {
@@ -658,7 +666,13 @@ export function LogisticsDashboard() {
                     </div>
                     {(z.status === 'critical' || z.status === 'shortage') && (
                       <button
-                        onClick={() => toast.success('Перенаправление курьеров', { description: `Зона ${z.name}: ${z.couriersNeeded - z.couriers} курьеров направлено` })}
+                        onClick={() => {
+                          const need = z.couriersNeeded - z.couriers;
+                          setZones(prev => prev.map(x => x.id === z.id
+                            ? { ...x, couriers: x.couriersNeeded, status: 'normal', avgWaitTime: Math.max(15, x.avgWaitTime - 10) }
+                            : x));
+                          toast.success(`Зона ${z.name}: ${need} курьеров направлено`, { description: 'Покрытие восстановлено до 100%' });
+                        }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors">
                         <Navigation className="w-3 h-3" />Перенаправить
                       </button>
@@ -716,10 +730,10 @@ export function LogisticsDashboard() {
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Активные маршруты</h2>
-              <span className="text-xs text-gray-400">{ROUTES_DATA.filter(r=>r.status!=='completed').length} активных</span>
+              <span className="text-xs text-gray-400">{routes.filter(r=>r.status!=='completed').length} активных</span>
             </div>
             <div className="divide-y divide-gray-50">
-              {ROUTES_DATA.map(r => (
+              {routes.map(r => (
                 <div key={r.id} className={`px-5 py-4 hover:bg-gray-50 transition-colors ${r.status === 'delayed' ? 'bg-orange-50/40' : ''}`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -747,13 +761,16 @@ export function LogisticsDashboard() {
                     <div className="flex items-center gap-2 shrink-0">
                       {r.status === 'delayed' && (
                         <button
-                          onClick={() => toast.success('Маршрут перестроен', { description: `Оптимальный маршрут для ${r.courierName} рассчитан` })}
+                          onClick={() => {
+                            setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, status: 'active', delay: 0 } : x));
+                            toast.success(`Маршрут перестроен`, { description: `Оптимальный маршрут для ${r.courierName} рассчитан, задержка снята` });
+                          }}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-semibold transition-colors">
                           <Navigation className="w-3 h-3" />Перестроить
                         </button>
                       )}
                       <button
-                        onClick={() => toast.info(`Маршрут ${r.courierId}`, { description: `${r.stops} остановок · ${r.distance} км · ETA ${r.eta}` })}
+                        onClick={() => setViewingRoute(r)}
                         className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-lg">
                         <Eye className="w-4 h-4" />
                       </button>
@@ -813,6 +830,27 @@ export function LogisticsDashboard() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingRoute && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingRoute(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Маршрут {viewingRoute.courierId}</p>
+              <button onClick={() => setViewingRoute(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-2 text-sm">
+              <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Курьер</span><span className="font-semibold text-gray-900">{viewingRoute.courierName}</span></div>
+              <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Остановки</span><span className="font-semibold text-gray-900">{viewingRoute.completedStops} / {viewingRoute.stops}</span></div>
+              <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Дистанция</span><span className="font-semibold text-gray-900">{viewingRoute.distance} км</span></div>
+              <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">ETA</span><span className="font-semibold text-gray-900">{viewingRoute.eta}</span></div>
+              <div className="flex justify-between border-b border-gray-50 pb-2"><span className="text-gray-500">Статус</span><span className="font-semibold text-gray-900">{viewingRoute.status === 'delayed' ? `Задержка +${viewingRoute.delay} мин` : viewingRoute.status === 'active' ? 'Активен' : 'Завершён'}</span></div>
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end">
+              <button onClick={() => setViewingRoute(null)} className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Закрыть</button>
             </div>
           </div>
         </div>

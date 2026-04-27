@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Search, Download, Shield, User, Package, DollarSign, Filter, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToCsv } from '../../utils/downloads';
 
 interface AuditEvent {
   id: string;
@@ -40,6 +41,7 @@ const actionIcons = {
 export function AuditLog() {
   const [searchQuery, setSearchQuery] = useState('');
   const [riskFilter, setRiskFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
 
   const filteredEvents = auditEvents.filter(e => {
     const q = searchQuery.toLowerCase();
@@ -90,17 +92,36 @@ export function AuditLog() {
             <option value="low">Низкий</option>
           </select>
           <button
-            onClick={() => toast.success('Лог экспортирован', { description: `${filteredEvents.length} записей в CSV` })}
+            onClick={() => {
+              if (filteredEvents.length === 0) { toast.info('Нет событий для экспорта'); return; }
+              exportToCsv(filteredEvents as any[], [
+                { key: 'timestamp',   label: 'Время' },
+                { key: 'actor',       label: 'Пользователь' },
+                { key: 'actorRole',   label: 'Роль' },
+                { key: 'action',      label: 'Действие' },
+                { key: 'entityType',  label: 'Объект' },
+                { key: 'entityId',    label: 'ID объекта' },
+                { key: 'ip',          label: 'IP' },
+                { key: 'riskLevel',   label: 'Риск' },
+                { key: 'details',     label: 'Детали' },
+              ], 'audit-log');
+              toast.success(`Скачан CSV: ${filteredEvents.length} записей`);
+            }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm"
           >
             <Download className="w-5 h-5" />
             Экспорт CSV
           </button>
           <button
-            onClick={() => toast.success('Данные обновлены')}
+            onClick={() => {
+              setRefreshedAt(new Date());
+              toast.success('Данные обновлены', { description: 'Журнал синхронизирован' });
+            }}
+            title={refreshedAt ? `Обновлено в ${refreshedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Обновить'}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm"
           >
             <RefreshCw className="w-4 h-4" />
+            {refreshedAt && <span className="text-xs text-gray-500">{refreshedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>}
           </button>
         </div>
       </div>

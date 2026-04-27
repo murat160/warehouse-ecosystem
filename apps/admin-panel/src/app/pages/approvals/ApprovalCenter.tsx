@@ -611,7 +611,14 @@ function ImageLightbox({
     toast.success("Загрузка начата");
   };
   const handleSend = () => {
-    toast.success("Ссылка скопирована для отправки");
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(src).then(
+        () => toast.success('Ссылка скопирована для отправки'),
+        () => toast.error('Не удалось скопировать'),
+      );
+    } else {
+      toast.error('Clipboard API недоступен');
+    }
   };
 
   const modal = (
@@ -909,27 +916,47 @@ function DocumentsSection({
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
-                onClick={() =>
-                  toast.success(`Скачивание: ${doc.name}`)
-                }
+                onClick={() => {
+                  const txt = `Документ: ${doc.name}\nТип: ${doc.type}\nРазмер: ${doc.size}\nСвязан с запросом ${item.id}: ${item.title}`;
+                  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `${doc.name}.txt`.replace(/[\\/:*?"<>|]/g, '_');
+                  document.body.appendChild(a); a.click(); a.remove();
+                  URL.revokeObjectURL(url);
+                  toast.success(`Скачан: ${doc.name}`);
+                }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() =>
-                  toast.success(`Открыто: ${doc.name}`)
-                }
+                onClick={() => {
+                  // Inline preview for the document — no real source URL in mock,
+                  // so we just open a tab with the doc metadata.
+                  const w = window.open('', '_blank');
+                  if (w) {
+                    w.document.write(`<pre style="font-family:system-ui;padding:24px">${doc.name}\nТип: ${doc.type}\nРазмер: ${doc.size}\nЗапрос: ${item.id} — ${item.title}</pre>`);
+                    w.document.title = doc.name;
+                  }
+                  toast.success(`Открыто: ${doc.name}`);
+                }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() =>
-                  toast.success(
-                    `Ссылка скопирована: ${doc.name}`,
-                  )
-                }
+                onClick={() => {
+                  const link = `${window.location.origin}/admin/approvals/${item.id}#doc=${encodeURIComponent(doc.name)}`;
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(link).then(
+                      () => toast.success(`Ссылка скопирована: ${doc.name}`),
+                      () => toast.error('Не удалось скопировать'),
+                    );
+                  } else {
+                    toast.error('Clipboard API недоступен');
+                  }
+                }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <SendIcon className="w-3.5 h-3.5" />
@@ -1204,9 +1231,29 @@ function DetailDrawer({
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [sendEmail, setSendEmail] = useState("");
 
-  const handlePrint = () =>
-    toast.success("Подготовка к печати...");
-  const handleExport = () => toast.success("Экспорт данных...");
+  const handlePrint = () => window.print();
+  const handleExport = () => {
+    const lines = [
+      `Запрос: ${item.id}`,
+      `Категория: ${item.category}`,
+      `Заголовок: ${item.title}`,
+      `Описание: ${item.description}`,
+      `Запросил: ${item.requestedBy}`,
+      `Создан: ${item.requestedAt}`,
+      `Приоритет: ${item.priority}`,
+      `Статус: ${item.status}`,
+      ...(item.amount != null ? [`Сумма: ${item.amount}`] : []),
+      ...(item.merchantName ? [`Мерчант: ${item.merchantName}`] : []),
+      ...(item.note ? [`Заметка: ${item.note}`] : []),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `approval-${item.id}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`Скачано: approval-${item.id}.txt`);
+  };
 
   const drawer = (
     <div

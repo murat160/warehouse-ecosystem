@@ -6,6 +6,7 @@ import {
   X, ChevronDown, User, Tag, Link2, Filter,
   CheckCircle2, XCircle, RotateCcw, Download,
 } from 'lucide-react';
+import { exportToCsv } from '../../utils/downloads';
 
 type TicketStatus   = 'open' | 'in_progress' | 'resolved' | 'closed';
 type TicketPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -97,7 +98,20 @@ export function TicketsList() {
   };
 
   const handleExport = () => {
-    toast.success('Экспорт запущен', { description: 'Файл будет готов через несколько секунд' });
+    if (filtered.length === 0) { toast.info('Нет тикетов для экспорта'); return; }
+    exportToCsv(filtered as any[], [
+      { key: 'id',           label: 'ID' },
+      { key: 'subject',      label: 'Тема' },
+      { key: 'category',     label: 'Категория' },
+      { key: 'status',       label: 'Статус' },
+      { key: 'priority',     label: 'Приоритет' },
+      { key: 'client',       label: 'Клиент' },
+      { key: 'assignee',     label: 'Агент' },
+      { key: 'linkedEntity', label: 'Связан с' },
+      { key: 'messages',     label: 'Сообщений' },
+      { key: 'createdAt',    label: 'Создан' },
+    ], 'tickets');
+    toast.success(`Скачан CSV: ${filtered.length} тикетов`);
   };
 
   return (

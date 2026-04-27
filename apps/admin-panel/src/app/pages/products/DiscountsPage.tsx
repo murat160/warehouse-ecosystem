@@ -10,6 +10,7 @@ import {
   TrendingUp, BarChart2, Eye, Copy, Star, FileText, User,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { exportToCsv } from '../../utils/downloads';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -625,7 +626,25 @@ export function DiscountsPage() {
           <p className="text-gray-500 text-sm mt-0.5">Платформенные акции для всех продавцов или выбранных сегментов</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => toast.info('Экспорт', { description: 'Отчёт в Excel скоро будет готов' })}
+          <button
+            onClick={() => {
+              if (filtered.length === 0) { toast.info('Нет акций для экспорта'); return; }
+              exportToCsv(filtered as any[], [
+                { key: 'id',          label: 'ID' },
+                { key: 'title',       label: 'Название' },
+                { key: 'type',        label: 'Тип' },
+                { key: 'value',       label: 'Значение' },
+                { key: 'minOrder',    label: 'Мин. заказ' },
+                { key: 'usedCount',   label: 'Применений' },
+                { key: 'maxUses',     label: 'Лимит' },
+                { key: 'status',      label: 'Статус' },
+                { key: 'startDate',   label: 'Начало' },
+                { key: 'endDate',     label: 'Окончание' },
+                { key: 'promoCode',   label: 'Промокод' },
+                { key: 'createdBy',   label: 'Кем создана' },
+              ], 'discounts');
+              toast.success(`Скачан CSV: ${filtered.length} акций`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />Экспорт
           </button>

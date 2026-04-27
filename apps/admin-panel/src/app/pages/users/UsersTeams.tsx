@@ -153,6 +153,8 @@ function MemberRow({ member, onRemove, canRemove }: { member: TeamMember; onRemo
 
 function DeptCard({ dept, onUpdate }: { dept: Department; onUpdate: (d: Department) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newMember, setNewMember] = useState({ name: '', email: '', position: '' });
   const occupancy = Math.round((dept.members.length / (dept.maxSize ?? 20)) * 100);
 
   function removeMember(memberId: string) {
@@ -160,6 +162,19 @@ function DeptCard({ dept, onUpdate }: { dept: Department; onUpdate: (d: Departme
     if (head?.id === memberId) { toast.error('Нельзя удалить руководителя отдела'); return; }
     onUpdate({ ...dept, members: dept.members.filter(m => m.id !== memberId) });
     toast.success('Сотрудник удалён из отдела');
+  }
+
+  function addMember() {
+    const name = newMember.name.trim();
+    const email = newMember.email.trim();
+    if (!name) { toast.error('Введите ФИО'); return; }
+    if (!email || !email.includes('@')) { toast.error('Введите корректный email'); return; }
+    onUpdate({ ...dept, members: [...dept.members, {
+      id: `m-${Date.now()}`, name, email, role: 'PVZOperator', dept: dept.id, position: newMember.position.trim() || 'Сотрудник',
+    }] });
+    setShowAdd(false);
+    setNewMember({ name: '', email: '', position: '' });
+    toast.success(`${name} добавлен в «${dept.name}»`);
   }
 
   return (
@@ -227,12 +242,36 @@ function DeptCard({ dept, onUpdate }: { dept: Department; onUpdate: (d: Departme
                   />
                 ))}
               </div>
-              {/* Add member stub */}
-              <button
-                onClick={() => toast.info('Выберите пользователя из списка и назначьте его в отдел')}
-                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 hover:border-blue-400 text-gray-400 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors">
-                <Plus className="w-3.5 h-3.5" />Добавить сотрудника
-              </button>
+              {/* Add member */}
+              {showAdd ? (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                  <input
+                    value={newMember.name} onChange={e => setNewMember(f => ({ ...f, name: e.target.value }))}
+                    placeholder="ФИО *" autoFocus
+                    className="w-full px-3 py-1.5 border border-blue-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                  <input
+                    value={newMember.email} onChange={e => setNewMember(f => ({ ...f, email: e.target.value }))}
+                    placeholder="email *"
+                    className="w-full px-3 py-1.5 border border-blue-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                  <input
+                    value={newMember.position} onChange={e => setNewMember(f => ({ ...f, position: e.target.value }))}
+                    placeholder="Должность"
+                    className="w-full px-3 py-1.5 border border-blue-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowAdd(false)} className="flex-1 py-1.5 border border-blue-200 rounded-lg text-xs hover:bg-white">Отмена</button>
+                    <button onClick={addMember} className="flex-1 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700">Добавить</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAdd(true)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 hover:border-blue-400 text-gray-400 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors">
+                  <Plus className="w-3.5 h-3.5" />Добавить сотрудника
+                </button>
+              )}
             </div>
           </motion.div>
         )}

@@ -915,13 +915,13 @@ function AgentDetailModal({ agent, activeConvs, onClose, onOpenChat }: {
             <div className="space-y-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: 'Активных чатов', value: agent.activeChats, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-                  { label: 'Закрыто сегодня', value: resolvedChats.length, color: 'text-green-700', bg: 'bg-green-50 border-green-200' },
-                  { label: 'Ср. время', value: avgTime > 0 ? `${avgTime} мин` : '—', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
-                  { label: 'CSAT', value: avgCsat !== '—' ? `${avgCsat} ★` : '—', color: agent.csat >= 4.5 ? 'text-green-700' : 'text-orange-700', bg: 'bg-yellow-50 border-yellow-200' },
+                  { label: 'Активных чатов', value: agent.activeChats,    color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200',     gotoTab: 'active'   as const },
+                  { label: 'Закрыто сегодня',value: resolvedChats.length, color: 'text-green-700',  bg: 'bg-green-50 border-green-200',   gotoTab: 'resolved' as const },
+                  { label: 'Ср. время',      value: avgTime > 0 ? `${avgTime} мин` : '—', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200', gotoTab: 'resolved' as const },
+                  { label: 'CSAT',           value: avgCsat !== '—' ? `${avgCsat} ★` : '—', color: agent.csat >= 4.5 ? 'text-green-700' : 'text-orange-700', bg: 'bg-yellow-50 border-yellow-200', gotoTab: 'resolved' as const },
                 ].map(s => (
                   <button key={s.label}
-                    onClick={() => toast.info(s.label, { description: `${agent.name}: ${s.value}` })}
+                    onClick={() => setTab(s.gotoTab)}
                     className={`rounded-xl border p-3 text-center cursor-pointer hover:shadow-sm active:scale-[0.97] transition-all ${s.bg}`}
                   >
                     <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
