@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Globe, Shield, Bell, Clock, Puzzle, Palette,
-  Save, RotateCcw, Eye, EyeOff, Copy, Plus, Trash2,
+  Save, RotateCcw, Eye, EyeOff, Copy, Plus, Trash2, X,
   Check, AlertTriangle, Info, Lock, Key, Server,
   Mail, MessageSquare, Smartphone, Webhook, Database,
   RefreshCw, Download, Upload, ChevronRight, ExternalLink,
@@ -9,6 +9,9 @@ import {
   ToggleLeft, ToggleRight, Activity,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToCsv } from '../utils/downloads';
+
+const fmtSavedTime = (d: Date) => d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,22 +84,32 @@ const selectCls = "w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm 
 
 // ─── Tab: General ─────────────────────────────────────────────────────────────
 
+const GENERAL_DEFAULTS = {
+  platformName: 'PVZ Platform',
+  platformUrl: 'https://platform.pvz.example.com',
+  supportEmail: 'support@pvz.example.com',
+  adminEmail: 'admin@platform.com',
+  timezone: 'Europe/Moscow',
+  language: 'ru',
+  currency: 'RUB',
+  dateFormat: 'DD.MM.YYYY',
+  maintenanceMode: false,
+  betaFeatures: false,
+};
+
 function GeneralTab() {
-  const [form, setForm] = useState({
-    platformName: 'PVZ Platform',
-    platformUrl: 'https://platform.pvz.example.com',
-    supportEmail: 'support@pvz.example.com',
-    adminEmail: 'admin@platform.com',
-    timezone: 'Europe/Moscow',
-    language: 'ru',
-    currency: 'RUB',
-    dateFormat: 'DD.MM.YYYY',
-    maintenanceMode: false,
-    betaFeatures: false,
-  });
+  const [form, setForm] = useState({ ...GENERAL_DEFAULTS });
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   function save() {
+    setSavedAt(new Date());
     toast.success('Общие настройки сохранены', { description: 'Изменения вступят в силу немедленно' });
+  }
+
+  function reset() {
+    setForm({ ...GENERAL_DEFAULTS });
+    setSavedAt(null);
+    toast.info('Данные сброшены к значениям по умолчанию');
   }
 
   return (
@@ -182,17 +195,24 @@ function GeneralTab() {
 
       <div className="flex items-center justify-between pt-2">
         <button
-          onClick={() => toast.info('Данные сброшены к значениям по умолчанию')}
+          onClick={reset}
           className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
         >
           <RotateCcw className="w-4 h-4" />Сбросить
         </button>
-        <button
-          onClick={save}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-blue-100"
-        >
-          <Save className="w-4 h-4" />Сохранить изменения
-        </button>
+        <div className="flex items-center gap-3">
+          {savedAt && (
+            <span className="flex items-center gap-1.5 text-xs text-green-600">
+              <Check className="w-3.5 h-3.5" />Сохранено в {fmtSavedTime(savedAt)}
+            </span>
+          )}
+          <button
+            onClick={save}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-blue-100"
+          >
+            <Save className="w-4 h-4" />Сохранить изменения
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -213,8 +233,32 @@ function SecurityTab() {
     ssoEnabled: false,
     apiKeyRotation: '90',
   });
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [apiKey, setApiKey] = useState('sk_live_pvz_' + 'x'.repeat(32));
+  const [confirmRotate, setConfirmRotate] = useState(false);
 
-  const apiKey = 'sk_live_pvz_' + 'x'.repeat(32);
+  const generateKey = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let body = '';
+    for (let i = 0; i < 32; i++) body += chars[Math.floor(Math.random() * chars.length)];
+    return `sk_live_pvz_${body}`;
+  };
+
+  function rotateKey() {
+    setApiKey(generateKey());
+    setConfirmRotate(false);
+    toast.success('Ключ ротирован', { description: 'Старый ключ перестанет работать через 24 часа' });
+  }
+
+  function newKey() {
+    setApiKey(generateKey());
+    toast.success('Новый сервисный ключ создан', { description: 'Ключ показан в поле выше — скопируй и сохрани' });
+  }
+
+  function saveSecurity() {
+    setSavedAt(new Date());
+    toast.success('Настройки безопасности сохранены', { description: 'Действие записано в журнал аудита' });
+  }
 
   return (
     <div className="space-y-6">
@@ -350,13 +394,13 @@ function SecurityTab() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => toast.warning('Подтвердите ротацию ключа — все текущие интеграции потребуют обновления')}
+              onClick={() => setConfirmRotate(true)}
               className="flex items-center gap-2 px-4 py-2 border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl text-sm font-medium transition-colors"
             >
               <RefreshCw className="w-4 h-4" />Ротация ключа
             </button>
             <button
-              onClick={() => toast.info('Новый сервисный ключ создан')}
+              onClick={newKey}
               className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-medium transition-colors"
             >
               <Plus className="w-4 h-4" />Новый ключ
@@ -365,9 +409,32 @@ function SecurityTab() {
         </div>
       </Section>
 
-      <div className="flex justify-end">
+      {confirmRotate && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setConfirmRotate(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5 text-orange-600" /></div>
+              <div>
+                <p className="font-bold text-gray-900">Ротировать API-ключ?</p>
+                <p className="text-xs text-gray-500 mt-1">Все текущие интеграции потребуют обновления. Старый ключ перестанет работать через 24 часа.</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmRotate(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={rotateKey} className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-semibold">Ротировать</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end items-center gap-3">
+        {savedAt && (
+          <span className="flex items-center gap-1.5 text-xs text-green-600">
+            <Check className="w-3.5 h-3.5" />Сохранено в {fmtSavedTime(savedAt)}
+          </span>
+        )}
         <button
-          onClick={() => toast.success('Настройки безопасности сохранены', { description: 'Действие записано в журнал аудита' })}
+          onClick={saveSecurity}
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-blue-100"
         >
           <Save className="w-4 h-4" />Сохранить
@@ -401,6 +468,7 @@ function NotificationsTab() {
 
   const [emails, setEmails] = useState(['admin@platform.com', 'ops@platform.com']);
   const [newEmail, setNewEmail] = useState('');
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   function addEmail() {
     if (newEmail.trim() && newEmail.includes('@')) {
@@ -408,6 +476,11 @@ function NotificationsTab() {
       setNewEmail('');
       toast.success('Email-адрес добавлен');
     }
+  }
+
+  function saveNotifications() {
+    setSavedAt(new Date());
+    toast.success('Настройки уведомлений сохранены');
   }
 
   return (
@@ -511,9 +584,14 @@ function NotificationsTab() {
         </div>
       </Section>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end items-center gap-3">
+        {savedAt && (
+          <span className="flex items-center gap-1.5 text-xs text-green-600">
+            <Check className="w-3.5 h-3.5" />Сохранено в {fmtSavedTime(savedAt)}
+          </span>
+        )}
         <button
-          onClick={() => toast.success('Настройки уведомлений сохранены')}
+          onClick={saveNotifications}
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-blue-100"
         >
           <Save className="w-4 h-4" />Сохранить
@@ -526,6 +604,11 @@ function NotificationsTab() {
 // ─── Tab: SLA ─────────────────────────────────────────────────────────────────
 
 function SLATab() {
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  function saveSla() {
+    setSavedAt(new Date());
+    toast.success('SLA-правила обновлены', { description: 'Применяются ко всем новым обращениям' });
+  }
   const [slaMatrix, setSlaMatrix] = useState([
     { channel: 'Клиенты (support)',    low: 240, normal: 120, high: 30,  critical: 10 },
     { channel: 'Курьеры',              low: 120, normal: 60,  high: 15,  critical: 5  },
@@ -654,9 +737,14 @@ function SLATab() {
         </div>
       </Section>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end items-center gap-3">
+        {savedAt && (
+          <span className="flex items-center gap-1.5 text-xs text-green-600">
+            <Check className="w-3.5 h-3.5" />Сохранено в {fmtSavedTime(savedAt)}
+          </span>
+        )}
         <button
-          onClick={() => toast.success('SLA-правила обновлены', { description: 'Применяются ко всем новым обращениям' })}
+          onClick={saveSla}
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-blue-100"
         >
           <Save className="w-4 h-4" />Сохранить SLA
@@ -674,6 +762,22 @@ function IntegrationsTab() {
     { id: 'wh2', name: 'Telegram-бот оповещений', url: 'https://api.telegram.org/bot.../sendMessage', events: ['sla.breach', 'pvz.offline'], active: true },
     { id: 'wh3', name: 'Аналитическая платформа', url: 'https://analytics.internal.co/ingest', events: ['order.completed', 'refund.issued'], active: false },
   ]);
+  const [showAddWebhook, setShowAddWebhook] = useState(false);
+  const [newWebhook, setNewWebhook] = useState({ name: '', url: '', events: 'order.created' });
+  const [viewingIntegration, setViewingIntegration] = useState<null | { name: string; desc: string; status: string }>(null);
+
+  function addWebhook() {
+    const name = newWebhook.name.trim();
+    const url  = newWebhook.url.trim();
+    if (!name) { toast.error('Имя webhook не может быть пустым'); return; }
+    if (!/^https?:\/\//i.test(url)) { toast.error('URL должен начинаться с http:// или https://'); return; }
+    const events = newWebhook.events.split(',').map(s => s.trim()).filter(Boolean);
+    if (events.length === 0) { toast.error('Укажите хотя бы одно событие'); return; }
+    setWebhooks(prev => [...prev, { id: `wh-${Date.now()}`, name, url, events, active: true }]);
+    setShowAddWebhook(false);
+    setNewWebhook({ name: '', url: '', events: 'order.created' });
+    toast.success(`Webhook добавлен: ${name}`);
+  }
 
   const integrations = [
     { name: '1С: Предприятие', desc: 'Синхронизация финансовых данных и товаров', icon: Database, status: 'connected', color: 'green' },
@@ -710,7 +814,7 @@ function IntegrationsTab() {
                   <div className={`w-2 h-2 rounded-full ${st.dot}`} />
                   <span className={`text-xs font-medium ${st.text}`}>{st.label}</span>
                 </div>
-                <button onClick={() => { import('sonner').then(m => m.toast.info(`Настройки интеграции «${i.name}»`)); }}
+                <button onClick={() => setViewingIntegration(intg)}
                   className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-600 transition-colors" title="Настройки">
                   <Settings2 className="w-4 h-4" />
                 </button>
@@ -725,7 +829,7 @@ function IntegrationsTab() {
         icon={Webhook}
         action={
           <button
-            onClick={() => toast.info('Диалог создания Webhook')}
+            onClick={() => setShowAddWebhook(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />Новый Webhook
@@ -781,14 +885,36 @@ function IntegrationsTab() {
       <Section title="Экспорт / Импорт данных" icon={Download}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
-            { label: 'Экспорт всех заказов', desc: 'CSV, все поля, за выбранный период', icon: Download },
-            { label: 'Экспорт финансового отчёта', desc: 'Excel с разбивкой по ПВЗ и каналам', icon: Download },
-            { label: 'Экспорт базы пользователей', desc: 'Без паролей — только профили и роли', icon: Download },
-            { label: 'Резервная копия настроек', desc: 'JSON-конфигурация всей платформы', icon: Upload },
-          ].map(({ label, desc, icon: Icon }) => (
+            { kind: 'orders'  as const, label: 'Экспорт всех заказов', desc: 'CSV, все поля, за выбранный период', icon: Download },
+            { kind: 'finance' as const, label: 'Экспорт финансового отчёта', desc: 'CSV с разбивкой по ПВЗ и каналам', icon: Download },
+            { kind: 'users'   as const, label: 'Экспорт базы пользователей', desc: 'Без паролей — только профили и роли', icon: Download },
+            { kind: 'backup'  as const, label: 'Резервная копия настроек', desc: 'JSON-конфигурация всей платформы', icon: Upload },
+          ].map(({ kind, label, desc, icon: Icon }) => (
             <button
-              key={label}
-              onClick={() => toast.success(`${label} — файл подготавливается`)}
+              key={kind}
+              onClick={() => {
+                if (kind === 'backup') {
+                  const cfg = { exportedAt: new Date().toISOString(), webhooks, version: '0.2.0' };
+                  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `pvz-platform-settings-${new Date().toISOString().slice(0, 10)}.json`;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  URL.revokeObjectURL(url);
+                  toast.success('Резервная копия скачана (JSON)');
+                  return;
+                }
+                const summaries = {
+                  orders:  [{ metric: 'Всего заказов (демо)', value: '1234' }, { metric: 'Период', value: 'последние 30 дней' }],
+                  finance: [{ metric: 'GMV (демо)', value: '₽12.4М' }, { metric: 'Период', value: 'последние 30 дней' }],
+                  users:   [{ metric: 'Всего пользователей (демо)', value: '142' }, { metric: 'Активных', value: '128' }],
+                };
+                exportToCsv(summaries[kind] as any[], [
+                  { key: 'metric', label: 'Метрика' },
+                  { key: 'value',  label: 'Значение' },
+                ], `${kind}-export`);
+                toast.success(`${label} — CSV скачан`);
+              }}
               className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all text-left group"
             >
               <div className="w-9 h-9 bg-gray-100 group-hover:bg-blue-100 rounded-xl flex items-center justify-center shrink-0 transition-colors">
@@ -803,6 +929,79 @@ function IntegrationsTab() {
           ))}
         </div>
       </Section>
+
+      {viewingIntegration && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingIntegration(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Настройки интеграции «{viewingIntegration.name}»</p>
+              <button onClick={() => setViewingIntegration(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-4 text-sm">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1">Описание</p>
+                <p className="text-gray-800">{viewingIntegration.desc}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1">Статус</p>
+                <p className="text-gray-800">{statusCfg[viewingIntegration.status as keyof typeof statusCfg].label}</p>
+              </div>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">Настройка endpoint-URL и секретов системных интеграций требует доступа SuperAdmin. Используйте секции Webhooks или Безопасность для самостоятельных настроек.</p>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end">
+              <button onClick={() => setViewingIntegration(null)} className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Закрыть</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddWebhook && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddWebhook(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Новый Webhook</p>
+              <button onClick={() => setShowAddWebhook(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Имя *</label>
+                <input
+                  value={newWebhook.name}
+                  onChange={e => setNewWebhook(f => ({ ...f, name: e.target.value }))}
+                  placeholder="ERP-интеграция"
+                  autoFocus
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">URL *</label>
+                <input
+                  value={newWebhook.url}
+                  onChange={e => setNewWebhook(f => ({ ...f, url: e.target.value }))}
+                  placeholder="https://example.com/webhook"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">События (через запятую)</label>
+                <input
+                  value={newWebhook.events}
+                  onChange={e => setNewWebhook(f => ({ ...f, events: e.target.value }))}
+                  placeholder="order.created, order.delivered"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex gap-3">
+              <button onClick={() => setShowAddWebhook(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={addWebhook} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Создать</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

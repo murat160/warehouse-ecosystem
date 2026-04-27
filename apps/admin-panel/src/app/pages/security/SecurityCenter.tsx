@@ -15,6 +15,7 @@ import {
   FileText,
   AlertCircle, CheckCircle, XCircle,
 } from 'lucide-react';
+import { exportToCsv } from '../../utils/downloads';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,9 @@ function PoliciesTab() {
   const [api, setApi] = useState({
     tokenExpiryDays: 90, maxTokensPerUser: 5, requireIpWhitelist: false, rateLimit: 1000,
   });
+  const [bruteForce, setBruteForce] = useState({
+    maxAttempts: 5, attemptWindow: 15, lockMinutes: 60,
+  });
   const [saved, setSaved] = useState(false);
 
   function save() {
@@ -332,19 +336,30 @@ function PoliciesTab() {
       <SectionCard title="Защита от Brute-Force" desc="Ограничение попыток входа" icon={ShieldAlert}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           {[
-            { label: 'Макс. попыток входа', desc: 'До автоблокировки аккаунта', value: 5 },
-            { label: 'Окно попыток (мин)', desc: 'Интервал подсчёта ошибок', value: 15 },
-            { label: 'Блокировка на (мин)', desc: 'Длительность блокировки IP', value: 60 },
+            { key: 'maxAttempts', label: 'Макс. попыток входа', desc: 'До автоблокировки аккаунта', min: 1, max: 50 },
+            { key: 'attemptWindow', label: 'Окно попыток (мин)', desc: 'Интервал подсчёта ошибок', min: 1, max: 60 },
+            { key: 'lockMinutes', label: 'Блокировка на (мин)', desc: 'Длительность блокировки IP', min: 1, max: 1440 },
           ].map(item => (
-            <button
-              key={item.label}
-              onClick={() => toast.info(item.label, { description: `Текущее значение: ${item.value} · Изменить в настройках политики` })}
-              className="text-center p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-blue-50 hover:border-blue-200 active:scale-[0.97] transition-all"
+            <div
+              key={item.key}
+              className="text-center p-4 bg-gray-50 rounded-xl border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-all"
             >
-              <p className="text-2xl font-black text-blue-600">{item.value}</p>
+              <input
+                type="number"
+                min={item.min}
+                max={item.max}
+                value={(bruteForce as any)[item.key]}
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!Number.isFinite(v)) return;
+                  const clamped = Math.max(item.min, Math.min(item.max, v));
+                  setBruteForce(prev => ({ ...prev, [item.key]: clamped }));
+                }}
+                className="text-2xl font-black text-blue-600 w-20 text-center bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-300 rounded"
+              />
               <p className="text-xs font-semibold text-gray-700 mt-1">{item.label}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">{item.desc}</p>
-            </button>
+            </div>
           ))}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -494,7 +509,22 @@ function LoginsTab() {
             <span className="ml-1 opacity-60">{counts[f]}</span>
           </button>
         ))}
-        <button onClick={() => toast.success('Экспорт журнала входов запущен')}
+        <button
+          onClick={() => {
+            if (filtered.length === 0) { toast.info('Нет событий для экспорта'); return; }
+            exportToCsv(filtered as any[], [
+              { key: 'user',       label: 'Пользователь' },
+              { key: 'email',      label: 'Email' },
+              { key: 'ip',         label: 'IP' },
+              { key: 'location',   label: 'Локация' },
+              { key: 'device',     label: 'Устройство' },
+              { key: 'status',     label: 'Статус' },
+              { key: 'twoFaUsed',  label: '2FA' },
+              { key: 'reason',     label: 'Причина' },
+              { key: 'timestamp',  label: 'Время' },
+            ], 'login-journal');
+            toast.success(`Скачан CSV: ${filtered.length} событий`);
+          }}
           className="ml-auto flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors">
           <Download className="w-3.5 h-3.5" />Экспорт
         </button>
@@ -650,6 +680,9 @@ function IpTab() {
 function TokensTab() {
   const [tokens, setTokens] = useState<ApiToken[]>(API_TOKENS);
   const [showRevealId, setShowRevealId] = useState<string | null>(null);
+  const [showCreateToken, setShowCreateToken] = useState(false);
+  const [newTokenForm, setNewTokenForm] = useState({ name: '', scope: 'orders:read', expiryDays: '90' });
+  const [keyOverrides, setKeyOverrides] = useState<Record<string, string>>({});
 
   const STATUS_CFG = {
     active:  { badge: 'bg-green-100 text-green-700', label: 'Активен' },
@@ -662,23 +695,103 @@ function TokensTab() {
     toast.success('Токен отозван');
   }
 
-  const secretKeys = [
+  function createToken() {
+    const name = newTokenForm.name.trim();
+    if (!name) { toast.error('Введите имя токена'); return; }
+    const days = parseInt(newTokenForm.expiryDays, 10);
+    if (!Number.isFinite(days) || days <= 0) { toast.error('Срок жизни должен быть > 0 дней'); return; }
+    const today = new Date();
+    const expiry = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+    const dateStr = (d: Date) => d.toLocaleDateString('ru-RU');
+    const prefix = `pk_${Math.random().toString(36).slice(2, 10)}_${Math.random().toString(36).slice(2, 10)}`;
+    const newToken: ApiToken = {
+      id: `tok-${Date.now()}`,
+      name,
+      prefix,
+      scope: [newTokenForm.scope],
+      createdAt: dateStr(today),
+      lastUsed: '—',
+      expiresAt: dateStr(expiry),
+      status: 'active',
+    };
+    setTokens(prev => [newToken, ...prev]);
+    setShowCreateToken(false);
+    setNewTokenForm({ name: '', scope: 'orders:read', expiryDays: '90' });
+    toast.success(`Токен создан: ${name}`, { description: `Префикс: ${prefix}` });
+  }
+
+  const baseSecretKeys = [
     { name: 'JWT_SECRET', value: 'hs256_prod_••••••••••••••••••••••••••••', env: 'production', updated: '01.01.2026' },
     { name: 'WEBHOOK_SIGNING_KEY', value: 'whsec_••••••••••••••••••••••••', env: 'production', updated: '15.02.2026' },
     { name: 'ENCRYPTION_KEY',  value: 'aes256_••••••••••••••••••••••••••••', env: 'production', updated: '01.01.2026' },
     { name: 'SERVICE_ACCOUNT_KEY', value: 'sa_key_••••••••••••••••••••••', env: 'all', updated: '10.03.2026' },
   ];
+  const secretKeys = baseSecretKeys.map(k => keyOverrides[k.name] ? { ...k, updated: keyOverrides[k.name] } : k);
 
   return (
     <div className="space-y-5">
       {/* API Tokens */}
       <SectionCard title="API Токены" desc="Ключи доступа к API для интеграций" icon={Key}>
         <div className="flex justify-end mb-3">
-          <button onClick={() => toast.info('Откройте диалог создания токена')}
+          <button onClick={() => setShowCreateToken(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors">
             <Plus className="w-3.5 h-3.5" />Создать токен
           </button>
         </div>
+
+        {showCreateToken && ReactDOM.createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowCreateToken(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+              <div className="px-6 py-4 border-b flex items-center justify-between">
+                <p className="font-bold text-gray-900">Создать API-токен</p>
+                <button onClick={() => setShowCreateToken(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Имя токена *</label>
+                  <input
+                    value={newTokenForm.name}
+                    onChange={e => setNewTokenForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Integration Webhook"
+                    autoFocus
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Scope</label>
+                  <select
+                    value={newTokenForm.scope}
+                    onChange={e => setNewTokenForm(f => ({ ...f, scope: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="orders:read">orders:read</option>
+                    <option value="orders:write">orders:write</option>
+                    <option value="inventory:read">inventory:read</option>
+                    <option value="inventory:write">inventory:write</option>
+                    <option value="webhooks:write">webhooks:write</option>
+                    <option value="admin:full">admin:full</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Срок жизни (дней)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={newTokenForm.expiryDays}
+                    onChange={e => setNewTokenForm(f => ({ ...f, expiryDays: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t flex gap-3">
+                <button onClick={() => setShowCreateToken(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+                <button onClick={createToken} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Создать</button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
         <div className="space-y-3">
           {tokens.map(token => {
             const cfg = STATUS_CFG[token.status];
@@ -728,11 +841,26 @@ function TokensTab() {
                   className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
                   {showRevealId === key.name ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
-                <button onClick={() => { toast.success('Скопировано'); }}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
+                <button
+                  onClick={() => {
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(key.value).then(
+                        () => toast.success(`${key.name} скопирован`),
+                        () => toast.error('Не удалось скопировать')
+                      );
+                    } else {
+                      toast.error('Clipboard API недоступен');
+                    }
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors" title="Скопировать">
                   <Copy className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => toast.success('Токен ротирован. Старый перестанет работать через 24 часа.')}
+                <button
+                  onClick={() => {
+                    const today = new Date().toLocaleDateString('ru-RU');
+                    setKeyOverrides(prev => ({ ...prev, [key.name]: today }));
+                    toast.success(`${key.name} ротирован`, { description: `Новая дата: ${today}. Старый ключ перестанет работать через 24 часа.` });
+                  }}
                   className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Ротировать">
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
@@ -769,11 +897,26 @@ function TokensTab() {
 
 function SsoTab() {
   const [providers, setProviders] = useState<SsoProvider[]>(SSO_PROVIDERS);
+  const [editingProvider, setEditingProvider] = useState<SsoProvider | null>(null);
+  const [editForm, setEditForm] = useState({ clientId: '', clientSecret: '' });
 
   function toggleProvider(id: string) {
     setProviders(prev => prev.map(p => p.id === id ? { ...p, active: !p.active } : p));
     const p = providers.find(x => x.id === id);
     toast.success(`${p?.name} ${p?.active ? 'отключён' : 'включён'}`);
+  }
+
+  function openEdit(p: SsoProvider) {
+    setEditingProvider(p);
+    setEditForm({ clientId: p.clientId, clientSecret: '' });
+  }
+
+  function saveEdit() {
+    if (!editingProvider) return;
+    if (!editForm.clientId.trim()) { toast.error('Client ID не может быть пустым'); return; }
+    setProviders(prev => prev.map(p => p.id === editingProvider.id ? { ...p, clientId: editForm.clientId.trim() } : p));
+    toast.success(`Настройки ${editingProvider.name} сохранены`);
+    setEditingProvider(null);
   }
 
   return (
@@ -793,7 +936,7 @@ function SsoTab() {
                 {p.active && <p className="text-xs text-green-700 mt-0.5">{p.userCount} пользователей используют этот провайдер</p>}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => toast.info(`Настройка SSO: ${p.name}`)}
+                <button onClick={() => openEdit(p)}
                   className="p-2 border border-gray-200 rounded-xl hover:bg-white text-gray-500 transition-colors" title="Настроить">
                   <Settings className="w-4 h-4" />
                 </button>
@@ -823,6 +966,43 @@ function SsoTab() {
           ))}
         </div>
       </SectionCard>
+
+      {editingProvider && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditingProvider(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Настройка SSO: {editingProvider.name}</p>
+              <button onClick={() => setEditingProvider(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Client ID</label>
+                <input
+                  value={editForm.clientId}
+                  onChange={e => setEditForm(f => ({ ...f, clientId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Client Secret <span className="text-gray-400 font-normal">(оставь пустым, чтобы не менять)</span></label>
+                <input
+                  type="password"
+                  value={editForm.clientSecret}
+                  onChange={e => setEditForm(f => ({ ...f, clientSecret: e.target.value }))}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-gray-500">Тип: <span className="font-mono font-semibold">{editingProvider.type.toUpperCase()}</span> · {editingProvider.userCount} пользователей.</p>
+            </div>
+            <div className="px-6 py-4 border-t flex gap-3">
+              <button onClick={() => setEditingProvider(null)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={saveEdit} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Сохранить</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -939,7 +1119,25 @@ function SuperAdminTab() {
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <p className="text-sm font-bold text-gray-700">Критические действия SuperAdmin</p>
-          <button onClick={() => toast.success('Экспорт критических действий SuperAdmin')}
+          <button
+            onClick={() => {
+              if (SUPERADMIN_ACTIONS.length === 0) { toast.info('Нет действий для экспорта'); return; }
+              const rows = SUPERADMIN_ACTIONS.map(a => ({
+                ...a,
+                actionLabel: ACTION_LABELS[a.action] ?? a.action,
+              }));
+              exportToCsv(rows as any[], [
+                { key: 'timestamp',   label: 'Время' },
+                { key: 'actor',       label: 'SuperAdmin' },
+                { key: 'action',      label: 'Код действия' },
+                { key: 'actionLabel', label: 'Действие' },
+                { key: 'target',      label: 'Цель' },
+                { key: 'detail',      label: 'Детали' },
+                { key: 'ip',          label: 'IP' },
+                { key: 'riskLevel',   label: 'Риск' },
+              ], 'superadmin-actions');
+              toast.success(`Экспорт скачан: ${SUPERADMIN_ACTIONS.length} действий`);
+            }}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-xl hover:bg-gray-100 transition-colors">
             <Download className="w-3.5 h-3.5" />Экспорт
           </button>

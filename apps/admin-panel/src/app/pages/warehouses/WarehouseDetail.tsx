@@ -12,6 +12,7 @@ import {
 import { ChartWrapper } from '../../components/ui/ChartWrapper';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { DocumentViewerModal, type DocumentRecord, type DocumentContent } from '../../components/ui/DocumentViewer';
+import { exportToCsv } from '../../utils/downloads';
 import ReactDOM from 'react-dom';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -168,6 +169,16 @@ export function WarehouseDetail() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<DocumentRecord | null>(null);
 
+  // Live mutable copies of mock data so handlers actually change state.
+  const [inboundList,  setInboundList]  = useState<InboundShipment[]>(INBOUND);
+  const [outboundList, setOutboundList] = useState<OutboundTask[]>(OUTBOUND);
+  const [staffList,    setStaffList]    = useState<StaffMember[]>(STAFF);
+  const [extraDocs,    setExtraDocs]    = useState<{ id: string; name: string; type: string; size: string; date: string; status: 'pending' }[]>([]);
+  const [escalatedShipments, setEscalatedShipments] = useState<Set<string>>(new Set());
+  const [viewingDetails, setViewingDetails] = useState<null | { kind: 'shipment' | 'task' | 'staff'; data: any }>(null);
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const [newStaff, setNewStaff] = useState({ name: '', role: 'Кладовщик', shift: 'утро 08:00-20:00', zone: 'A' });
+
   const wh = WAREHOUSES[id || '1'] ?? WAREHOUSES['1'];
   const loadPct = Math.round((wh.currentLoad / wh.capacity) * 100);
 
@@ -178,19 +189,93 @@ export function WarehouseDetail() {
   );
 
   const handleExport = () => {
-    toast.success('Экспорт данных запущен', { description: `Файл будет готов через несколько секунд` });
+    let rows: any[] = [];
+    let cols: { key: string; label: string }[] = [];
+    let name = 'warehouse-export';
+    if (activeTab === 'inventory') {
+      rows = filteredInv;
+      cols = [
+        { key: 'sku', label: 'SKU' }, { key: 'name', label: 'Название' }, { key: 'category', label: 'Категория' },
+        { key: 'qty', label: 'Кол-во' }, { key: 'reserved', label: 'Резерв' }, { key: 'available', label: 'Доступно' },
+        { key: 'cell', label: 'Ячейка' }, { key: 'lastMovement', label: 'Последнее движение' },
+      ];
+      name = `inventory-${wh.code}`;
+    } else if (activeTab === 'inbound') {
+      rows = inboundList;
+      cols = [
+        { key: 'manifest', label: 'Манифест' }, { key: 'from', label: 'Отправитель' }, { key: 'items', label: 'Позиций' },
+        { key: 'status', label: 'Статус' }, { key: 'expectedAt', label: 'Ожидается' }, { key: 'arrivedAt', label: 'Прибыл' },
+        { key: 'operator', label: 'Оператор' },
+      ];
+      name = `inbound-${wh.code}`;
+    } else if (activeTab === 'outbound') {
+      rows = outboundList;
+      cols = [
+        { key: 'orderId', label: 'Заказ' }, { key: 'customerName', label: 'Клиент' }, { key: 'items', label: 'Позиций' },
+        { key: 'destination', label: 'Назначение' }, { key: 'courier', label: 'Курьер' }, { key: 'status', label: 'Статус' },
+        { key: 'priority', label: 'Приоритет' }, { key: 'createdAt', label: 'Создан' },
+      ];
+      name = `outbound-${wh.code}`;
+    } else {
+      rows = filteredInv;
+      cols = [{ key: 'sku', label: 'SKU' }, { key: 'name', label: 'Название' }, { key: 'qty', label: 'Кол-во' }];
+      name = `warehouse-${wh.code}`;
+    }
+    if (rows.length === 0) { toast.info('Нет данных для экспорта'); return; }
+    exportToCsv(rows, cols, name);
+    toast.success(`Скачан CSV: ${rows.length} строк`);
   };
 
   const handleRefresh = () => {
     toast.success('Данные обновлены', { description: 'Синхронизация WMS выполнена' });
   };
 
-  const handleStartPicking = (taskId: string) => {
-    toast.success(`Пикинг начат`, { description: `Задание ${taskId} передано на исполнение` });
+  const handleStartPicking = (orderId: string) => {
+    setOutboundList(prev => prev.map(t => t.orderId === orderId ? { ...t, status: 'picking' } : t));
+    toast.success(`Пикинг начат`, { description: `Задание ${orderId} → В работе` });
   };
 
   const handleReceiveShipment = (manifest: string) => {
-    toast.success(`Приёмка начата`, { description: `Поставка ${manifest} передана оператору` });
+    setInboundList(prev => prev.map(s => s.manifest === manifest ? { ...s, status: 'in_progress', operator: 'Текущий оператор', arrivedAt: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } : s));
+    toast.success(`Приёмка начата`, { description: `Поставка ${manifest} → В процессе` });
+  };
+
+  const handleMarkPacked = (orderId: string) => {
+    setOutboundList(prev => prev.map(t => t.orderId === orderId ? { ...t, status: 'packed' } : t));
+    toast.success(`Упаковано`, { description: `${orderId} → Готов к отправке` });
+  };
+
+  const handleDispatch = (orderId: string) => {
+    setOutboundList(prev => prev.map(t => t.orderId === orderId ? { ...t, status: 'dispatched' } : t));
+    toast.success(`Передано курьеру`, { description: `${orderId} → Отправлен` });
+  };
+
+  const handleEscalateOverdue = (manifest: string) => {
+    setEscalatedShipments(prev => new Set(prev).add(manifest));
+    toast.error('Инцидент создан', { description: `Просрочка поставки ${manifest} — передано в поддержку` });
+  };
+
+  const handleAddStaff = () => {
+    const name = newStaff.name.trim();
+    if (!name) { toast.error('ФИО не может быть пустым'); return; }
+    setStaffList(prev => [...prev, {
+      id: `st-${Date.now()}`, name, role: newStaff.role, shift: newStaff.shift,
+      zone: newStaff.zone, tasksToday: 0, status: 'offline',
+    }]);
+    setShowAddStaff(false);
+    setNewStaff({ name: '', role: 'Кладовщик', shift: 'утро 08:00-20:00', zone: 'A' });
+    toast.success(`Сотрудник добавлен: ${name}`, { description: 'Приглашение отправлено на email' });
+  };
+
+  const handleDownloadDoc = (doc: { name: string; type: string; size: string; date?: string }) => {
+    const text = `Документ: ${doc.name}\nСклад: ${wh.name} (${wh.code})\nТип: ${doc.type}\nРазмер: ${doc.size}${doc.date ? `\nДата: ${doc.date}` : ''}`;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${wh.code}-${doc.name}.txt`.replace(/[\\/:*?"<>|]/g, '_');
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`Скачан: ${doc.name}`);
   };
 
   return (
@@ -414,7 +499,7 @@ export function WarehouseDetail() {
                 </button>
               </div>
               <div className="space-y-3">
-                {INBOUND.map(ship => {
+                {inboundList.map(ship => {
                   const cfg = STATUS_IN_CFG[ship.status];
                   return (
                     <div key={ship.id} className={`p-4 border rounded-xl ${ship.status === 'overdue' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
@@ -442,21 +527,26 @@ export function WarehouseDetail() {
                             </button>
                           )}
                           {ship.status === 'in_progress' && (
-                            <button onClick={() => { import('sonner').then(m => m.toast.info(`Поставка ${ship.id} — открыть детали`)); }}
+                            <button onClick={() => setViewingDetails({ kind: 'shipment', data: ship })}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-sm hover:bg-yellow-600 transition-colors">
                               <Activity className="w-3.5 h-3.5" /> В процессе
                             </button>
                           )}
-                          {ship.status === 'overdue' && (
+                          {ship.status === 'overdue' && !escalatedShipments.has(ship.manifest) && (
                             <button
-                              onClick={() => toast.error('Инцидент создан', { description: `Просрочка поставки ${ship.manifest} — передано в поддержку` })}
+                              onClick={() => handleEscalateOverdue(ship.manifest)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
                             >
                               <AlertCircle className="w-3.5 h-3.5" /> Эскалировать
                             </button>
                           )}
+                          {ship.status === 'overdue' && escalatedShipments.has(ship.manifest) && (
+                            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm">
+                              <AlertCircle className="w-3.5 h-3.5" /> Эскалировано
+                            </span>
+                          )}
                           <button
-                            onClick={() => toast.info('Детали поставки', { description: `${ship.manifest}: ${ship.items} позиций от «${ship.from}»` })}
+                            onClick={() => setViewingDetails({ kind: 'shipment', data: ship })}
                             className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -480,7 +570,7 @@ export function WarehouseDetail() {
                 </button>
               </div>
               <div className="space-y-3">
-                {OUTBOUND.map(task => {
+                {outboundList.map(task => {
                   const stCfg = STATUS_OUT_CFG[task.status];
                   const prCfg = PRIORITY_CFG[task.priority];
                   return (
@@ -507,7 +597,7 @@ export function WarehouseDetail() {
                           )}
                           {task.status === 'picking' && (
                             <button
-                              onClick={() => toast.success('Статус обновлён', { description: `${task.orderId} → Упакован` })}
+                              onClick={() => handleMarkPacked(task.orderId)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
                             >
                               <Check className="w-3.5 h-3.5" /> Упаковано
@@ -515,14 +605,14 @@ export function WarehouseDetail() {
                           )}
                           {task.status === 'packed' && (
                             <button
-                              onClick={() => toast.success('Передано курьеру', { description: `${task.orderId} готов к отправке` })}
+                              onClick={() => handleDispatch(task.orderId)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors"
                             >
                               <Truck className="w-3.5 h-3.5" /> Передать
                             </button>
                           )}
                           <button
-                            onClick={() => toast.info('Детали задания', { description: `${task.orderId}: ${task.items} поз. → ${task.destination}` })}
+                            onClick={() => setViewingDetails({ kind: 'task', data: task })}
                             className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
                           >
                             <Eye className="w-4 h-4" />
@@ -542,14 +632,14 @@ export function WarehouseDetail() {
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-gray-900">Персонал склада</h3>
                 <button
-                  onClick={() => toast.success('Приглашение отправлено', { description: 'Ссылка для регистрации выслана на email' })}
+                  onClick={() => setShowAddStaff(true)}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="w-4 h-4" /> Добавить сотрудника
                 </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {STAFF.map(member => {
+                {staffList.map(member => {
                   const stCfg = STAFF_STATUS_CFG[member.status];
                   return (
                     <div key={member.id} className="p-4 border border-gray-200 rounded-xl bg-white">
@@ -582,17 +672,17 @@ export function WarehouseDetail() {
                       </div>
                       <div className="mt-3 flex gap-2">
                         <button
-                          onClick={() => toast.info(`Профиль: ${member.name}`, { description: `Роль: ${member.role} · Зона: ${member.zone}` })}
+                          onClick={() => setViewingDetails({ kind: 'staff', data: member })}
                           className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                         >
                           Профиль
                         </button>
-                        <button
-                          onClick={() => toast.success(`Сообщение отправлено`, { description: `Уведомление для ${member.name}` })}
-                          className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        <Link
+                          to={`/chat?with=${encodeURIComponent('staff:' + member.id)}&name=${encodeURIComponent(member.name)}`}
+                          className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center text-gray-700"
                         >
                           Написать
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   );
@@ -654,12 +744,24 @@ export function WarehouseDetail() {
               expired: { label: 'Истёк', cls: 'bg-red-100 text-red-700' },
             };
 
+            const allDocs: DocumentRecord[] = [
+              ...WH_DOCS,
+              ...extraDocs.map(d => ({ id: d.id, name: d.name, type: d.type, size: d.size, date: d.date, status: d.status })),
+            ];
             return (
               <WarehouseDocumentsTab
-                docs={WH_DOCS}
+                docs={allDocs}
                 statusCfg={DOC_STATUS_CFG}
                 onView={setViewingDoc}
                 onExport={handleExport}
+                onUpload={(file) => {
+                  if (file.size > 20 * 1024 * 1024) { toast.error('Файл больше 20 MB'); return; }
+                  const sizeKb = Math.max(1, Math.round(file.size / 1024));
+                  const today = new Date().toLocaleDateString('ru-RU');
+                  setExtraDocs(prev => [...prev, { id: `wd-${Date.now()}`, name: file.name, type: file.name.split('.').pop()?.toUpperCase() ?? 'FILE', size: `${sizeKb} КБ`, date: today, status: 'pending' }]);
+                  toast.success(`Документ «${file.name}» загружен`, { description: 'Статус: ожидает подписи' });
+                }}
+                onDownload={(doc) => handleDownloadDoc({ name: doc.name, type: doc.type, size: doc.size, date: doc.date })}
               />
             );
           })()}
@@ -725,7 +827,7 @@ export function WarehouseDetail() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Исполнитель</label>
                 <select className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
-                  {STAFF.filter(s => s.status !== 'offline').map(s => (
+                  {staffList.filter(s => s.status !== 'offline').map(s => (
                     <option key={s.id}>{s.name} ({s.role})</option>
                   ))}
                 </select>
@@ -760,6 +862,82 @@ export function WarehouseDetail() {
           </div>
         </div>
       )}
+
+      {showAddStaff && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddStaff(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Добавить сотрудника</p>
+              <button onClick={() => setShowAddStaff(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">ФИО *</label>
+                <input value={newStaff.name} onChange={e => setNewStaff(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Иванов Иван Иванович" autoFocus
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Роль</label>
+                  <select value={newStaff.role} onChange={e => setNewStaff(f => ({ ...f, role: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option>Кладовщик</option>
+                    <option>Старший смены</option>
+                    <option>Оператор приёмки</option>
+                    <option>Упаковщик</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Зона</label>
+                  <input value={newStaff.zone} onChange={e => setNewStaff(f => ({ ...f, zone: e.target.value }))}
+                    placeholder="A"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Смена</label>
+                <select value={newStaff.shift} onChange={e => setNewStaff(f => ({ ...f, shift: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option>утро 08:00-20:00</option>
+                  <option>ночь 20:00-08:00</option>
+                  <option>день 09:00-18:00</option>
+                </select>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex gap-3">
+              <button onClick={() => setShowAddStaff(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={handleAddStaff} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Добавить</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {viewingDetails && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingDetails(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">
+                {viewingDetails.kind === 'shipment' ? 'Поставка' : viewingDetails.kind === 'task' ? 'Задание' : 'Профиль сотрудника'}
+              </p>
+              <button onClick={() => setViewingDetails(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-2 text-sm">
+              {Object.entries(viewingDetails.data).map(([k, v]) => v != null && v !== '' ? (
+                <div key={k} className="flex justify-between gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="text-xs uppercase tracking-wider text-gray-400">{k}</span>
+                  <span className="text-gray-800 font-medium text-right truncate max-w-[60%]">{String(v)}</span>
+                </div>
+              ) : null)}
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end">
+              <button onClick={() => setViewingDetails(null)} className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Закрыть</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -771,9 +949,11 @@ type WarehouseDocumentsTabProps = {
   statusCfg: Record<string, { label: string; cls: string }>;
   onView: (doc: DocumentRecord) => void;
   onExport: () => void;
+  onUpload: (file: File) => void;
+  onDownload: (doc: DocumentRecord) => void;
 };
 
-function WarehouseDocumentsTab({ docs, statusCfg, onView, onExport }: WarehouseDocumentsTabProps) {
+function WarehouseDocumentsTab({ docs, statusCfg, onView, onExport, onUpload, onDownload }: WarehouseDocumentsTabProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -785,10 +965,15 @@ function WarehouseDocumentsTab({ docs, statusCfg, onView, onExport }: WarehouseD
           <button onClick={onExport} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
             <Download className="w-4 h-4" /> Экспорт
           </button>
-          <button onClick={() => toast.success('Загрузка документа', { description: 'Выберите файл для загрузки' })}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors">
+          <label className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors cursor-pointer">
             <Upload className="w-4 h-4" /> Загрузить
-          </button>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ''; }}
+            />
+          </label>
         </div>
       </div>
       <div className="flex gap-3 flex-wrap">
@@ -835,11 +1020,11 @@ function WarehouseDocumentsTab({ docs, statusCfg, onView, onExport }: WarehouseD
                         className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors" title="Просмотр">
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button onClick={() => toast.success('Скачивание...', { description: doc.name })}
+                      <button onClick={() => onDownload(doc)}
                         className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors" title="Скачать">
                         <Download className="w-4 h-4" />
                       </button>
-                      <button onClick={() => toast.success('Печать...', { description: doc.name })}
+                      <button onClick={() => window.print()}
                         className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors" title="Печать">
                         <Printer className="w-4 h-4" />
                       </button>

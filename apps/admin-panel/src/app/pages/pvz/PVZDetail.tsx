@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import jsQR from 'jsqr';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../../utils/clipboard';
+import { exportToCsv } from '../../utils/downloads';
 import {
   ArrowLeft, Phone, MessageSquare, Pause, Play, QrCode, Package,
   Users, Wallet, History, Settings, Download, Clock, ScanLine, CheckCircle,
@@ -234,7 +235,22 @@ function ScanLogPanel({ log }: { log: UnifiedLog[] }) {
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}
-          <button onClick={() => toast.success('Экспорт данных ПВЗ запущен')}
+          <button
+            onClick={() => {
+              if (log.length === 0) { toast.info('Журнал пуст'); return; }
+              exportToCsv(log as any[], [
+                { key: 'time',        label: 'Время' },
+                { key: 'mode',        label: 'Тип' },
+                { key: 'orderNumber', label: 'Заказ' },
+                { key: 'operator',    label: 'Оператор' },
+                { key: 'clientName',  label: 'Клиент' },
+                { key: 'cell',        label: 'Ячейка' },
+                { key: 'amount',      label: 'Сумма' },
+                { key: 'success',     label: 'Успех' },
+                { key: 'note',        label: 'Заметка' },
+              ], 'pvz-scan-log');
+              toast.success(`Скачан CSV: ${log.length} записей`);
+            }}
             className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
             <Download className="w-3 h-3" />Экспорт
           </button>
@@ -1038,7 +1054,18 @@ function PvzDocumentsTab({ docs }: { docs: DocumentRecord[] }) {
                       <button onClick={() => setViewingDoc(doc)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="Просмотреть">
                         <Eye className="w-4 h-4 text-blue-500" />
                       </button>
-                      <button onClick={() => toast.success(`Скачивание: ${doc.name}`)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Скачать">
+                      <button
+                        onClick={() => {
+                          const text = `Документ: ${doc.name}\nНомер: ${doc.number ?? '—'}\nТип: ${doc.type}\nРазмер: ${doc.size}\nДата: ${doc.date}\nСтатус: ${doc.status}`;
+                          const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url; a.download = `${doc.name}.txt`.replace(/[\\/:*?"<>|]/g, '_');
+                          document.body.appendChild(a); a.click(); a.remove();
+                          URL.revokeObjectURL(url);
+                          toast.success(`Скачан: ${doc.name}`);
+                        }}
+                        className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Скачать">
                         <Download className="w-4 h-4 text-gray-400" />
                       </button>
                     </div>
@@ -1131,6 +1158,15 @@ export function PVZDetail() {
 
   // ─ Pause ─
   const [paused, setPaused] = useState(false);
+
+  // ─ Shift / Cash / Settings runtime state ─
+  const [shiftClosed, setShiftClosed]         = useState(false);
+  const [shiftClosedAt, setShiftClosedAt]     = useState<string | null>(null);
+  const [shipmentClosed, setShipmentClosed]   = useState(false);
+  const [encashmentRequested, setEncashmentRequested] = useState(false);
+  const [encashmentRequestedAt, setEncashmentRequestedAt] = useState<string | null>(null);
+  const [pvzSettingsSavedAt, setPvzSettingsSavedAt] = useState<string | null>(null);
+  const [actionsMenuOpenForId, setActionsMenuOpenForId] = useState<string | null>(null);
 
   const [now] = useState(new Date());
   const timeNow = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -1382,7 +1418,21 @@ export function PVZDetail() {
             <div className="text-center"><p className="text-lg font-bold text-white">{receivedToday}</p><p className="text-xs text-blue-200">принято</p></div>
             <div className="text-center"><p className="text-lg font-bold text-white">{issuedToday}</p><p className="text-xs text-blue-200">выдано</p></div>
             <div className="text-center"><p className="text-lg font-bold text-white">{returnsToday}</p><p className="text-xs text-blue-200">возврат</p></div>
-            <button onClick={() => toast.success('Смена закрыта. Касса инкассирована.')} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium border border-white/30">Закрыть смену</button>
+            {shiftClosed ? (
+              <span className="px-4 py-2 bg-green-500/30 text-white rounded-lg text-sm font-medium border border-green-300/40">
+                Закрыта в {shiftClosedAt}
+              </span>
+            ) : (
+              <button
+                onClick={() => {
+                  const t = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                  setShiftClosed(true); setShiftClosedAt(t);
+                  toast.success('Смена закрыта', { description: `Касса инкассирована в ${t}. Z-отчёт сформирован.` });
+                }}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium border border-white/30">
+                Закрыть смену
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1551,7 +1601,22 @@ export function PVZDetail() {
                           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                           <span>Сканируйте каждую посылку по отдельности. После окончания нажмите «Закрыть приёмку».</span>
                         </div>
-                        <button onClick={() => toast.success(`Приёмка закрыта · ${SHIPMENTS[0].parcels} посылок принято`)} className="w-full py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium">Закрыть приёмку ({SHIPMENTS[0].parcels} посылок)</button>
+                        {shipmentClosed ? (
+                          <div className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-medium text-center">
+                            ✓ Приёмка закрыта · {SHIPMENTS[0].parcels} посылок принято
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setShipmentClosed(true);
+                              setReceivedToday(prev => prev + SHIPMENTS[0].parcels);
+                              setShowCourierForm(false);
+                              toast.success(`Приёмка закрыта · ${SHIPMENTS[0].parcels} посылок принято`, { description: `Накладная: ${invoiceNo}` });
+                            }}
+                            className="w-full py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium">
+                            Закрыть приёмку ({SHIPMENTS[0].parcels} посылок)
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1970,7 +2035,22 @@ export function PVZDetail() {
                 <div className="flex gap-2">
                   <button onClick={() => { setOpMode('inventory'); setActiveTab('operations'); }}
                     className="flex items-center gap-2 px-4 py-2 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors text-sm font-medium"><ClipboardList className="w-4 h-4" />Инвентаризация</button>
-                  <button onClick={() => toast.success('Экспорт инвентаризации в Excel запущен')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
+                  <button
+                    onClick={() => {
+                      if (myOrders.length === 0) { toast.info('Нет посылок для экспорта'); return; }
+                      exportToCsv(myOrders as any[], [
+                        { key: 'orderNumber',    label: 'Номер заказа' },
+                        { key: 'trackingNumber', label: 'Трек' },
+                        { key: 'pickupCode',     label: 'Код выдачи' },
+                        { key: 'cell',           label: 'Ячейка' },
+                        { key: 'status',         label: 'Статус' },
+                        { key: 'customerName',   label: 'Клиент' },
+                        { key: 'customerPhone',  label: 'Телефон' },
+                        { key: 'updatedAt',      label: 'Обновлён' },
+                      ], `inventory-${pvz.code}`);
+                      toast.success(`Скачан CSV: ${myOrders.length} посылок`);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
                 </div>
               </div>
 
@@ -2371,7 +2451,26 @@ export function PVZDetail() {
                   <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">Оператор ПВЗ</span>
                   <span className="flex items-center gap-0.5 px-2 py-0.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium"><Shield className="w-3 h-3" />Активен</span>
                 </div>
-                <button onClick={() => toast.info('Дополнительные действия')} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg" title="Действия"><MoreHorizontal className="w-4 h-4" /></button>
+                <div className="relative">
+                  <button onClick={() => setActionsMenuOpenForId(actionsMenuOpenForId === 'main-operator' ? null : 'main-operator')}
+                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg" title="Действия"><MoreHorizontal className="w-4 h-4" /></button>
+                  {actionsMenuOpenForId === 'main-operator' && (
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-48">
+                      <a href={`mailto:${pvz.operatorEmail}`}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        <Mail className="w-3.5 h-3.5" />Написать email
+                      </a>
+                      <button onClick={() => { setActiveTab('settings'); setActionsMenuOpenForId(null); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                        <Settings className="w-3.5 h-3.5" />Настройки доступа
+                      </button>
+                      <button onClick={() => { copyToClipboard(pvz.operatorEmail); toast.success('Email скопирован'); setActionsMenuOpenForId(null); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                        <Copy className="w-3.5 h-3.5" />Скопировать email
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             <div className="space-y-3">
@@ -2401,8 +2500,32 @@ export function PVZDetail() {
               <div><h3 className="font-semibold text-gray-900">Касса смены</h3>
                 <p className="text-sm text-gray-500">Остаток: <span className="font-bold text-green-700">{formatCurrency(CASH_ENTRIES.reduce((s,e)=>e.type==='income'?s+e.amount:s-e.amount,5000))}</span></p></div>
               <div className="flex gap-2">
-                <button onClick={() => toast.success('Кассовый отчёт сформирован')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Отчёт</button>
-                <button onClick={() => toast.success('Инкассация запущена. Дождитесь курьера.')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"><CreditCard className="w-4 h-4" />Инкассация</button>
+                <button
+                  onClick={() => {
+                    if (CASH_ENTRIES.length === 0) { toast.info('Касса пуста'); return; }
+                    exportToCsv(CASH_ENTRIES as any[], [
+                      { key: 'time',        label: 'Время' },
+                      { key: 'type',        label: 'Тип' },
+                      { key: 'description', label: 'Описание' },
+                      { key: 'amount',      label: 'Сумма' },
+                      { key: 'operator',    label: 'Оператор' },
+                    ], `cash-report-${pvz.code}`);
+                    toast.success(`Скачан кассовый отчёт: ${CASH_ENTRIES.length} операций`);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Отчёт</button>
+                {encashmentRequested ? (
+                  <span className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium border border-green-200">
+                    <Check className="w-4 h-4" />Инкассация запрошена в {encashmentRequestedAt}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const t = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                      setEncashmentRequested(true); setEncashmentRequestedAt(t);
+                      toast.success('Инкассация запущена', { description: 'Курьер банка приедет в течение часа.' });
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"><CreditCard className="w-4 h-4" />Инкассация</button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3 mb-4">
@@ -2459,7 +2582,20 @@ export function PVZDetail() {
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900">Журнал аудита</h3>
-              <button onClick={() => toast.success('Экспорт журнала аудита')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
+              <button
+                onClick={() => {
+                  if (AUDIT_ENTRIES.length === 0) { toast.info('Журнал пуст'); return; }
+                  exportToCsv(AUDIT_ENTRIES as any[], [
+                    { key: 'time',    label: 'Время' },
+                    { key: 'action',  label: 'Действие' },
+                    { key: 'actor',   label: 'Оператор' },
+                    { key: 'details', label: 'Детали' },
+                    { key: 'ip',      label: 'IP' },
+                    { key: 'level',   label: 'Уровень' },
+                  ], `audit-${pvz.code}`);
+                  toast.success(`Скачан CSV: ${AUDIT_ENTRIES.length} событий`);
+                }}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
             </div>
             <div className="space-y-2">
               {AUDIT_LOG.map(entry => (
@@ -2534,7 +2670,22 @@ export function PVZDetail() {
                     <input defaultValue={val} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /></div>
                 ))}
               </div>
-              <button onClick={() => toast.success('Настройки ПВЗ сохранены')} className="mt-4 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium">Сохранить изменения</button>
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    const t = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                    setPvzSettingsSavedAt(t);
+                    toast.success('Настройки ПВЗ сохранены', { description: `Изменения применены в ${t}` });
+                  }}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium">
+                  Сохранить изменения
+                </button>
+                {pvzSettingsSavedAt && (
+                  <span className="flex items-center gap-1.5 text-xs text-green-600">
+                    <Check className="w-3.5 h-3.5" />Сохранено в {pvzSettingsSavedAt}
+                  </span>
+                )}
+              </div>
             </div>
 
             <hr className="border-gray-200" />

@@ -131,29 +131,41 @@ const PRIORITY_CFG: Record<TicketPriority, { label: string; color: string }> = {
 export function TicketDetail() {
   const { id } = useParams();
   const [message, setMessage] = useState('');
+  const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
   const [localMsgs, setLocalMsgs] = useState<TicketMessage[]>([]);
   const [status, setStatus] = useState<TicketStatus | null>(null);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<DocumentRecord | null>(null);
+  const [localTags, setLocalTags]         = useState<string[]>([]);
+  const [localPriority, setLocalPriority] = useState<TicketPriority | null>(null);
+  const [localAssignee, setLocalAssignee] = useState<string | null>(null);
 
   const ticket = TICKETS[id || '1'] ?? TICKETS['1'];
-  const currentStatus = status ?? ticket.status;
+  const currentStatus    = status ?? ticket.status;
+  const currentPriority  = localPriority ?? ticket.priority;
+  const currentAssignee  = localAssignee ?? ticket.assignee;
   const allMessages = [...ticket.messages, ...localMsgs];
+  const allTags     = [...ticket.tags, ...localTags];
 
   const stCfg = STATUS_CFG[currentStatus];
-  const prCfg = PRIORITY_CFG[ticket.priority];
+  const prCfg = PRIORITY_CFG[currentPriority];
+
+  const nowStr = () => new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const handleSend = () => {
-    if (!message.trim()) return;
+    if (!message.trim() && !pendingAttachment) return;
+    const text = pendingAttachment ? `${message.trim()}${message.trim() ? '\n' : ''}📎 ${pendingAttachment}` : message.trim();
     const newMsg: TicketMessage = {
       id: `new-${Date.now()}`,
       role: 'agent',
       author: 'Вы (Агент)',
-      text: message.trim(),
-      time: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      text,
+      time: nowStr(),
+      attachments: pendingAttachment ? [pendingAttachment] : undefined,
     };
     setLocalMsgs(prev => [...prev, newMsg]);
     setMessage('');
+    setPendingAttachment(null);
     toast.success('Сообщение отправлено');
   };
 
@@ -166,21 +178,97 @@ export function TicketDetail() {
       role: 'system',
       author: 'Система',
       text: `Статус тикета изменён: «${STATUS_CFG[currentStatus].label}» → «${STATUS_CFG[newStatus].label}»`,
-      time: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      time: nowStr(),
     };
     setLocalMsgs(prev => [...prev, sysMsg]);
   };
 
   const handleAssign = () => {
-    toast.success('Тикет назначен', { description: 'Уведомление отправлено агенту' });
+    const next = window.prompt('Назначить агента (ФИО)', currentAssignee);
+    if (!next || !next.trim() || next.trim() === currentAssignee) return;
+    setLocalAssignee(next.trim());
+    setLocalMsgs(prev => [...prev, {
+      id: `sys-${Date.now()}`, role: 'system', author: 'Система',
+      text: `Агент изменён: «${currentAssignee}» → «${next.trim()}»`, time: nowStr(),
+    }]);
+    toast.success(`Назначен: ${next.trim()}`, { description: 'Уведомление отправлено агенту' });
   };
 
   const handleExport = () => {
-    toast.success('Экспорт запущен', { description: `Тикет #${ticket.id} будет скачан в PDF` });
+    const lines: string[] = [];
+    lines.push(`ТИКЕТ #${ticket.id}`);
+    lines.push(`Тема: ${ticket.subject}`);
+    lines.push(`Категория: ${ticket.category}`);
+    lines.push(`Статус: ${STATUS_CFG[currentStatus].label}`);
+    lines.push(`Приоритет: ${PRIORITY_CFG[currentPriority].label}`);
+    lines.push(`Создан: ${ticket.createdAt}`);
+    lines.push(`Обновлён: ${ticket.updatedAt}`);
+    lines.push(`Агент: ${currentAssignee}`);
+    lines.push(`SLA: ${ticket.sla}${ticket.slaBreach ? ' (нарушен)' : ''}`);
+    lines.push(`Заявитель: ${ticket.client.name}`);
+    lines.push(`Email: ${ticket.client.email}`);
+    lines.push(`Телефон: ${ticket.client.phone}`);
+    lines.push(`Связанный объект: ${ticket.linkedEntity ?? '—'}`);
+    lines.push(`Теги: ${allTags.join(', ')}`);
+    lines.push('');
+    lines.push('=== ПЕРЕПИСКА ===');
+    allMessages.forEach(m => {
+      lines.push(`[${m.time}] ${m.author} (${m.role}):`);
+      lines.push(m.text);
+      lines.push('');
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ticket-${ticket.id}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`Экспорт скачан: ticket-${ticket.id}.txt`);
   };
 
   const handleCall = () => {
-    toast.info(`Звонок: ${ticket.client.phone}`, { description: ticket.client.name });
+    if (ticket.client.phone) window.location.href = `tel:${ticket.client.phone}`;
+  };
+
+  const handleEscalate = () => {
+    if (currentPriority === 'critical') {
+      toast.info('Тикет уже на максимальном приоритете');
+      return;
+    }
+    setLocalPriority('critical');
+    setLocalMsgs(prev => [...prev, {
+      id: `sys-${Date.now()}`, role: 'system', author: 'Система',
+      text: `Тикет эскалирован: приоритет «${PRIORITY_CFG[currentPriority].label}» → «Критический», передан старшему менеджеру.`,
+      time: nowStr(),
+    }]);
+    toast.success('Эскалировано', { description: 'Приоритет: Критический' });
+  };
+
+  const handleAddTag = () => {
+    const tag = window.prompt('Новый тег');
+    if (!tag || !tag.trim()) return;
+    if (allTags.includes(tag.trim())) { toast.info('Такой тег уже есть'); return; }
+    setLocalTags(prev => [...prev, tag.trim()]);
+    toast.success(`Тег добавлен: ${tag.trim()}`);
+  };
+
+  const handleAttach = (file: File) => {
+    if (file.size > 10 * 1024 * 1024) { toast.error('Файл больше 10 MB'); return; }
+    setPendingAttachment(file.name);
+    toast.success(`Файл прикреплён: ${file.name}`, { description: 'Будет отправлен со следующим сообщением' });
+  };
+
+  const handleDownloadDoc = (doc: DocumentRecord) => {
+    const lines = [`Документ: ${doc.name}`, `Тикет: #${ticket.id}`, `Тип: ${doc.type}`, `Размер: ${doc.size}`, `Дата: ${doc.date}`, `Статус: ${doc.status}`];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${doc.name}.txt`.replace(/[\\/:*?"<>|]/g, '_');
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`Скачано: ${doc.name}`);
   };
 
   return (
@@ -281,6 +369,13 @@ export function TicketDetail() {
           {/* Input */}
           {currentStatus !== 'closed' && currentStatus !== 'resolved' && (
             <div className="p-4 border-t border-gray-200">
+              {pendingAttachment && (
+                <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                  <Paperclip className="w-3.5 h-3.5" />
+                  <span className="flex-1 truncate">📎 {pendingAttachment}</span>
+                  <button onClick={() => setPendingAttachment(null)} className="text-blue-400 hover:text-blue-700"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -290,12 +385,14 @@ export function TicketDetail() {
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                   className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                <button
-                  onClick={() => toast.info('Прикрепить файл', { description: 'Функционал загрузки файлов' })}
-                  className="p-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-colors"
-                >
+                <label className="p-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-colors cursor-pointer flex items-center" title="Прикрепить файл">
                   <Paperclip className="w-4 h-4" />
-                </button>
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAttach(f); e.target.value = ''; }}
+                  />
+                </label>
                 <button
                   onClick={handleSend}
                   disabled={!message.trim()}
@@ -331,17 +428,17 @@ export function TicketDetail() {
               </div>
             </div>
             <div className="space-y-2">
-              <button onClick={handleCall} className="w-full flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+              <a href={`tel:${ticket.client.phone}`} onClick={handleCall} className="w-full flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
                 <Phone className="w-4 h-4 text-gray-400" />
                 {ticket.client.phone}
-              </button>
-              <button
-                onClick={() => toast.info(`Email: ${ticket.client.email}`)}
+              </a>
+              <a
+                href={`mailto:${ticket.client.email}?subject=${encodeURIComponent(`Тикет #${ticket.id}: ${ticket.subject}`)}`}
                 className="w-full flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors"
               >
                 <Mail className="w-4 h-4 text-gray-400" />
                 Написать email
-              </button>
+              </a>
             </div>
           </div>
 
@@ -372,7 +469,7 @@ export function TicketDetail() {
               <div className="flex justify-between items-center">
                 <span className="text-gray-500">Агент</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-medium text-gray-900">{ticket.assignee}</span>
+                  <span className="font-medium text-gray-900">{currentAssignee}</span>
                   <button onClick={handleAssign} className="text-xs text-blue-600 hover:underline">изменить</button>
                 </div>
               </div>
@@ -395,18 +492,30 @@ export function TicketDetail() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-900">Теги</h3>
               <button
-                onClick={() => toast.info('Добавить тег')}
+                onClick={handleAddTag}
                 className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
+                title="Добавить тег"
               >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {ticket.tags.map(tag => (
-                <span key={tag} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                  <Tag className="w-3 h-3" />{tag}
-                </span>
-              ))}
+              {allTags.map(tag => {
+                const isLocal = localTags.includes(tag);
+                return (
+                  <span key={tag} className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${isLocal ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-700'}`}>
+                    <Tag className="w-3 h-3" />{tag}
+                    {isLocal && (
+                      <button
+                        onClick={() => setLocalTags(prev => prev.filter(t => t !== tag))}
+                        className="ml-0.5 text-green-400 hover:text-green-700"
+                        title="Удалить">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
             </div>
           </div>
 
@@ -446,7 +555,7 @@ export function TicketDetail() {
                         <button onClick={() => setViewingDoc(doc)} className="p-1.5 hover:bg-blue-50 rounded-lg" title="Просмотреть">
                           <Eye className="w-3.5 h-3.5 text-blue-500" />
                         </button>
-                        <button onClick={() => toast.success(`Скачивание: ${doc.name}`)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Скачать">
+                        <button onClick={() => handleDownloadDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Скачать">
                           <Download className="w-3.5 h-3.5 text-gray-400" />
                         </button>
                       </div>
@@ -483,10 +592,10 @@ export function TicketDetail() {
                 <XCircle className="w-4 h-4" /> Закрыть тикет
               </button>
               <button
-                onClick={() => toast.success('Эскалировано', { description: 'Тикет передан старшему менеджеру' })}
+                onClick={handleEscalate}
                 className="w-full flex items-center gap-2 px-3 py-2.5 border border-orange-200 text-orange-700 bg-orange-50 rounded-xl hover:bg-orange-100 text-sm transition-colors"
               >
-                <AlertCircle className="w-4 h-4" /> Эскалировать
+                <AlertCircle className="w-4 h-4" /> Эскалировать{currentPriority === 'critical' ? ' (макс)' : ''}
               </button>
             </div>
           </div>
