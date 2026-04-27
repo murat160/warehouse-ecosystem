@@ -8,6 +8,7 @@ import {
   GitBranch, BadgeCheck, Phone, Image as ImageIcon,
 } from 'lucide-react';
 import { ProductImageViewer, type ProductImage } from '../../components/ui/ProductImageViewer';
+import { exportToCsv } from '../../utils/downloads';
 
 type RefundStatus = 'pending' | 'under_review' | 'approved' | 'processing' | 'completed' | 'rejected' | 'disputed';
 type RefundReason = 'wrong_item' | 'damaged' | 'not_delivered' | 'quality' | 'other' | 'cancel_by_client' | 'late_delivery' | 'missing_items';
@@ -283,9 +284,10 @@ function ConfirmModal({ title, description, icon: Icon, iconBg, confirmLabel, co
 }
 
 // ─── Detail Drawer ────────────────────────────────────────────────────────────
-function RefundDetailDrawer({ refund, onClose, onApprove, onReject }: {
+function RefundDetailDrawer({ refund, onClose, onApprove, onReject, onRequestPhoto }: {
   refund: Refund; onClose: () => void;
   onApprove: (r: Refund) => void; onReject: (r: Refund) => void;
+  onRequestPhoto: (r: Refund) => void;
 }) {
   const [tab, setTab] = useState<'info' | 'images' | 'audit'>('info');
   const sc  = STATUS_CFG[refund.status];
@@ -480,7 +482,7 @@ function RefundDetailDrawer({ refund, onClose, onApprove, onReject }: {
                   <ImageIcon className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Фотографии не прикреплены</p>
                   <p className="text-xs mt-1 text-center">Клиент не загрузил фото или тип возврата не требует доказательств</p>
-                  <button onClick={() => toast.success('Запрос на фото отправлен клиенту')}
+                  <button onClick={() => onRequestPhoto(refund)}
                     className="mt-4 flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50">
                     <ImageIcon className="w-3.5 h-3.5" />Запросить фото у клиента
                   </button>
@@ -616,9 +618,9 @@ export function RefundCenter() {
   const [rejectingId, setRejectingId]   = useState<string | null>(null);
   const [deductToggle, setDeductToggle] = useState(true);
   const [rejectReason, setRejectReason] = useState('');
-  const [toast, setToast]               = useState<string | null>(null);
+  const [notice, setNotice]             = useState<string | null>(null);
 
-  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); }, []);
+  const showToast = useCallback((msg: string) => { setNotice(msg); setTimeout(() => setNotice(null), 3500); }, []);
 
   const summary = useMemo(() => ({
     total: refunds.length,
@@ -670,9 +672,48 @@ export function RefundCenter() {
           <p className="text-sm text-gray-500 mt-0.5">Управление возвратами · Финансовый отдел · Фото доказательства · Баркоды · Полный аудит</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => toast.success('Экспорт возвратов в CSV запущен')}
+          <button
+            onClick={() => {
+              if (filtered.length === 0) { showToast('Нет возвратов для экспорта'); return; }
+              exportToCsv(filtered as any[], [
+                { key: 'id',          label: 'ID' },
+                { key: 'orderId',     label: 'Заказ' },
+                { key: 'orderDate',   label: 'Дата заказа' },
+                { key: 'customer',    label: 'Клиент' },
+                { key: 'partnerName', label: 'Партнёр' },
+                { key: 'partnerType', label: 'Тип' },
+                { key: 'reason',      label: 'Причина' },
+                { key: 'type',        label: 'Тип возврата' },
+                { key: 'amount',      label: 'Сумма' },
+                { key: 'status',      label: 'Статус' },
+                { key: 'createdAt',   label: 'Создан' },
+                { key: 'createdByName', label: 'Кем создан' },
+                { key: 'approvedByName', label: 'Кем одобрен' },
+                { key: 'rejectedByName', label: 'Кем отклонён' },
+                { key: 'rejectReason', label: 'Причина отклонения' },
+              ], 'refunds');
+              showToast(`Скачан CSV: ${filtered.length} возвратов`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"><Download className="w-3.5 h-3.5" />Экспорт</button>
-          <button onClick={() => toast.info('Отчёт по возвратам', { description: 'Готовится сводный отчёт за выбранный период' })}
+          <button
+            onClick={() => {
+              const reportRows = [
+                { metric: 'Период отчёта',   value: new Date().toLocaleDateString('ru-RU') },
+                { metric: 'Всего заявок',     value: String(summary.total) },
+                { metric: 'Ожидают решения',  value: `${summary.pending} (${fmt(summary.pendingAmt)})` },
+                { metric: 'Выполнено',        value: String(summary.completed) },
+                { metric: 'Отклонено',        value: String(summary.rejected) },
+                { metric: 'Арбитраж',         value: String(summary.disputed) },
+                { metric: 'Удержано с партнёров', value: fmt(summary.deductAmt) },
+                { metric: 'Сумма возвратов (без отклонённых)', value: fmt(summary.totalAmt) },
+                { metric: 'С фото повреждений', value: String(summary.withDamage) },
+              ];
+              exportToCsv(reportRows as any[], [
+                { key: 'metric', label: 'Метрика' },
+                { key: 'value',  label: 'Значение' },
+              ], 'refunds-report');
+              showToast('Сводный отчёт скачан (CSV)');
+            }}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-medium transition-colors"><FileText className="w-3.5 h-3.5" />Отчёт</button>
         </div>
       </div>
@@ -810,10 +851,17 @@ export function RefundCenter() {
 
       {viewing && <RefundDetailDrawer refund={viewing} onClose={() => setViewing(null)}
         onApprove={(r) => { setViewing(null); setDeductToggle(r.deductFromPartner); setApprovingId(r.id); }}
-        onReject={(r) => { setViewing(null); setRejectReason(''); setRejectingId(r.id); }} />}
+        onReject={(r) => { setViewing(null); setRejectReason(''); setRejectingId(r.id); }}
+        onRequestPhoto={(r) => {
+          const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          setRefunds(prev => prev.map(x => x.id === r.id
+            ? { ...x, auditTrail: [...x.auditTrail, { action: 'Запрошено фото у клиента', actor: 'Администратор', actorRole: 'Финансовый менеджер', at: now }] }
+            : x));
+          showToast(`Запрос фото отправлен клиенту ${r.customer}`);
+        }} />}
 
-      {toast && ReactDOM.createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 bg-gray-900 text-white text-sm font-medium rounded-2xl shadow-2xl">{toast}</div>,
+      {notice && ReactDOM.createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 bg-gray-900 text-white text-sm font-medium rounded-2xl shadow-2xl">{notice}</div>,
         document.body
       )}
     </div>

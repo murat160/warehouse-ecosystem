@@ -76,12 +76,26 @@ const deliveryTypeIcons = {
   pvz: MapPin,
 };
 
+type LocalMessage = { id: string; type: 'sms' | 'push' | 'email' | 'call' | 'text'; text: string; time: string; direction: 'in' | 'out' };
+type LocalDoc     = { id: string; name: string; type: string; size: string; date: string; status: 'signed' | 'pending' };
+type LocalIncident = { id: string; title: string; description: string; createdAt: string; status: 'open' | 'escalated' | 'closed' };
+
 export function OrderDetail() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [documentViewer, setDocumentViewer] = useState<DocumentRecord | null>(null);
+
+  // Local state for live interactions (no backend yet).
+  const [extraMessages, setExtraMessages]   = useState<LocalMessage[]>([]);
+  const [extraDocs, setExtraDocs]           = useState<LocalDoc[]>([]);
+  const [extraIncidents, setExtraIncidents] = useState<LocalIncident[]>([]);
+  const [incidentStatusOverride, setIncidentStatusOverride] = useState<Record<string, 'open' | 'escalated' | 'closed'>>({});
+  const [messageInput, setMessageInput]     = useState('');
+  const [editPanel, setEditPanel]           = useState(false);
+  const [editNotes, setEditNotes]           = useState('');
+  const [savedNotes, setSavedNotes]         = useState<string | null>(null);
 
   const order = getOrderById(id || '');
 
@@ -146,7 +160,7 @@ export function OrderDetail() {
           </button>
           {!isTerminal && (
             <div style={{display:'contents'}}>
-              <button onClick={() => toast.info('Редактирование заказа', { description: `Открывается форма для ${order.id}` })}
+              <button onClick={() => { setEditNotes(savedNotes ?? order.notes ?? ''); setEditPanel(true); }}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                 <Edit className="w-4 h-4" />
                 Изменить
@@ -291,10 +305,10 @@ export function OrderDetail() {
                       <dd className="font-medium text-gray-900">{order.deliveryAddress}</dd>
                     </div>
                   )}
-                  {order.notes && (
+                  {(savedNotes ?? order.notes) && (
                     <div className="md:col-span-2">
-                      <dt className="text-sm text-gray-500">Примечания</dt>
-                      <dd className="font-medium text-gray-900 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">{order.notes}</dd>
+                      <dt className="text-sm text-gray-500">Примечания {savedNotes !== null && <span className="text-[10px] text-green-600 font-semibold ml-1">· изменено</span>}</dt>
+                      <dd className="font-medium text-gray-900 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200 whitespace-pre-wrap">{savedNotes ?? order.notes}</dd>
                     </div>
                   )}
                 </dl>
@@ -508,16 +522,19 @@ export function OrderDetail() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Коммуникации с клиентом</h3>
 
-              {/* Message history */}
+              {/* Message history (mock + live) */}
               <div className="space-y-4 max-h-80 overflow-y-auto">
                 {[
-                  { id: 'm1', type: 'sms', text: 'Ваш заказ принят. Ожидайте доставки.', time: order.createdAt, direction: 'out' },
-                  { id: 'm2', type: 'push', text: 'Курьер назначен и уже едет к вам!', time: order.updatedAt, direction: 'out' },
-                  { id: 'm3', type: 'call', text: 'Входящий звонок (пропущен)', time: order.updatedAt, direction: 'in' },
+                  ...([
+                    { id: 'm1', type: 'sms'  as const, text: 'Ваш заказ принят. Ожидайте доставки.', time: order.createdAt, direction: 'out' as const },
+                    { id: 'm2', type: 'push' as const, text: 'Курьер назначен и уже едет к вам!',     time: order.updatedAt, direction: 'out' as const },
+                    { id: 'm3', type: 'call' as const, text: 'Входящий звонок (пропущен)',            time: order.updatedAt, direction: 'in'  as const },
+                  ] as LocalMessage[]),
+                  ...extraMessages,
                 ].map(msg => (
                   <div key={msg.id} className={`flex gap-3 ${msg.direction === 'out' ? 'flex-row-reverse' : ''}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${msg.direction === 'out' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                      {msg.type === 'call' ? '📞' : msg.type === 'sms' ? '💬' : '🔔'}
+                      {msg.type === 'call' ? '📞' : msg.type === 'sms' ? '💬' : msg.type === 'email' ? '✉️' : msg.type === 'push' ? '🔔' : '💭'}
                     </div>
                     <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${msg.direction === 'out' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-900 rounded-tl-sm'}`}>
                       {msg.text}
@@ -531,103 +548,260 @@ export function OrderDetail() {
               <div className="border-t pt-4">
                 <p className="text-sm font-medium text-gray-700 mb-3">Отправить сообщение клиенту</p>
                 <div className="flex gap-2 mb-2">
-                  {['SMS', 'Push', 'Email'].map(ch => (
-                    <button key={ch} onClick={() => toast.success(`${ch} отправлен`, { description: `Клиент: ${order.customerName}` })}
+                  {(['SMS', 'Push', 'Email'] as const).map(ch => (
+                    <button key={ch} onClick={() => {
+                      const time = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                      const text = messageInput.trim() || `Стандартное уведомление по заказу ${order.orderNumber}`;
+                      setExtraMessages(prev => [...prev, { id: `lm-${Date.now()}`, type: ch.toLowerCase() as 'sms' | 'push' | 'email', text, time, direction: 'out' }]);
+                      setMessageInput('');
+                      toast.success(`${ch} отправлен клиенту ${order.customerName}`);
+                    }}
                       className="flex-1 py-2 border border-gray-200 rounded-lg text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors font-medium">
                       {ch}
                     </button>
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Введите сообщение..." className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                  <button onClick={() => toast.success('Сообщение отправлено')} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"><Send className="w-4 h-4" /></button>
+                  <input
+                    type="text"
+                    placeholder="Введите сообщение..."
+                    value={messageInput}
+                    onChange={e => setMessageInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && messageInput.trim()) {
+                        const time = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                        setExtraMessages(prev => [...prev, { id: `lm-${Date.now()}`, type: 'text', text: messageInput.trim(), time, direction: 'out' }]);
+                        setMessageInput('');
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!messageInput.trim()) { toast.error('Введите сообщение'); return; }
+                      const time = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                      setExtraMessages(prev => [...prev, { id: `lm-${Date.now()}`, type: 'text', text: messageInput.trim(), time, direction: 'out' }]);
+                      setMessageInput('');
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"><Send className="w-4 h-4" /></button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => toast.info('Звонок клиенту', { description: order.customerPhone })} className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors"><Phone className="w-4 h-4" /> Позвонить</button>
-                <button onClick={() => toast.success('История чата открыта')} className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors"><MessageSquare className="w-4 h-4" /> Чат-история</button>
+                <a href={`tel:${order.customerPhone || ''}`}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+                  <Phone className="w-4 h-4" /> Позвонить
+                </a>
+                <Link to={`/chat?with=customer:${encodeURIComponent(order.customerName)}&order=${order.orderNumber}`}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+                  <MessageSquare className="w-4 h-4" /> Чат-история
+                </Link>
               </div>
             </div>
           )}
 
-          {activeTab === 'documents' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold text-gray-900">Документы по заказу</h3>
-                <button onClick={() => toast.success('Документ создан')} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"><Plus className="w-4 h-4" /> Добавить</button>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { id: 'd1', name: 'Товарная накладная', type: 'PDF', size: '124 КБ', date: order.createdAt, status: 'signed' },
-                  { id: 'd2', name: 'Акт передачи курьеру', type: 'PDF', size: '87 КБ', date: order.updatedAt, status: 'signed' },
-                  { id: 'd3', name: 'Чек оплаты', type: 'PDF', size: '45 КБ', date: order.createdAt, status: 'signed' },
-                  ...(order.status === 'returned' ? [{ id: 'd4', name: 'Акт возврата', type: 'PDF', size: '93 КБ', date: order.updatedAt, status: 'pending' as const }] : []),
-                ].map(doc => (
-                  <div key={doc.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-red-500" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{doc.name}</p>
-                        <p className="text-xs text-gray-500">{doc.type} · {doc.size} · {doc.date}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${doc.status === 'signed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {doc.status === 'signed' ? '✓ Подписан' : '⏳ Ожидает'}
-                      </span>
-                      <button onClick={() => toast.success(`Скачивание: ${doc.name}`)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Скачать"><Download className="w-4 h-4 text-gray-400" /></button>
-                      <button onClick={() => setDocumentViewer(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Просмотреть"><Eye className="w-4 h-4 text-gray-400" /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button onClick={() => toast.success('Печать запущена')} className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">🖨️ Распечатать все</button>
-                <button onClick={() => toast.success('Все документы скачаны')} className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors"><Download className="w-4 h-4" /> Скачать ZIP</button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'incidents' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold text-gray-900">Инциденты по заказу</h3>
-                <button onClick={() => toast.success('Инцидент создан', { description: `Связан с ${order.orderNumber}` })} className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"><Plus className="w-4 h-4" /> Создать</button>
-              </div>
-              {order.isOverdue ? (
+          {activeTab === 'documents' && (() => {
+            const baseDocs: LocalDoc[] = [
+              { id: 'd1', name: 'Товарная накладная',   type: 'PDF', size: '124 КБ', date: order.createdAt, status: 'signed' },
+              { id: 'd2', name: 'Акт передачи курьеру', type: 'PDF', size: '87 КБ',  date: order.updatedAt, status: 'signed' },
+              { id: 'd3', name: 'Чек оплаты',           type: 'PDF', size: '45 КБ',  date: order.createdAt, status: 'signed' },
+              ...(order.status === 'returned' ? [{ id: 'd4', name: 'Акт возврата', type: 'PDF', size: '93 КБ', date: order.updatedAt, status: 'pending' as const }] : []),
+            ];
+            const allDocs = [...baseDocs, ...extraDocs];
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Документы по заказу</h3>
+                  <label className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors cursor-pointer">
+                    <Plus className="w-4 h-4" /> Добавить
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                      className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (f.size > 20 * 1024 * 1024) { toast.error('Файл больше 20 MB'); return; }
+                        const sizeKb = Math.max(1, Math.round(f.size / 1024));
+                        const today = new Date().toLocaleDateString('ru-RU');
+                        setExtraDocs(prev => [...prev, { id: `ld-${Date.now()}`, name: f.name, type: f.name.split('.').pop()?.toUpperCase() ?? 'FILE', size: `${sizeKb} КБ`, date: today, status: 'pending' }]);
+                        toast.success(`Документ «${f.name}» добавлен`, { description: 'Статус: ожидает подписи' });
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
                 <div className="space-y-3">
-                  <div className="p-4 border border-red-200 bg-red-50 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-semibold text-red-900">Просрочка SLA доставки</p>
-                          <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">Открыт</span>
+                  {allDocs.map(doc => (
+                    <div key={doc.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-red-500" />
                         </div>
-                        <p className="text-sm text-red-700 mt-1">Заказ не доставлен в срок. Дедлайн: {order.slaDeadline}</p>
-                        <p className="text-xs text-red-500 mt-2">Автоматически создан · {order.updatedAt}</p>
-                        <div className="flex gap-2 mt-3">
-                          <button onClick={() => toast.success('Инцидент эскалирован')} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs hover:bg-red-700 transition-colors">Эскалировать</button>
-                          <button onClick={() => toast.success('Инцидент закрыт')} className="px-3 py-1.5 border border-red-300 text-red-700 rounded-lg text-xs hover:bg-red-100 transition-colors">Закрыть</button>
+                        <div>
+                          <p className="font-medium text-gray-900">{doc.name}</p>
+                          <p className="text-xs text-gray-500">{doc.type} · {doc.size} · {doc.date}</p>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${doc.status === 'signed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {doc.status === 'signed' ? '✓ Подписан' : '⏳ Ожидает'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const text = `Документ: ${doc.name}\nЗаказ: ${order.orderNumber}\nКлиент: ${order.customerName}\nПродавец: ${order.merchant}\nСтатус: ${doc.status === 'signed' ? 'Подписан' : 'Ожидает'}\nДата: ${doc.date}\nРазмер (декл.): ${doc.size}\n`;
+                            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${order.orderNumber}-${doc.name}.txt`.replace(/[\\/:*?"<>|]/g, '_');
+                            document.body.appendChild(a); a.click(); a.remove();
+                            URL.revokeObjectURL(url);
+                            toast.success(`Скачан: ${doc.name}`);
+                          }}
+                          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Скачать">
+                          <Download className="w-4 h-4 text-gray-400" />
+                        </button>
+                        {!doc.id.startsWith('ld-') && (
+                          <button onClick={() => setDocumentViewer(doc as DocumentRecord)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Просмотреть"><Eye className="w-4 h-4 text-gray-400" /></button>
+                        )}
+                      </div>
                     </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button onClick={() => window.print()}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+                    <Printer className="w-4 h-4" /> Распечатать
+                  </button>
+                  <button
+                    onClick={() => {
+                      const text = allDocs.map(d => `=== ${d.name} ===\nТип: ${d.type}\nДата: ${d.date}\nСтатус: ${d.status === 'signed' ? 'Подписан' : 'Ожидает'}\n`).join('\n');
+                      const blob = new Blob([`Документы по заказу ${order.orderNumber}\nКлиент: ${order.customerName}\n\n${text}`], { type: 'text/plain;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${order.orderNumber}-документы.txt`;
+                      document.body.appendChild(a); a.click(); a.remove();
+                      URL.revokeObjectURL(url);
+                      toast.success(`Скачан архив (${allDocs.length} документов)`);
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors">
+                    <Download className="w-4 h-4" /> Скачать всё
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {activeTab === 'incidents' && (() => {
+            const autoSlaIncident = order.isOverdue ? {
+              id: 'auto-sla',
+              title: 'Просрочка SLA доставки',
+              description: `Заказ не доставлен в срок. Дедлайн: ${order.slaDeadline}`,
+              createdAt: order.updatedAt,
+              status: (incidentStatusOverride['auto-sla'] ?? 'open') as 'open' | 'escalated' | 'closed',
+              auto: true,
+            } : null;
+            const allIncidents = [
+              ...(autoSlaIncident ? [autoSlaIncident] : []),
+              ...extraIncidents.map(i => ({ ...i, status: incidentStatusOverride[i.id] ?? i.status, auto: false })),
+            ];
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Инциденты по заказу</h3>
+                  <button
+                    onClick={() => {
+                      const title = window.prompt('Заголовок инцидента');
+                      if (!title) return;
+                      const description = window.prompt('Описание (необязательно)') ?? '';
+                      const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                      setExtraIncidents(prev => [...prev, { id: `inc-${Date.now()}`, title, description, createdAt: now, status: 'open' }]);
+                      toast.success('Инцидент создан', { description: `Связан с ${order.orderNumber}` });
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors">
+                    <Plus className="w-4 h-4" /> Создать
+                  </button>
+                </div>
+                {allIncidents.length > 0 ? (
+                  <div className="space-y-3">
+                    {allIncidents.map(inc => {
+                      const statusBg = inc.status === 'closed' ? 'bg-gray-50 border-gray-200' : inc.status === 'escalated' ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200';
+                      const statusBadge = inc.status === 'closed' ? 'bg-gray-200 text-gray-700' : inc.status === 'escalated' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700';
+                      const statusLabel = inc.status === 'closed' ? 'Закрыт' : inc.status === 'escalated' ? 'Эскалирован' : 'Открыт';
+                      const textColor = inc.status === 'closed' ? 'text-gray-700' : inc.status === 'escalated' ? 'text-orange-700' : 'text-red-700';
+                      return (
+                        <div key={inc.id} className={`p-4 border rounded-xl ${statusBg}`}>
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${textColor}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <p className={`font-semibold ${textColor}`}>{inc.title}</p>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge}`}>{statusLabel}</span>
+                              </div>
+                              {inc.description && <p className={`text-sm mt-1 ${textColor}`}>{inc.description}</p>}
+                              <p className={`text-xs mt-2 opacity-70 ${textColor}`}>{(inc as any).auto ? 'Автоматически создан' : 'Создан вручную'} · {inc.createdAt}</p>
+                              {inc.status !== 'closed' && (
+                                <div className="flex gap-2 mt-3">
+                                  {inc.status !== 'escalated' && (
+                                    <button
+                                      onClick={() => { setIncidentStatusOverride(prev => ({ ...prev, [inc.id]: 'escalated' })); toast.success(`Инцидент эскалирован`); }}
+                                      className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs hover:bg-orange-700 transition-colors">Эскалировать</button>
+                                  )}
+                                  <button
+                                    onClick={() => { setIncidentStatusOverride(prev => ({ ...prev, [inc.id]: 'closed' })); toast.success(`Инцидент закрыт`); }}
+                                    className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-100 transition-colors">Закрыть</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-10">
-                  <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-400" />
-                  <p className="font-medium text-gray-700">Инцидентов нет</p>
-                  <p className="text-sm text-gray-400 mt-1">Заказ выполняется без нарушений</p>
-                </div>
-              )}
-            </div>
-          )}
+                ) : (
+                  <div className="text-center py-10">
+                    <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-400" />
+                    <p className="font-medium text-gray-700">Инцидентов нет</p>
+                    <p className="text-sm text-gray-400 mt-1">Заказ выполняется без нарушений</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
+
+      {/* Edit Notes Modal */}
+      {editPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditPanel(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Изменить заказ</h3>
+            <p className="text-sm text-gray-500 mb-1 font-mono">{order.orderNumber}</p>
+            <p className="text-gray-600 mb-4 text-sm">
+              Внутренние комментарии к заказу. Видны только сотрудникам.
+            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Комментарий</label>
+            <textarea
+              value={editNotes}
+              onChange={e => setEditNotes(e.target.value)}
+              rows={5}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 text-sm"
+              placeholder="Например: Клиент попросил оставить заказ у двери"
+            />
+            {savedNotes !== null && (
+              <p className="text-xs text-green-600 mb-2 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />Сохранено локально</p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => setEditPanel(false)} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Закрыть</button>
+              <button
+                onClick={() => { setSavedNotes(editNotes); setEditPanel(false); toast.success('Заметка сохранена', { description: order.orderNumber }); }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Сохранить</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cancel Modal */}
       {showCancelModal && (

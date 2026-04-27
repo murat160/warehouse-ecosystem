@@ -448,8 +448,15 @@ export function MerchantsList() {
   const [showExportMenu, setShowExportMenu]   = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [extraSellers, setExtraSellers]       = useState<SellerSummary[]>([]);
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, SellerStatus>>({});
+  const [managerByseller, setManagerBySeller] = useState<Record<string, string>>({});
+  const [bulkAction, setBulkAction]           = useState<null | { kind: 'manager' }>(null);
+  const [managerInput, setManagerInput]       = useState('');
 
-  const allSellers = useMemo(() => [...SELLERS, ...extraSellers], [extraSellers]);
+  const allSellers = useMemo(() => {
+    const list = [...SELLERS, ...extraSellers];
+    return list.map(s => statusOverrides[s.id] ? { ...s, status: statusOverrides[s.id] } : s);
+  }, [extraSellers, statusOverrides]);
 
   const allRegions = useMemo(() => {
     const r = new Set<string>();
@@ -713,18 +720,81 @@ export function MerchantsList() {
         <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
           <span className="text-sm text-blue-700">Выбрано: {selected.size}</span>
           <div className="h-4 w-px bg-blue-200" />
-          <button onClick={() => toast.info('Массовая пауза — требуется API')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={() => {
+              const ids = Array.from(selected);
+              setStatusOverrides(prev => {
+                const next = { ...prev };
+                ids.forEach(id => { next[id] = 'paused'; });
+                return next;
+              });
+              toast.success(`Поставлено на паузу: ${ids.length}`, { description: 'Статус продавцов изменён в списке' });
+              setSelected(new Set());
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
             <Pause className="w-3.5 h-3.5" /> Пауза
           </button>
-          <button onClick={() => toast.info('Назначить менеджера — требуется API')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={() => { setBulkAction({ kind: 'manager' }); setManagerInput(''); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
             Назначить менеджера
           </button>
-          <button onClick={() => toast.info('Создание тикета — требуется API')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={() => {
+              const ids = Array.from(selected).join(',');
+              navigate(`/support/tickets?from=merchant_bulk&ids=${encodeURIComponent(ids)}`);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
             <MessageSquare className="w-3.5 h-3.5" /> Тикет
           </button>
           <button onClick={() => setSelected(new Set())} className="ml-auto p-1 text-blue-400 hover:text-blue-600">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Manager assign modal */}
+      {bulkAction?.kind === 'manager' && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setBulkAction(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Назначить менеджера ({selected.size} продавцов)</p>
+              <button onClick={() => setBulkAction(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">ФИО менеджера</label>
+              <input
+                value={managerInput}
+                onChange={e => setManagerInput(e.target.value)}
+                placeholder="Иванов И.И."
+                autoFocus
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex gap-2 flex-wrap pt-1">
+                {['Иванов И.И.', 'Петров А.С.', 'Сидорова О.В.'].map(m => (
+                  <button key={m} onClick={() => setManagerInput(m)}
+                    className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">{m}</button>
+                ))}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex gap-3">
+              <button onClick={() => setBulkAction(null)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button
+                onClick={() => {
+                  if (!managerInput.trim()) { toast.error('Введите ФИО менеджера'); return; }
+                  const ids = Array.from(selected);
+                  setManagerBySeller(prev => {
+                    const next = { ...prev };
+                    ids.forEach(id => { next[id] = managerInput.trim(); });
+                    return next;
+                  });
+                  toast.success(`Менеджер назначен: ${managerInput.trim()}`, { description: `Продавцов: ${ids.length}` });
+                  setBulkAction(null);
+                  setSelected(new Set());
+                }}
+                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Назначить</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -818,6 +888,11 @@ export function MerchantsList() {
                             {seller.riskLevel !== 'low' && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${rc.bg} ${rc.color}`}>{rc.label}</span>}
                           </div>
                           <p className="text-xs text-gray-500 truncate mt-0.5">{seller.sellerCode} · {seller.cities.join(', ')}</p>
+                          {managerByseller[seller.id] && (
+                            <p className="text-[10px] text-blue-600 truncate mt-0.5 flex items-center gap-1">
+                              <User className="w-2.5 h-2.5" />Менеджер: {managerByseller[seller.id]}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
