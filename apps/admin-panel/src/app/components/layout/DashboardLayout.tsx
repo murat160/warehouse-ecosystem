@@ -150,8 +150,8 @@ export function DashboardLayout() {
     { name: 'Проверка документов', href: '/compliance',      icon: ClipboardList,   moduleKey: 'couriers',   end: true },
     { name: 'Склады',    href: '/warehouses', icon: Warehouse,      moduleKey: 'warehouses' },
     { name: 'Логистика', href: '/logistics',  icon: Route,          moduleKey: 'logistics' },
-    { name: 'Устройства склада', href: '/devices', icon: ScanLine,   moduleKey: 'warehouses', end: true },
-    { name: 'Безопасность склада', href: '/safety', icon: AlertTriangle, moduleKey: 'warehouses', end: true },
+    { name: 'Устройства склада',   href: '/devices', icon: ScanLine,        moduleKey: 'warehouses', end: true },
+    { name: 'Безопасность склада', href: '/safety',  icon: AlertTriangle,   moduleKey: 'warehouses', end: true },
     { name: 'Продавцы',  href: '/merchants',  icon: Store,          moduleKey: 'merchants' },
     {
       name: 'Продвижение',

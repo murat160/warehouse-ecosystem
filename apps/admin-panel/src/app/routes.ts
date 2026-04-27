@@ -40,7 +40,7 @@ import { UsersCabinets } from "./pages/users/UsersCabinets";
 import { IncidentsList } from "./pages/safety/IncidentsList";
 import { DevicesList } from "./pages/devices/DevicesList";
 
-// basename "/admin" so the SPA works behind nginx at https://<host>/admin/
+// basename "/admin/" so the SPA works behind nginx at https://<host>/admin/
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -83,8 +83,8 @@ export const router = createBrowserRouter([
       { path: "analytics", Component: Analytics },
       { path: "settings", Component: Settings },
       { path: "system/architecture", Component: ArchitecturePage },
-      // Stage-4 additions: physical warehouse safety + device management
-      { path: "safety", Component: IncidentsList },
+      // Stage-4 additions: warehouse safety register + device management
+      { path: "safety",  Component: IncidentsList },
       { path: "devices", Component: DevicesList },
     ],
   },
