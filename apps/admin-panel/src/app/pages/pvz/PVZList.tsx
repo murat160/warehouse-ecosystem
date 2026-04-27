@@ -313,8 +313,18 @@ export function PVZList() {
                   <ScanLine className="w-4 h-4" />
                 </Link>
                 {pvz.status === 'active'
-                  ? <button onClick={() => { import('sonner').then(m => m.toast.success(`ПВЗ ${pvz.code} приостановлен`)); }} title="Приостановить" className="px-3 py-2 border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"><Pause className="w-4 h-4" /></button>
-                  : <button onClick={() => { import('sonner').then(m => m.toast.success(`ПВЗ ${pvz.code} активирован`)); }} title="Активировать" className="px-3 py-2 border border-green-200 text-green-600 hover:bg-green-50 rounded-xl transition-colors"><Play className="w-4 h-4" /></button>
+                  ? <button
+                      onClick={() => {
+                        setPvzList(prev => prev.map(p => p.id === pvz.id ? { ...p, status: 'paused' } : p));
+                        import('sonner').then(m => m.toast.success(`ПВЗ ${pvz.code} приостановлен`));
+                      }}
+                      title="Приостановить" className="px-3 py-2 border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"><Pause className="w-4 h-4" /></button>
+                  : <button
+                      onClick={() => {
+                        setPvzList(prev => prev.map(p => p.id === pvz.id ? { ...p, status: 'active' } : p));
+                        import('sonner').then(m => m.toast.success(`ПВЗ ${pvz.code} активирован`));
+                      }}
+                      title="Активировать" className="px-3 py-2 border border-green-200 text-green-600 hover:bg-green-50 rounded-xl transition-colors"><Play className="w-4 h-4" /></button>
                 }
               </div>
 

@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Search, Plus, Bike, MapPin, Phone, MessageSquare, Zap, Warehouse,
   ChevronRight, X,
 } from 'lucide-react';
 import { COURIERS_MOCK, type CourierType, type CourierStatus } from '../../data/couriers-mock';
+
+type CourierExtra = (typeof COURIERS_MOCK)[number];
 
 const STATUS_CFG: Record<string, { label: string; dot: string; badge: string }> = {
   online:        { label: 'Онлайн',         dot: 'bg-green-500',  badge: 'bg-green-100 text-green-700' },
@@ -22,29 +24,44 @@ const VEHICLE_LABELS: Record<string, string> = {
 };
 
 export function CouriersList() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CourierStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<CourierType | 'all'>('all');
+  const [onlineOnly, setOnlineOnly] = useState(false);
+  const [busyOnly, setBusyOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'default' | 'completedToday'>('default');
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '', phone: '', vehicle: 'bike', zone: 'Москва ЦАО',
     type: 'fast_delivery', contract: 'gig',
   });
+  const [extraCouriers, setExtraCouriers] = useState<CourierExtra[]>([]);
 
-  const filtered = COURIERS_MOCK.filter(c => {
-    const q = search.toLowerCase();
-    const matchSearch = c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.zone.toLowerCase().includes(q);
-    const matchStatus = statusFilter === 'all' || c.status === statusFilter;
-    const matchType = typeFilter === 'all' || c.courier_type === typeFilter;
-    return matchSearch && matchStatus && matchType;
-  });
+  const allCouriers = useMemo(() => [...extraCouriers, ...COURIERS_MOCK], [extraCouriers]);
 
-  const fastCount = COURIERS_MOCK.filter(c => c.courier_type === 'fast_delivery').length;
-  const warehouseCount = COURIERS_MOCK.filter(c => c.courier_type === 'warehouse_delivery').length;
-  const onlineCount = COURIERS_MOCK.filter(c => c.status !== 'offline').length;
-  const busyCount = COURIERS_MOCK.filter(c => ['delivering', 'on_task', 'picking_order'].includes(c.status)).length;
-  const activeOrders = COURIERS_MOCK.reduce((s, c) => s + c.activeOrders, 0);
-  const deliveredToday = COURIERS_MOCK.reduce((s, c) => s + c.completedToday, 0);
+  const filtered = useMemo(() => {
+    const list = allCouriers.filter(c => {
+      const q = search.toLowerCase();
+      const matchSearch = c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.zone.toLowerCase().includes(q);
+      const matchStatus = statusFilter === 'all' || c.status === statusFilter;
+      const matchType = typeFilter === 'all' || c.courier_type === typeFilter;
+      const matchOnline = !onlineOnly || c.status !== 'offline';
+      const matchBusy = !busyOnly || c.activeOrders > 0;
+      return matchSearch && matchStatus && matchType && matchOnline && matchBusy;
+    });
+    if (sortBy === 'completedToday') {
+      return [...list].sort((a, b) => b.completedToday - a.completedToday);
+    }
+    return list;
+  }, [allCouriers, search, statusFilter, typeFilter, onlineOnly, busyOnly, sortBy]);
+
+  const fastCount = allCouriers.filter(c => c.courier_type === 'fast_delivery').length;
+  const warehouseCount = allCouriers.filter(c => c.courier_type === 'warehouse_delivery').length;
+  const onlineCount = allCouriers.filter(c => c.status !== 'offline').length;
+  const busyCount = allCouriers.filter(c => ['delivering', 'on_task', 'picking_order'].includes(c.status)).length;
+  const activeOrders = allCouriers.reduce((s, c) => s + c.activeOrders, 0);
+  const deliveredToday = allCouriers.reduce((s, c) => s + c.completedToday, 0);
 
   return (
     <div className="space-y-6">
@@ -66,20 +83,31 @@ export function CouriersList() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
-          { label: 'Онлайн',         value: onlineCount,    color: 'text-green-600',  bg: 'bg-green-50',  filter: null as CourierStatus | null },
-          { label: 'В работе',        value: busyCount,      color: 'text-blue-600',   bg: 'bg-blue-50',   filter: 'delivering' as CourierStatus },
-          { label: 'Активных зад.',   value: activeOrders,   color: 'text-purple-600', bg: 'bg-purple-50', filter: null as CourierStatus | null },
-          { label: 'Доставлено сег.', value: deliveredToday, color: 'text-gray-900',   bg: 'bg-gray-50',   filter: null as CourierStatus | null },
-        ].map(stat => (
-          <button
-            key={stat.label}
-            onClick={() => { if (stat.filter) setStatusFilter(statusFilter === stat.filter ? 'all' : stat.filter); }}
-            className={`${stat.bg} p-4 rounded-xl border text-left transition-all hover:shadow-md ${stat.filter ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'} ${stat.filter && statusFilter === stat.filter ? 'ring-2 ring-offset-1 ring-current border-current' : 'border-gray-200'}`}
-          >
-            <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
-            <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-          </button>
-        ))}
+          { label: 'Онлайн',          value: onlineCount,    color: 'text-green-600',  bg: 'bg-green-50',  action: 'online'    as const },
+          { label: 'В работе',         value: busyCount,      color: 'text-blue-600',   bg: 'bg-blue-50',   action: 'busy'      as const },
+          { label: 'Активных зад.',    value: activeOrders,   color: 'text-purple-600', bg: 'bg-purple-50', action: 'orders'    as const },
+          { label: 'Доставлено сег.',  value: deliveredToday, color: 'text-gray-900',   bg: 'bg-gray-50',   action: 'top-today' as const },
+        ].map(stat => {
+          const isActive =
+            (stat.action === 'online'    && onlineOnly) ||
+            (stat.action === 'busy'      && busyOnly) ||
+            (stat.action === 'top-today' && sortBy === 'completedToday');
+          return (
+            <button
+              key={stat.label}
+              onClick={() => {
+                if (stat.action === 'online')    setOnlineOnly(v => !v);
+                if (stat.action === 'busy')      setBusyOnly(v => !v);
+                if (stat.action === 'orders')    navigate('/orders');
+                if (stat.action === 'top-today') setSortBy(s => s === 'completedToday' ? 'default' : 'completedToday');
+              }}
+              className={`${stat.bg} p-4 rounded-xl border text-left transition-all hover:shadow-md cursor-pointer active:scale-[0.98] ${isActive ? 'ring-2 ring-offset-1 ring-current border-current' : 'border-gray-200'}`}
+            >
+              <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
+              <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+            </button>
+          );
+        })}
         <button
           onClick={() => setTypeFilter(typeFilter === 'fast_delivery' ? 'all' : 'fast_delivery')}
           className={`p-4 rounded-xl border cursor-pointer transition-all active:scale-[0.98] text-left ${typeFilter === 'fast_delivery' ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-300 ring-offset-1' : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-md'}`}
@@ -237,16 +265,20 @@ export function CouriersList() {
                     <MapPin className="w-3.5 h-3.5" />Открыть профиль
                     <ChevronRight className="w-3 h-3 ml-auto" />
                   </Link>
-                  <button
-                    onClick={() => toast.info('Звонок', { description: courier.phone })}
-                    className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors" title="Позвонить">
+                  <a
+                    href={`tel:${courier.phone}`}
+                    title={`Позвонить: ${courier.phone}`}
+                    className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors flex items-center"
+                  >
                     <Phone className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => toast.info('Сообщение', { description: `Чат с ${courier.name}` })}
-                    className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors" title="Сообщение">
+                  </a>
+                  <Link
+                    to={`/chat?with=${encodeURIComponent(courier.id)}&name=${encodeURIComponent(courier.name)}`}
+                    title={`Открыть чат с ${courier.name}`}
+                    className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors flex items-center"
+                  >
                     <MessageSquare className="w-4 h-4" />
-                  </button>
+                  </Link>
                 </div>
 
                 <p className="text-[10px] text-gray-400 mt-2.5 text-center">Онлайн: {courier.lastOnline}</p>
@@ -346,9 +378,40 @@ export function CouriersList() {
                 <button
                   onClick={() => {
                     if (!addForm.name || !addForm.phone) { toast.error('Заполните обязательные поля'); return; }
+                    const newCourier = {
+                      id: `crr-${Date.now()}`,
+                      name: addForm.name,
+                      phone: addForm.phone,
+                      email: '',
+                      avatar: addForm.name.split(' ').map(n => n[0] ?? '').join('').slice(0, 2).toUpperCase() || '??',
+                      vehicle: addForm.vehicle,
+                      zone: addForm.zone,
+                      region: addForm.zone,
+                      courier_type: addForm.type as CourierType,
+                      status: 'offline' as CourierStatus,
+                      activeOrders: 0,
+                      completedToday: 0,
+                      totalOrders: 0,
+                      cancelRate: 0,
+                      problemRate: 0,
+                      rating: 5.0,
+                      earningsToday: 0,
+                      earningsTotal: 0,
+                      blocked: false,
+                      contractType: addForm.contract,
+                      contractStatus: 'pending',
+                      contractDate: new Date().toLocaleDateString('ru-RU'),
+                      contractExpiry: '',
+                      registeredAt: new Date().toLocaleDateString('ru-RU'),
+                      lastOnline: 'только что',
+                      gpsLat: 0, gpsLng: 0, gpsUpdated: '',
+                      orders: [], tasks: [], shifts: [], dailyFinance: [],
+                      documents: [], auditLog: [], chatHistory: [],
+                    } as unknown as CourierExtra;
+                    setExtraCouriers(prev => [newCourier, ...prev]);
                     setShowAddModal(false);
                     setAddForm({ name: '', phone: '', vehicle: 'bike', zone: 'Москва ЦАО', type: 'fast_delivery', contract: 'gig' });
-                    toast.success('Курьер добавлен', { description: `${addForm.name} — приглашение отправлено в приложение` });
+                    toast.success('Курьер добавлен', { description: `${newCourier.name} — приглашение отправлено в приложение` });
                   }}
                   className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
                 >

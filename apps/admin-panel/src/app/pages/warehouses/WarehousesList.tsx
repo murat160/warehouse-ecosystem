@@ -27,8 +27,11 @@ export function WarehousesList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', code: '', city: '', type: 'warehouse', capacity: '5000' });
+  const [extraWarehouses, setExtraWarehouses] = useState<WarehouseData[]>([]);
 
-  const filteredWarehouses = warehouses.filter(wh =>
+  const allWarehouses = [...extraWarehouses, ...warehouses];
+
+  const filteredWarehouses = allWarehouses.filter(wh =>
     wh.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
     wh.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -182,9 +185,23 @@ export function WarehousesList() {
                 <button
                   onClick={() => {
                     if (!addForm.name || !addForm.code || !addForm.city) { toast.error('Заполните обязательные поля'); return; }
+                    const newWh: WarehouseData = {
+                      id: `wh-${Date.now()}`,
+                      code: addForm.code,
+                      name: addForm.name,
+                      city: addForm.city,
+                      type: addForm.type as WarehouseData['type'],
+                      status: 'active',
+                      capacity: Number(addForm.capacity) || 5000,
+                      currentLoad: 0,
+                      inboundToday: 0,
+                      outboundToday: 0,
+                      pickingInProgress: 0,
+                    };
+                    setExtraWarehouses(prev => [newWh, ...prev]);
                     setShowAddModal(false);
                     setAddForm({ name: '', code: '', city: '', type: 'warehouse', capacity: '5000' });
-                    toast.success('Склад создан', { description: `${addForm.code} — ${addForm.name} добавлен в систему` });
+                    toast.success('Склад создан', { description: `${newWh.code} — ${newWh.name} добавлен в систему` });
                   }}
                   className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
                 >

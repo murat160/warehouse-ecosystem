@@ -626,16 +626,21 @@ interface DetailPanelProps {
   onOpenDelete: () => void;
   onEdit: () => void;
   onPreview: () => void;
+  department: string;
+  onChangeDepartment: (dept: string) => void;
+  extraDocs: { id: string; name: string; type: string; uploadedAt: string; status: 'verified'|'pending'|'expired' }[];
+  onAddDoc: (doc: { id: string; name: string; type: string; uploadedAt: string; status: 'verified'|'pending'|'expired' }) => void;
 }
 
-function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onOpenRequest2FA, onOpenBlock, onOpenDelete, onEdit, onPreview }: DetailPanelProps) {
+function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onOpenRequest2FA, onOpenBlock, onOpenDelete, onEdit, onPreview, department, onChangeDepartment, extraDocs, onAddDoc }: DetailPanelProps) {
   const [tab, setTab] = useState<'overview' | 'access' | 'dept' | 'history' | 'docs'>('overview');
   const mods = getEffectiveModules(user);
   const isCustom = user.cabinetModules !== null;
   const auditLog = useMemo(() => buildAuditLog(user), [user.id]);
   const loginHistory = useMemo(() => genLoginHistory(), [user.id]);
-  const documents = useMemo(() => genDocuments(user.id), [user.id]);
-  const dept = DEPT_DEFAULTS[user.id] ?? 'none';
+  const baseDocs = useMemo(() => genDocuments(user.id), [user.id]);
+  const documents = [...extraDocs, ...baseDocs];
+  const dept = department;
 
   const TABS = [
     { id: 'overview' as const,  label: 'Обзор',    icon: Users },
@@ -842,7 +847,7 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
                 {DEPARTMENTS.map(d => (
                   <button key={d.value}
                     className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs transition-all text-left ${dept === d.value ? 'border-blue-400 bg-blue-50' : 'border-gray-100 hover:border-gray-200 bg-gray-50'}`}
-                    onClick={() => { toast.success(`Отдел изменён: ${d.label}`); }}>
+                    onClick={() => { onChangeDepartment(d.value); toast.success(`Отдел изменён: ${d.label}`); }}>
                     <Building2 className={`w-3.5 h-3.5 shrink-0 ${dept === d.value ? 'text-blue-600' : 'text-gray-400'}`} />
                     <span className={`font-medium truncate ${dept === d.value ? 'text-blue-800' : 'text-gray-700'}`}>{d.label}</span>
                     {dept === d.value && <CheckCircle2 className="w-3 h-3 text-blue-600 ml-auto shrink-0" />}
@@ -930,10 +935,24 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
                 </div>
               );
             })}
-            <button onClick={() => toast.info('Загрузка документа', { description: 'Выберите файл — поддерживается PDF, JPG, PNG до 10 MB' })}
-              className="w-full py-2.5 border-2 border-dashed border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+            <label
+              className="w-full py-2.5 border-2 border-dashed border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
               <Activity className="w-3.5 h-3.5" />Загрузить документ
-            </button>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (f.size > 10 * 1024 * 1024) { toast.error('Файл больше 10 MB'); return; }
+                  const today = new Date().toLocaleDateString('ru-RU');
+                  onAddDoc({ id: `doc-${Date.now()}`, name: f.name, type: 'Загруженный', uploadedAt: today, status: 'pending' });
+                  toast.success(`Документ «${f.name}» загружен`, { description: 'Статус: на проверке' });
+                  e.target.value = '';
+                }}
+              />
+            </label>
           </div>
         )}
       </div>
@@ -948,6 +967,7 @@ export function UsersList() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [twoFAFilter, setTwoFAFilter] = useState<'all' | 'on' | 'off'>('all');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [addEditModal, setAddEditModal] = useState<{ mode: 'add' | 'edit'; user?: ManagedUser } | null>(null);
   const [cabinetPreview, setCabinetPreview] = useState<ManagedUser | null>(null);
@@ -959,6 +979,10 @@ export function UsersList() {
   const [blockModal, setBlockModal] = useState<ManagedUser | null>(null);
   const [deleteModal, setDeleteModal] = useState<ManagedUser | null>(null);
 
+  // Per-user runtime state for things not in the static mock
+  const [departmentByUserId, setDepartmentByUserId] = useState<Record<string, string>>({});
+  const [docsByUserId, setDocsByUserId] = useState<Record<string, { id: string; name: string; type: string; uploadedAt: string; status: 'verified'|'pending'|'expired' }[]>>({});
+
   // Always read live data
   const selectedUser = selectedUserId ? users.find(u => u.id === selectedUserId) ?? null : null;
 
@@ -967,8 +991,12 @@ export function UsersList() {
     const matchSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
     const matchRole = roleFilter === 'all' || u.role === roleFilter;
     const matchStatus = statusFilter === 'all' || u.status === statusFilter;
-    return matchSearch && matchRole && matchStatus;
-  }), [users, search, roleFilter, statusFilter]);
+    const matchTwoFA =
+      twoFAFilter === 'all' ||
+      (twoFAFilter === 'on'  && u.twoFactorEnabled) ||
+      (twoFAFilter === 'off' && !u.twoFactorEnabled);
+    return matchSearch && matchRole && matchStatus && matchTwoFA;
+  }), [users, search, roleFilter, statusFilter, twoFAFilter]);
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -1007,12 +1035,13 @@ export function UsersList() {
     }
   }
 
-  const statCards = [
-    { label: 'Всего',        val: stats.total,     color: 'text-gray-900',   icon: Users,        bg: 'bg-gray-50 border-gray-200',     filterStatus: null as string | null },
-    { label: 'Активных',     val: stats.active,    color: 'text-green-700',  icon: CheckCircle2, bg: 'bg-green-50 border-green-200',   filterStatus: 'active' },
-    { label: 'Приглашены',   val: stats.invited,   color: 'text-blue-700',   icon: Send,         bg: 'bg-blue-50 border-blue-200',     filterStatus: 'invited' },
-    { label: 'С 2FA',        val: stats.twofa,     color: 'text-purple-700', icon: ShieldCheck,  bg: 'bg-purple-50 border-purple-200', filterStatus: null },
-    { label: 'Заблокировано',val: stats.suspended, color: 'text-red-700',    icon: ShieldAlert,  bg: 'bg-red-50 border-red-200',       filterStatus: 'suspended' },
+  type StatAction = { kind: 'reset' } | { kind: 'status'; value: string } | { kind: 'twofa' };
+  const statCards: { label: string; val: number; color: string; icon: any; bg: string; action: StatAction }[] = [
+    { label: 'Всего',        val: stats.total,     color: 'text-gray-900',   icon: Users,        bg: 'bg-gray-50 border-gray-200',     action: { kind: 'reset' } },
+    { label: 'Активных',     val: stats.active,    color: 'text-green-700',  icon: CheckCircle2, bg: 'bg-green-50 border-green-200',   action: { kind: 'status', value: 'active' } },
+    { label: 'Приглашены',   val: stats.invited,   color: 'text-blue-700',   icon: Send,         bg: 'bg-blue-50 border-blue-200',     action: { kind: 'status', value: 'invited' } },
+    { label: 'С 2FA',        val: stats.twofa,     color: 'text-purple-700', icon: ShieldCheck,  bg: 'bg-purple-50 border-purple-200', action: { kind: 'twofa' } },
+    { label: 'Заблокировано',val: stats.suspended, color: 'text-red-700',    icon: ShieldAlert,  bg: 'bg-red-50 border-red-200',       action: { kind: 'status', value: 'suspended' } },
   ];
 
   return (
@@ -1055,15 +1084,28 @@ export function UsersList() {
         <div className="grid grid-cols-5 gap-3 mb-4">
           {statCards.map(s => {
             const Icon = s.icon;
-            const isActive = s.filterStatus !== null && statusFilter === s.filterStatus;
+            const isActive =
+              (s.action.kind === 'status' && statusFilter === s.action.value) ||
+              (s.action.kind === 'twofa'  && twoFAFilter === 'on');
             return (
               <button
                 key={s.label}
                 onClick={() => {
-                  if (!s.filterStatus) return;
-                  setStatusFilter((statusFilter === s.filterStatus ? 'all' : s.filterStatus) as any);
+                  if (s.action.kind === 'reset') {
+                    setSearch(''); setRoleFilter('all'); setStatusFilter('all'); setTwoFAFilter('all');
+                    return;
+                  }
+                  if (s.action.kind === 'status') {
+                    setStatusFilter(statusFilter === s.action.value ? 'all' : s.action.value);
+                    setTwoFAFilter('all');
+                    return;
+                  }
+                  if (s.action.kind === 'twofa') {
+                    setTwoFAFilter(twoFAFilter === 'on' ? 'all' : 'on');
+                    setStatusFilter('all');
+                  }
                 }}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${s.bg} ${s.filterStatus ? 'cursor-pointer hover:shadow-md active:scale-[0.97]' : 'cursor-default'} ${isActive ? 'ring-2 ring-offset-1 shadow-sm' : ''}`}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${s.bg} cursor-pointer hover:shadow-md active:scale-[0.97] ${isActive ? 'ring-2 ring-offset-1 shadow-sm' : ''}`}
               >
                 <div className="w-8 h-8 bg-white rounded-lg border border-white/60 flex items-center justify-center shrink-0 shadow-sm">
                   <Icon className={`w-4 h-4 ${s.color}`} />
@@ -1094,8 +1136,8 @@ export function UsersList() {
             <option value="active">Активен</option><option value="invited">Приглашён</option>
             <option value="inactive">Неактивен</option><option value="suspended">Заблокирован</option>
           </select>
-          {(search || roleFilter !== 'all' || statusFilter !== 'all') && (
-            <button onClick={() => { setSearch(''); setRoleFilter('all'); setStatusFilter('all'); }}
+          {(search || roleFilter !== 'all' || statusFilter !== 'all' || twoFAFilter !== 'all') && (
+            <button onClick={() => { setSearch(''); setRoleFilter('all'); setStatusFilter('all'); setTwoFAFilter('all'); }}
               className="px-4 py-2.5 border border-orange-200 bg-orange-50 text-orange-700 rounded-xl text-sm font-medium hover:bg-orange-100 transition-colors flex items-center gap-1.5">
               <X className="w-3.5 h-3.5" />Сбросить
             </button>
@@ -1200,6 +1242,10 @@ export function UsersList() {
                 onOpenDelete={() => setDeleteModal(selectedUser)}
                 onEdit={() => setAddEditModal({ mode: 'edit', user: selectedUser })}
                 onPreview={() => setCabinetPreview(selectedUser)}
+                department={departmentByUserId[selectedUser.id] ?? DEPT_DEFAULTS[selectedUser.id] ?? 'none'}
+                onChangeDepartment={(dept) => setDepartmentByUserId(prev => ({ ...prev, [selectedUser.id]: dept }))}
+                extraDocs={docsByUserId[selectedUser.id] ?? []}
+                onAddDoc={(doc) => setDocsByUserId(prev => ({ ...prev, [selectedUser.id]: [doc, ...(prev[selectedUser.id] ?? [])] }))}
               />
             </motion.div>
           )}

@@ -27,6 +27,8 @@ const deliveryTypeIcons: Record<DeliveryType, any> = {
 export function OrdersList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [activeOnly, setActiveOnly]   = useState(false);
 
   const filteredOrders = useMemo(() => {
     return ORDERS.filter(order => {
@@ -36,10 +38,12 @@ export function OrdersList() {
         order.customerName.toLowerCase().includes(q) ||
         order.customerPhone.includes(searchQuery) ||
         order.merchant.toLowerCase().includes(q);
-      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesStatus  = statusFilter === 'all' || order.status === statusFilter;
+      const matchesOverdue = !overdueOnly || order.isOverdue;
+      const matchesActive  = !activeOnly  || !['delivered', 'cancelled', 'returned'].includes(order.status);
+      return matchesSearch && matchesStatus && matchesOverdue && matchesActive;
     });
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, overdueOnly, activeOnly]);
 
   const stats = useMemo(() => ({
     active: ORDERS.filter(o => !['delivered', 'cancelled', 'returned'].includes(o.status)).length,
@@ -61,20 +65,33 @@ export function OrdersList() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: 'Активные',          value: stats.active,          color: 'text-blue-600',   bg: 'bg-blue-50',   filter: null         as OrderStatus | null },
-          { label: 'Просрочки SLA',     value: stats.overdue,         color: 'text-red-600',    bg: 'bg-red-50',    filter: null         as OrderStatus | null },
-          { label: 'В доставке',        value: stats.inDelivery,      color: 'text-purple-600', bg: 'bg-purple-50', filter: 'in_transit' as OrderStatus },
-          { label: 'Доставлено сегодня',value: stats.deliveredToday,  color: 'text-green-600',  bg: 'bg-green-50',  filter: 'delivered'  as OrderStatus },
-        ].map(stat => (
-          <button
-            key={stat.label}
-            onClick={() => { if (stat.filter) setStatusFilter(statusFilter === stat.filter ? 'all' : stat.filter); else toast.info(stat.label, { description: `${stat.value} заказов` }); }}
-            className={`${stat.bg} p-4 rounded-lg border text-left transition-all cursor-pointer hover:shadow-md active:scale-[0.98] ${stat.filter && statusFilter === stat.filter ? 'ring-2 ring-offset-1 ring-current border-current' : 'border-gray-200 hover:border-gray-300'}`}
-          >
-            <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
-            <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-          </button>
-        ))}
+          { label: 'Активные',          value: stats.active,         color: 'text-blue-600',   bg: 'bg-blue-50',   action: 'active'    as const },
+          { label: 'Просрочки SLA',     value: stats.overdue,        color: 'text-red-600',    bg: 'bg-red-50',    action: 'overdue'   as const },
+          { label: 'В доставке',        value: stats.inDelivery,     color: 'text-purple-600', bg: 'bg-purple-50', action: 'status'    as const, filter: 'in_transit' as OrderStatus },
+          { label: 'Доставлено сегодня',value: stats.deliveredToday, color: 'text-green-600',  bg: 'bg-green-50',  action: 'status'    as const, filter: 'delivered'  as OrderStatus },
+        ].map(stat => {
+          const isActive =
+            (stat.action === 'active'  && activeOnly) ||
+            (stat.action === 'overdue' && overdueOnly) ||
+            (stat.action === 'status'  && stat.filter && statusFilter === stat.filter);
+          return (
+            <button
+              key={stat.label}
+              onClick={() => {
+                if (stat.action === 'active')  { setActiveOnly(v => !v); setOverdueOnly(false); setStatusFilter('all'); }
+                if (stat.action === 'overdue') { setOverdueOnly(v => !v); setActiveOnly(false); setStatusFilter('all'); }
+                if (stat.action === 'status' && stat.filter) {
+                  setStatusFilter(statusFilter === stat.filter ? 'all' : stat.filter);
+                  setActiveOnly(false); setOverdueOnly(false);
+                }
+              }}
+              className={`${stat.bg} p-4 rounded-lg border text-left transition-all cursor-pointer hover:shadow-md active:scale-[0.98] ${isActive ? 'ring-2 ring-offset-1 ring-current border-current' : 'border-gray-200 hover:border-gray-300'}`}
+            >
+              <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+              <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters */}
