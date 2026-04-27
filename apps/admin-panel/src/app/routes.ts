@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, redirect } from "react-router-dom";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { UsersList } from "./pages/users/UsersList";
@@ -80,6 +80,15 @@ export const router = createBrowserRouter([
       { path: "analytics", Component: Analytics },
       { path: "settings", Component: Settings },
       { path: "system/architecture", Component: ArchitecturePage },
+      // Catch-all: any unknown path under the admin panel → bounce to index.
+      // This stops React Router's "404 Not Found" screen from ever showing.
+      { path: "*", loader: () => redirect("/") },
     ],
   },
-]);
+], {
+  // basename so this SPA works under nginx alias /admin/.
+  // Vite injects BASE_URL = "/admin/" at build time when called with --base=/admin/.
+  // Trailing slash is stripped because React Router expects "/admin" (no trailing).
+  // Falls back to "/" for plain `vite dev` (where BASE_URL is "/").
+  basename: ((import.meta as any).env?.BASE_URL ?? "/").replace(/\/$/, "") || "/",
+});
