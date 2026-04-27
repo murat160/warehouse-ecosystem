@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, ListTodo, Map, Boxes, User, Users, AlertTriangle } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { isSupervisorOrAbove } from '../services/permissions';

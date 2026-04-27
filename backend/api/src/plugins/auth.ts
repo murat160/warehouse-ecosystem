@@ -1,6 +1,6 @@
 import jwt from '@fastify/jwt';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { env } from '../env.js';
+import { env } from '../env';
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -30,8 +30,9 @@ export async function registerAuth(app: FastifyInstance) {
     try {
       await req.jwtVerify();
     } catch {
-      throw app.httpErrors?.unauthorized?.('Invalid or missing token') ??
-        Object.assign(new Error('Unauthorized'), { statusCode: 401, code: 'UNAUTHORIZED' });
+      throw Object.assign(new Error('Invalid or missing token'), {
+        statusCode: 401, code: 'UNAUTHORIZED',
+      });
     }
   });
 

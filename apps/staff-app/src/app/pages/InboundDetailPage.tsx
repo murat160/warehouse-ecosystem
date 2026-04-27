@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Camera, Plus, Minus, ScanLine, AlertCircle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppState, store, lookupSkuFull } from '../hooks/useAppState';

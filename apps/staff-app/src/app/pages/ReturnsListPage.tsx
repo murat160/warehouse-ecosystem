@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, RotateCcw } from 'lucide-react';
 import { useAppState, store, lookupSkuFull } from '../hooks/useAppState';
 import { PageHeader } from '../components/PageHeader';

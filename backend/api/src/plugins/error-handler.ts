@@ -19,7 +19,7 @@ export function registerErrorHandler(app: FastifyInstance) {
     }
 
     reply.status(status).send({
-      error: err.message || 'Internal server error',
+      error: err instanceof Error ? err.message : 'Internal server error',
       code,
     });
   });

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppState, store } from '../hooks/useAppState';

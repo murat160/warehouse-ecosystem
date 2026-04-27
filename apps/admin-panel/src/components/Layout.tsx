@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users as UsersIcon, Shield, Building2, Map as MapIcon,
   MapPin, Package, ShoppingCart, ListTodo, Boxes, FileText, Activity,

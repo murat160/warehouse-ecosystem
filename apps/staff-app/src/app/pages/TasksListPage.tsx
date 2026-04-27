@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useAppState, store } from '../hooks/useAppState';
 import { TASK_TYPE_EMOJI, TASK_TYPE_LABELS, type TaskType } from '../data/mockData';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Truck, AlertTriangle } from 'lucide-react';
 import { useAppState, store } from '../hooks/useAppState';
 import { type InboundStatus } from '../data/mockData';

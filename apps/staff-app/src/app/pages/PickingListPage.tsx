@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Clock } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { PriorityBadge, OrderStatusBadge } from '../components/Badges';

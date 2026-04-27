@@ -1,5 +1,5 @@
 import { LogOut, User, Smartphone, Cpu, FileText, Award, Activity } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAppState, store } from '../hooks/useAppState';
 import { ROLE_LABELS } from '../data/mockData';

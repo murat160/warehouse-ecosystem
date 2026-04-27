@@ -6,7 +6,7 @@
  *
  * All pages talk to backend via src/api.ts. No mock data lives here.
  */
-import { Routes, Route, Navigate } from 'react-router';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSession } from './lib/auth';
 import { Layout } from './components/Layout';
 

@@ -3,7 +3,7 @@ import { kpiApi, problemTasksApi, ordersApi, tasksApi } from '../api';
 import { PageHeader, PageBody } from '../components/Layout';
 import { Badge, Table, type Column } from '../components/Table';
 import { fmtRelative, statusBadgeColor } from '../lib/format';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 
 export function DashboardPage() {
   const [kpi, setKpi] = useState<any>(null);

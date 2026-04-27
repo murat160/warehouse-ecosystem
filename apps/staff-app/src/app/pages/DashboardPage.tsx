@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Pause, Play, AlertTriangle, ChevronRight, Map, Package, ShoppingCart, RotateCcw, BarChart3, Truck, ScanLine, PackageCheck, Boxes } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppState, store } from '../hooks/useAppState';
