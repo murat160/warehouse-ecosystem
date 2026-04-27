@@ -884,7 +884,8 @@ function OperatorsTab({ operators, onEdit, onBlock, onCreate, onArchive }: {
                               <button onClick={() => onEdit(op)} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
                                 <Edit2 className="w-3.5 h-3.5 text-blue-500" />Редактировать
                               </button>
-                              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                              <button onClick={() => { import('sonner').then(m => m.toast.success(`Ссылка для сброса пароля отправлена ${op.name}`)); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
                                 <KeyRound className="w-3.5 h-3.5 text-yellow-500" />Сбросить пароль
                               </button>
                               <div className="border-t border-gray-100 my-1" />

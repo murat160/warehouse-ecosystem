@@ -494,7 +494,8 @@ function LoginsTab() {
             <span className="ml-1 opacity-60">{counts[f]}</span>
           </button>
         ))}
-        <button className="ml-auto flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors">
+        <button onClick={() => toast.success('Экспорт журнала входов запущен')}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors">
           <Download className="w-3.5 h-3.5" />Экспорт
         </button>
       </div>
@@ -731,7 +732,8 @@ function TokensTab() {
                   className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
                   <Copy className="w-3.5 h-3.5" />
                 </button>
-                <button className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Ротировать">
+                <button onClick={() => toast.success('Токен ротирован. Старый перестанет работать через 24 часа.')}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Ротировать">
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -791,7 +793,8 @@ function SsoTab() {
                 {p.active && <p className="text-xs text-green-700 mt-0.5">{p.userCount} пользователей используют этот провайдер</p>}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button className="p-2 border border-gray-200 rounded-xl hover:bg-white text-gray-500 transition-colors" title="Настроить">
+                <button onClick={() => toast.info(`Настройка SSO: ${p.name}`)}
+                  className="p-2 border border-gray-200 rounded-xl hover:bg-white text-gray-500 transition-colors" title="Настроить">
                   <Settings className="w-4 h-4" />
                 </button>
                 <Toggle on={p.active} onToggle={() => toggleProvider(p.id)} />
@@ -936,7 +939,8 @@ function SuperAdminTab() {
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <p className="text-sm font-bold text-gray-700">Критические действия SuperAdmin</p>
-          <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-xl hover:bg-gray-100 transition-colors">
+          <button onClick={() => toast.success('Экспорт критических действий SuperAdmin')}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-xl hover:bg-gray-100 transition-colors">
             <Download className="w-3.5 h-3.5" />Экспорт
           </button>
         </div>

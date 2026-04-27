@@ -196,7 +196,8 @@ export function PVZList() {
           <option value="paused">Пауза</option>
           <option value="closed">Закрыт</option>
         </select>
-        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-sm font-medium transition-colors">
+        <button onClick={() => { import('sonner').then(m => m.toast.success(`Экспортировано ПВЗ: ${filteredPVZ.length}`)); }}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-sm font-medium transition-colors">
           <Download className="w-4 h-4" />Экспорт
         </button>
       </div>
@@ -296,8 +297,8 @@ export function PVZList() {
                   <ScanLine className="w-4 h-4" />
                 </Link>
                 {pvz.status === 'active'
-                  ? <button className="px-3 py-2 border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"><Pause className="w-4 h-4" /></button>
-                  : <button className="px-3 py-2 border border-green-200 text-green-600 hover:bg-green-50 rounded-xl transition-colors"><Play className="w-4 h-4" /></button>
+                  ? <button onClick={() => { import('sonner').then(m => m.toast.success(`ПВЗ ${pvz.code} приостановлен`)); }} title="Приостановить" className="px-3 py-2 border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"><Pause className="w-4 h-4" /></button>
+                  : <button onClick={() => { import('sonner').then(m => m.toast.success(`ПВЗ ${pvz.code} активирован`)); }} title="Активировать" className="px-3 py-2 border border-green-200 text-green-600 hover:bg-green-50 rounded-xl transition-colors"><Play className="w-4 h-4" /></button>
                 }
               </div>
 

@@ -442,7 +442,8 @@ export function WarehouseDetail() {
                             </button>
                           )}
                           {ship.status === 'in_progress' && (
-                            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-sm hover:bg-yellow-600 transition-colors">
+                            <button onClick={() => { import('sonner').then(m => m.toast.info(`Поставка ${ship.id} — открыть детали`)); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-sm hover:bg-yellow-600 transition-colors">
                               <Activity className="w-3.5 h-3.5" /> В процессе
                             </button>
                           )}

@@ -234,7 +234,8 @@ function ScanLogPanel({ log }: { log: UnifiedLog[] }) {
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}
-          <button className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
+          <button onClick={() => toast.success('Экспорт данных ПВЗ запущен')}
+            className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
             <Download className="w-3 h-3" />Экспорт
           </button>
         </div>
@@ -1381,7 +1382,7 @@ export function PVZDetail() {
             <div className="text-center"><p className="text-lg font-bold text-white">{receivedToday}</p><p className="text-xs text-blue-200">принято</p></div>
             <div className="text-center"><p className="text-lg font-bold text-white">{issuedToday}</p><p className="text-xs text-blue-200">выдано</p></div>
             <div className="text-center"><p className="text-lg font-bold text-white">{returnsToday}</p><p className="text-xs text-blue-200">возврат</p></div>
-            <button className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium border border-white/30">Закрыть смену</button>
+            <button onClick={() => toast.success('Смена закрыта. Касса инкассирована.')} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium border border-white/30">Закрыть смену</button>
           </div>
         </div>
       </div>
@@ -1550,7 +1551,7 @@ export function PVZDetail() {
                           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                           <span>Сканируйте каждую посылку по отдельности. После окончания нажмите «Закрыть приёмку».</span>
                         </div>
-                        <button className="w-full py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium">Закрыть приёмку ({SHIPMENTS[0].parcels} посылок)</button>
+                        <button onClick={() => toast.success(`Приёмка закрыта · ${SHIPMENTS[0].parcels} посылок принято`)} className="w-full py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium">Закрыть приёмку ({SHIPMENTS[0].parcels} посылок)</button>
                       </div>
                     )}
                   </div>
@@ -1969,7 +1970,7 @@ export function PVZDetail() {
                 <div className="flex gap-2">
                   <button onClick={() => { setOpMode('inventory'); setActiveTab('operations'); }}
                     className="flex items-center gap-2 px-4 py-2 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors text-sm font-medium"><ClipboardList className="w-4 h-4" />Инвентаризация</button>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
+                  <button onClick={() => toast.success('Экспорт инвентаризации в Excel запущен')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
                 </div>
               </div>
 
@@ -2370,7 +2371,7 @@ export function PVZDetail() {
                   <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">Оператор ПВЗ</span>
                   <span className="flex items-center gap-0.5 px-2 py-0.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium"><Shield className="w-3 h-3" />Активен</span>
                 </div>
-                <button className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg"><MoreHorizontal className="w-4 h-4" /></button>
+                <button onClick={() => toast.info('Дополнительные действия')} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg" title="Действия"><MoreHorizontal className="w-4 h-4" /></button>
               </div>
             )}
             <div className="space-y-3">
@@ -2400,8 +2401,8 @@ export function PVZDetail() {
               <div><h3 className="font-semibold text-gray-900">Касса смены</h3>
                 <p className="text-sm text-gray-500">Остаток: <span className="font-bold text-green-700">{formatCurrency(CASH_ENTRIES.reduce((s,e)=>e.type==='income'?s+e.amount:s-e.amount,5000))}</span></p></div>
               <div className="flex gap-2">
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Отчёт</button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"><CreditCard className="w-4 h-4" />Инкассация</button>
+                <button onClick={() => toast.success('Кассовый отчёт сформирован')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Отчёт</button>
+                <button onClick={() => toast.success('Инкассация запущена. Дождитесь курьера.')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"><CreditCard className="w-4 h-4" />Инкассация</button>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3 mb-4">
@@ -2458,7 +2459,7 @@ export function PVZDetail() {
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900">Журнал аудита</h3>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
+              <button onClick={() => toast.success('Экспорт журнала аудита')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"><Download className="w-4 h-4" />Экспорт</button>
             </div>
             <div className="space-y-2">
               {AUDIT_LOG.map(entry => (
@@ -2533,7 +2534,7 @@ export function PVZDetail() {
                     <input defaultValue={val} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /></div>
                 ))}
               </div>
-              <button className="mt-4 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium">Сохранить изменения</button>
+              <button onClick={() => toast.success('Настройки ПВЗ сохранены')} className="mt-4 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium">Сохранить изменения</button>
             </div>
 
             <hr className="border-gray-200" />
@@ -2588,7 +2589,7 @@ export function PVZDetail() {
                 </div>
                 <div className="flex items-center justify-between p-4 border border-red-200 rounded-xl">
                   <div><p className="font-medium text-gray-900">Закрыть ПВЗ</p><p className="text-sm text-gray-500">Полная деактивация. Требует подтверждения руководства</p></div>
-                  <button className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors">Закрыть ПВЗ</button>
+                  <button onClick={() => { if (confirm('Полностью деактивировать этот ПВЗ?')) toast.success('Запрос на закрытие ПВЗ отправлен руководству'); }} className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors">Закрыть ПВЗ</button>
                 </div>
               </div>
             </div>

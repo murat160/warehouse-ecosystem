@@ -268,7 +268,10 @@ function SupportWidget() {
   return (
     <div className="space-y-2">
       {tickets.map(t => (
-        <div key={t.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer">
+        <div key={t.id}
+          onClick={() => { import('sonner').then(m => m.toast.info(`Тикет ${t.id}`, { description: t.title })); }}
+          role="button" tabIndex={0}
+          className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer">
           <span className="text-xs font-mono text-gray-400 w-16 shrink-0">{t.id}</span>
           <p className="text-sm text-gray-700 flex-1 truncate">{t.title}</p>
           <span className={`px-2 py-0.5 rounded-lg text-xs font-medium shrink-0 ${pclr[t.priority as keyof typeof pclr]}`}>
