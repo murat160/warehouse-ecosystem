@@ -2,14 +2,42 @@
 // Keeps types + mock arrays in one place so ProductsList / ProductCategories /
 // ProductMedia can reference the same dataset.
 
-export type ProductStatus = 'active' | 'moderation' | 'blocked' | 'archived';
+export type ProductStatus = 'draft' | 'active' | 'moderation' | 'blocked' | 'archived';
 
 export const PRODUCT_STATUS_CFG: Record<ProductStatus, { label: string; cls: string; dot: string }> = {
+  draft:      { label: 'Черновик',      cls: 'bg-slate-100 text-slate-700',  dot: 'bg-slate-400'  },
   active:     { label: 'Активный',      cls: 'bg-green-100 text-green-700',  dot: 'bg-green-500'  },
   moderation: { label: 'На модерации',  cls: 'bg-yellow-100 text-yellow-700',dot: 'bg-yellow-500' },
   blocked:    { label: 'Заблокирован',  cls: 'bg-red-100 text-red-700',      dot: 'bg-red-500'    },
   archived:   { label: 'В архиве',      cls: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400'   },
 };
+
+export type ProductAvailability = 'in_stock' | 'low' | 'out' | 'preorder';
+
+export const AVAILABILITY_LABELS: Record<ProductAvailability, { label: string; cls: string }> = {
+  in_stock: { label: 'В наличии',    cls: 'bg-green-100 text-green-700'  },
+  low:      { label: 'Мало осталось',cls: 'bg-orange-100 text-orange-700'},
+  out:      { label: 'Нет в наличии',cls: 'bg-red-100 text-red-700'      },
+  preorder: { label: 'Предзаказ',    cls: 'bg-blue-100 text-blue-700'    },
+};
+
+export interface ProductDimensions { length?: number; width?: number; height?: number; }
+export interface ProductDiscount { percent: number; startDate?: string; endDate?: string; }
+export interface ProductShipping {
+  delivery?:       boolean;
+  pvz?:            boolean;
+  pickup?:         boolean;
+  fragile?:        boolean;
+  needsPackaging?: boolean;
+  ageLimit?:       number; // 0 = no limit
+}
+export interface ProductAttribute { key: string; value: string; }
+export interface ProductAuditEntry {
+  at:     string;
+  actor:  string;
+  role:   string;
+  action: string;
+}
 
 export type ProductOwnerType = 'company' | 'merchant';
 
@@ -52,6 +80,40 @@ export interface Product {
   boostReason?: string;
   /** Whether the product is visible to customers (independent of status). */
   visibleToCustomers?: boolean;
+
+  // ── Extended (used by professional product creation form) ──
+  barcode?:          string;
+  brand?:            string;
+  subcategoryId?:    string;
+  productType?:      string;          // type label (физический / цифровой / услуга / комплект)
+  shortDescription?: string;
+  description?:      string;
+  tags?:             string[];
+  /** Identifier of the photo from MEDIA that is the main one. */
+  mainPhotoId?:      string;
+  /** Pricing details. */
+  oldPrice?:         number;
+  costPrice?:        number;
+  currency?:         string;          // RUB / KZT / USD ...
+  discount?:         ProductDiscount;
+  /** Stock & warehouse. */
+  minStock?:         number;
+  warehouseId?:      string;
+  cellLocation?:     string;
+  availability?:     ProductAvailability;
+  /** Physical specs. */
+  weight?:           number;          // grams
+  dimensions?:       ProductDimensions;
+  color?:            string;
+  material?:         string;
+  size?:             string;
+  country?:          string;
+  warranty?:         string;
+  customAttributes?: ProductAttribute[];
+  /** Shipping flags. */
+  shipping?:         ProductShipping;
+  /** Audit log of significant changes. */
+  audit?:            ProductAuditEntry[];
 }
 
 export type RecommendationPosition =

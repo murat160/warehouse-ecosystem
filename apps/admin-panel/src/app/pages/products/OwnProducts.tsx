@@ -3,15 +3,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Search, Plus, Download, Eye, Pencil as Edit2, Image as ImageIcon,
-  CheckCircle2, Ban, Archive, Send, X, ShieldCheck, Building2,
+  CheckCircle2, Ban, Archive, Send, ShieldCheck, Building2,
 } from 'lucide-react';
 import {
-  PRODUCTS, CATEGORIES, PRODUCT_STATUS_CFG, COMPANY_MERCHANT_ID,
-  getCategoryName, fmtPrice, photosForProduct, MEDIA,
+  PRODUCTS, CATEGORIES, PRODUCT_STATUS_CFG, MEDIA,
+  RECOMMENDATIONS_INITIAL, SHOWCASE_INITIAL,
+  getCategoryName, fmtPrice, photosForProduct,
   type Product, type ProductStatus,
 } from '../../data/products-mock';
 import { exportToCsv } from '../../utils/downloads';
 import { ProductPreviewModal } from '../../components/products/ProductPreviewModal';
+import { ProductFormDrawer, type ProductFormPayload, type SubmitAction } from '../../components/products/ProductFormDrawer';
 
 type StatusFilter = ProductStatus | 'all' | 'low_stock' | 'no_photo';
 
@@ -22,17 +24,17 @@ export function OwnProducts() {
   const [search, setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
-  const [form, setForm] = useState({ name: '', sku: '', categoryId: 'cat-bags', price: '', stock: '' });
 
   const stats = useMemo(() => ({
     total:      products.length,
     active:     products.filter(p => p.status === 'active').length,
     moderation: products.filter(p => p.status === 'moderation').length,
+    draft:      products.filter(p => p.status === 'draft').length,
     noPhoto:    products.filter(p => p.photoCount === 0).length,
-    lowStock:   products.filter(p => p.stock > 0 && p.stock < 100).length,
+    lowStock:   products.filter(p => p.stock > 0 && p.stock < (p.minStock ?? 100)).length,
   }), [products]);
 
   const filtered = useMemo(() => products.filter(p => {
@@ -41,51 +43,112 @@ export function OwnProducts() {
     const matchCategory = categoryFilter === 'all' || p.categoryId === categoryFilter;
     let matchStatus = true;
     if (statusFilter === 'no_photo')  matchStatus = p.photoCount === 0;
-    else if (statusFilter === 'low_stock') matchStatus = p.stock > 0 && p.stock < 100;
+    else if (statusFilter === 'low_stock') matchStatus = p.stock > 0 && p.stock < (p.minStock ?? 100);
     else if (statusFilter !== 'all')  matchStatus = p.status === statusFilter;
     return matchSearch && matchCategory && matchStatus;
   }), [products, search, statusFilter, categoryFilter]);
 
   function setStatus(id: string, status: ProductStatus) {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, status, updatedAt: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } : p));
+    const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, status, updatedAt: now } : p));
+    // Mutate global PRODUCTS so cross-page state stays consistent.
+    const idx = PRODUCTS.findIndex(p => p.id === id);
+    if (idx >= 0) PRODUCTS[idx] = { ...PRODUCTS[idx], status, updatedAt: now };
   }
 
   function openAdd() {
-    setEditingId(null);
-    setForm({ name: '', sku: '', categoryId: 'cat-bags', price: '', stock: '' });
-    setShowAddModal(true);
+    setEditingProduct(null);
+    setDrawerOpen(true);
   }
 
   function openEdit(p: Product) {
-    setEditingId(p.id);
-    setForm({ name: p.name, sku: p.sku, categoryId: p.categoryId, price: String(p.price), stock: String(p.stock) });
-    setShowAddModal(true);
+    setEditingProduct(p);
+    setDrawerOpen(true);
   }
 
-  function handleSave() {
-    const name = form.name.trim();
-    if (!name) { toast.error('Введите название товара'); return; }
-    if (!form.sku.trim()) { toast.error('Укажите SKU'); return; }
-    const price = parseFloat(form.price);
-    const stock = parseInt(form.stock, 10);
-    if (!Number.isFinite(price) || price < 0) { toast.error('Некорректная цена'); return; }
-    if (!Number.isFinite(stock) || stock < 0) { toast.error('Некорректный остаток'); return; }
+  /**
+   * Persist a newly-built product across the whole catalogue:
+   *  - update local list (instant in /products/own),
+   *  - mutate exported PRODUCTS so it appears on next mount in
+   *    /products, /products/popular, /products/recommended, /products/showcase,
+   *  - mutate MEDIA with new photos/videos so /products/media sees them too,
+   *  - if promotion options chosen, push slots into RECOMMENDATIONS_INITIAL /
+   *    SHOWCASE_INITIAL.
+   */
+  function handleSubmit(payload: ProductFormPayload, action: SubmitAction) {
+    const { product, newMedia, promotion } = payload;
     const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    if (editingId) {
-      setProducts(prev => prev.map(p => p.id === editingId ? { ...p, name, sku: form.sku.trim(), categoryId: form.categoryId, price, stock, revenue: price * p.sales, updatedAt: now } : p));
-      toast.success(`Товар обновлён: ${name}`);
+
+    // Re-compute revenue (in case sales > 0 in edit mode)
+    const finalProduct: Product = { ...product, revenue: product.price * product.sales };
+
+    if (editingProduct) {
+      // Edit: replace
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? finalProduct : p));
+      const idx = PRODUCTS.findIndex(p => p.id === editingProduct.id);
+      if (idx >= 0) PRODUCTS[idx] = finalProduct;
     } else {
-      setProducts(prev => [{
-        id: `p-c${Date.now()}`, sku: form.sku.trim(), name, categoryId: form.categoryId,
-        merchant: 'PVZ Platform', merchantId: COMPANY_MERCHANT_ID,
-        ownerType: 'company',
-        status: 'moderation', price, stock, photoCount: 0, rating: 0, sales: 0, revenue: 0,
-        createdAt: now, updatedAt: now,
-      }, ...prev]);
-      toast.success(`Товар нашей фирмы создан: ${name}`, { description: 'Статус: На модерации' });
+      // Create: add to local + global
+      setProducts(prev => [finalProduct, ...prev]);
+      PRODUCTS.unshift(finalProduct);
     }
-    setShowAddModal(false);
-    setEditingId(null);
+
+    // Add new media
+    if (newMedia.length > 0) {
+      MEDIA.unshift(...newMedia);
+    }
+
+    // Recommendation slot
+    if (promotion.addToRecommended) {
+      RECOMMENDATIONS_INITIAL.unshift({
+        id: `rec-${Date.now()}`,
+        productId: finalProduct.id,
+        productName: finalProduct.name,
+        position: promotion.position,
+        priority: promotion.priority,
+        startDate: promotion.startDate,
+        endDate: promotion.endDate,
+        active: true,
+        addedBy: 'Супер Админ', addedByRole: 'SuperAdmin',
+        addedAt: now,
+        mode: 'manual', audience: 'all', audienceValue: '',
+      });
+    }
+
+    // Showcase slot
+    if (promotion.addToShowcase) {
+      const homeSlots = SHOWCASE_INITIAL.filter(s => s.location === 'home');
+      const nextSlot = (homeSlots.reduce((max, s) => Math.max(max, s.slotNumber), 0)) + 1;
+      SHOWCASE_INITIAL.unshift({
+        id: `show-${Date.now()}`,
+        slotNumber: nextSlot,
+        productId: finalProduct.id,
+        productName: finalProduct.name,
+        location: 'home',
+        active: true,
+        addedBy: 'Супер Админ', addedByRole: 'SuperAdmin',
+        addedAt: now,
+      });
+    }
+
+    setDrawerOpen(false);
+    setEditingProduct(null);
+
+    const desc =
+      action === 'draft'             ? 'Статус: Черновик' :
+      action === 'moderation'        ? 'Статус: На модерации' :
+      action === 'active+showcase'   ? 'Статус: Активен · Добавлен в первые ряды' :
+      'Статус: Активен';
+    const promos: string[] = [];
+    if (promotion.addToPopular)     promos.push('закреплён в популярных');
+    if (promotion.addToRecommended) promos.push('добавлен в рекомендации');
+    if (promotion.addToShowcase)    promos.push('добавлен в первые ряды');
+    const promoLine = promos.length ? ` · ${promos.join(', ')}` : '';
+
+    toast.success(
+      editingProduct ? `Товар обновлён: ${finalProduct.name}` : `Товар создан: ${finalProduct.name}`,
+      { description: desc + promoLine },
+    );
   }
 
   return (
@@ -124,11 +187,12 @@ export function OwnProducts() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
           { label: 'Всего наших',     value: stats.total,      bg: 'bg-amber-50 border-amber-200',  color: 'text-amber-700', filter: 'all'        as StatusFilter },
           { label: 'Активные',        value: stats.active,     bg: 'bg-green-50 border-green-200',  color: 'text-green-700', filter: 'active'     as StatusFilter },
           { label: 'На модерации',    value: stats.moderation, bg: 'bg-yellow-50 border-yellow-200',color: 'text-yellow-700',filter: 'moderation' as StatusFilter },
+          { label: 'Черновики',       value: stats.draft,      bg: 'bg-slate-50 border-slate-200',  color: 'text-slate-700', filter: 'draft'      as StatusFilter },
           { label: 'Без фото',        value: stats.noPhoto,    bg: 'bg-orange-50 border-orange-200',color: 'text-orange-700',filter: 'no_photo'   as StatusFilter },
           { label: 'Низкий остаток',  value: stats.lowStock,   bg: 'bg-red-50 border-red-200',      color: 'text-red-700',   filter: 'low_stock'  as StatusFilter },
         ].map(stat => {
@@ -187,6 +251,7 @@ export function OwnProducts() {
                 {filtered.map(p => {
                   const sc = PRODUCT_STATUS_CFG[p.status];
                   const photo = photosForProduct(p.id, MEDIA)[0];
+                  const lowStock = p.stock > 0 && p.stock < (p.minStock ?? 100);
                   return (
                     <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
@@ -200,32 +265,45 @@ export function OwnProducts() {
                               <span className="text-white text-xs flex w-full h-full items-center justify-center font-bold">{p.name.slice(0, 2).toUpperCase()}</span>
                             )}
                           </button>
-                          <div>
-                            <button onClick={() => setPreviewProduct(p)} className="font-medium text-gray-900 hover:text-amber-700 text-left">{p.name}</button>
+                          <div className="min-w-0">
+                            <button onClick={() => setPreviewProduct(p)} className="font-medium text-gray-900 hover:text-amber-700 text-left truncate block max-w-[260px]">{p.name}</button>
                             <p className="text-xs text-gray-500 mt-0.5 font-mono">{p.sku}</p>
+                            {p.brand && <p className="text-[10px] text-amber-700">{p.brand}</p>}
                           </div>
                         </div>
                       </td>
                       <td className="px-3 py-3 text-gray-600 hidden lg:table-cell text-xs">{getCategoryName(p.categoryId)}</td>
-                      <td className="px-3 py-3 text-right font-medium">{fmtPrice(p.price)}</td>
+                      <td className="px-3 py-3 text-right">
+                        <span className="font-medium">{fmtPrice(p.price)}</span>
+                        {p.oldPrice && p.oldPrice > p.price && (
+                          <p className="text-[10px] text-gray-400 line-through">{fmtPrice(p.oldPrice)}</p>
+                        )}
+                        {p.discount?.percent ? (
+                          <p className="text-[10px] text-rose-600 font-bold">-{p.discount.percent}%</p>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-3 text-right hidden lg:table-cell">
-                        <span className={`font-medium ${p.stock === 0 ? 'text-red-600' : p.stock < 100 ? 'text-orange-600' : 'text-gray-700'}`}>{p.stock}</span>
+                        <span className={`font-medium ${p.stock === 0 ? 'text-red-600' : lowStock ? 'text-orange-600' : 'text-gray-700'}`}>{p.stock}</span>
+                        {lowStock && <p className="text-[9px] text-orange-600">низкий</p>}
                       </td>
                       <td className="px-3 py-3 text-right hidden xl:table-cell text-gray-600">{p.sales}</td>
                       <td className="px-3 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${sc.cls}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />{sc.label}
                         </span>
+                        {p.visibleToCustomers === false && (
+                          <p className="text-[9px] text-gray-500 mt-0.5">скрыт</p>
+                        )}
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => setPreviewProduct(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md" title="Открыть"><Eye className="w-3.5 h-3.5" /></button>
                           <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md" title="Редактировать"><Edit2 className="w-3.5 h-3.5" /></button>
-                          <Link to={`/products/media`} className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md" title="Фото товара"><ImageIcon className="w-3.5 h-3.5" /></Link>
+                          <Link to={`/products/media?product=${p.id}`} className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md" title="Фото товара"><ImageIcon className="w-3.5 h-3.5" /></Link>
                           {p.status !== 'moderation' && p.status !== 'archived' && (
                             <button onClick={() => { setStatus(p.id, 'moderation'); toast.success(`«${p.name}» на модерации`); }} className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-md" title="На модерацию"><Send className="w-3.5 h-3.5" /></button>
                           )}
-                          {p.status === 'blocked' || p.status === 'moderation' ? (
+                          {p.status === 'blocked' || p.status === 'moderation' || p.status === 'draft' ? (
                             <button onClick={() => { setStatus(p.id, 'active'); toast.success(`«${p.name}» активирован`); }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md" title="Активировать"><CheckCircle2 className="w-3.5 h-3.5" /></button>
                           ) : (
                             <button onClick={() => { setStatus(p.id, 'blocked'); toast.warning(`«${p.name}» заблокирован`); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md" title="Заблокировать"><Ban className="w-3.5 h-3.5" /></button>
@@ -244,52 +322,13 @@ export function OwnProducts() {
         )}
       </div>
 
-      {/* Add/edit modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <p className="font-bold text-gray-900">{editingId ? 'Редактировать товар фирмы' : 'Новый товар фирмы'}</p>
-              <button onClick={() => setShowAddModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <div className="p-6 grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Название *</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus
-                  placeholder="PVZ Platform · Брендированный картон XL"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">SKU *</label>
-                <input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
-                  placeholder="PVZ-MERCH-006"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Категория</label>
-                <select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
-                  {CATEGORIES.filter(c => c.parentId).map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Цена ₽</label>
-                <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} min="0"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Остаток</label>
-                <input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} min="0"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t flex gap-3">
-              <button onClick={() => setShowAddModal(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
-              <button onClick={handleSave} className="flex-1 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-sm font-semibold">{editingId ? 'Сохранить' : 'Создать'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Add/edit drawer */}
+      <ProductFormDrawer
+        open={drawerOpen}
+        initialProduct={editingProduct ?? undefined}
+        onClose={() => { setDrawerOpen(false); setEditingProduct(null); }}
+        onSubmit={handleSubmit}
+      />
 
       {/* Product preview */}
       {previewProduct && (

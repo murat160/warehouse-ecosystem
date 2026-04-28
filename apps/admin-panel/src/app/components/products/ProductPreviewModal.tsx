@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {
   MEDIA, photosForProduct, videosForProduct, getCategoryName, fmtPrice,
-  PRODUCT_STATUS_CFG, MEDIA_STATUS_CFG, COMPANY_MERCHANT_ID,
+  PRODUCT_STATUS_CFG, MEDIA_STATUS_CFG, COMPANY_MERCHANT_ID, AVAILABILITY_LABELS,
   type Product, type ProductMediaItem,
 } from '../../data/products-mock';
 import { MediaLightbox } from '../ui/MediaLightbox';
@@ -113,6 +113,16 @@ export function ProductPreviewModal({
                   <EyeOff className="w-3 h-3" />Скрыт из популярных
                 </span>
               )}
+              {product.availability && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${AVAILABILITY_LABELS[product.availability].cls}`}>
+                  {AVAILABILITY_LABELS[product.availability].label}
+                </span>
+              )}
+              {product.visibleToCustomers === false && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full text-[10px] font-bold">
+                  <EyeOff className="w-3 h-3" />Скрыт от покупателей
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-0.5 font-mono">{product.sku}</p>
             <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -198,25 +208,116 @@ export function ProductPreviewModal({
             )}
           </section>
 
+          {/* Description */}
+          {(product.shortDescription || product.description) && (
+            <section className="space-y-2">
+              {product.shortDescription && (
+                <p className="text-sm text-gray-700 italic border-l-2 border-amber-300 pl-3">{product.shortDescription}</p>
+              )}
+              {product.description && (
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">{product.description}</p>
+              )}
+            </section>
+          )}
+
+          {/* Tags */}
+          {product.tags && product.tags.length > 0 && (
+            <section className="flex flex-wrap gap-1">
+              {product.tags.map((t, i) => (
+                <span key={i} className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-[10px]">#{t}</span>
+              ))}
+            </section>
+          )}
+
+          {/* Pricing line with discount */}
+          {(product.oldPrice || product.discount) && (
+            <section className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl p-3">
+              <p className="text-2xl font-bold text-rose-700">{fmtPrice(product.price)}</p>
+              {product.oldPrice && product.oldPrice > product.price && (
+                <p className="text-sm text-gray-400 line-through">{fmtPrice(product.oldPrice)}</p>
+              )}
+              {product.discount?.percent ? (
+                <span className="px-2 py-0.5 bg-rose-600 text-white rounded-full text-xs font-bold">−{product.discount.percent}%</span>
+              ) : null}
+              {product.discount?.startDate && (
+                <span className="text-xs text-rose-700 ml-auto">с {product.discount.startDate}{product.discount.endDate ? ` по ${product.discount.endDate}` : ''}</span>
+              )}
+            </section>
+          )}
+
           {/* Info grid */}
           <section className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-            {[
-              ['Цена',     fmtPrice(product.price)],
-              ['Остаток',  `${product.stock} шт.`],
-              ['Продано',  String(product.sales)],
-              ['Выручка',  fmtPrice(product.revenue)],
-              ['Рейтинг',  product.rating ? `★ ${product.rating}` : '—'],
-              ['Фото',     String(product.photoCount)],
-              ['Создан',   product.createdAt],
-              ['Обновлён', product.updatedAt],
-              ['ID',       product.id],
-            ].map(([k, v]) => (
-              <div key={k as string} className="flex justify-between border-b border-gray-50 pb-2 px-1">
+            {([
+              ['Цена',         fmtPrice(product.price)],
+              ['Остаток',      `${product.stock} шт.`],
+              product.availability ? ['Наличие', AVAILABILITY_LABELS[product.availability].label] : null,
+              ['Продано',      String(product.sales)],
+              ['Выручка',      fmtPrice(product.revenue)],
+              ['Рейтинг',      product.rating ? `★ ${product.rating}` : '—'],
+              ['Фото',         String(product.photoCount)],
+              product.brand        ? ['Бренд',     product.brand]                              : null,
+              product.productType  ? ['Тип',       product.productType]                        : null,
+              product.barcode      ? ['Штрихкод',  product.barcode]                            : null,
+              product.country      ? ['Страна',    product.country]                            : null,
+              product.warranty     ? ['Гарантия',  product.warranty]                           : null,
+              product.color        ? ['Цвет',      product.color]                              : null,
+              product.material     ? ['Материал',  product.material]                           : null,
+              product.size         ? ['Размер',    product.size]                               : null,
+              product.weight       ? ['Вес',       `${product.weight} г`]                      : null,
+              product.dimensions   ? ['Габариты',  `${product.dimensions.length ?? '—'}×${product.dimensions.width ?? '—'}×${product.dimensions.height ?? '—'} см`] : null,
+              product.warehouseId  ? ['Склад',     product.warehouseId]                        : null,
+              product.cellLocation ? ['Ячейка',    product.cellLocation]                       : null,
+              ['Создан',       product.createdAt],
+              ['Обновлён',     product.updatedAt],
+              ['ID',           product.id],
+            ].filter(Boolean) as [string, string][]).map(([k, v]) => (
+              <div key={k} className="flex justify-between border-b border-gray-50 pb-2 px-1">
                 <span className="text-gray-500 text-xs">{k}</span>
                 <span className="font-semibold text-gray-900 text-xs text-right truncate ml-2 max-w-[60%]">{v}</span>
               </div>
             ))}
           </section>
+
+          {/* Custom attributes */}
+          {product.customAttributes && product.customAttributes.length > 0 && (
+            <section>
+              <p className="text-xs font-bold text-gray-700 mb-2">Дополнительные характеристики</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {product.customAttributes.map((a, i) => (
+                  <div key={i} className="flex justify-between bg-gray-50 rounded px-2 py-1 text-xs">
+                    <span className="text-gray-600">{a.key}</span>
+                    <span className="font-semibold text-gray-900">{a.value}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Shipping flags */}
+          {product.shipping && (
+            <section className="flex flex-wrap gap-1.5 text-[11px]">
+              {product.shipping.delivery       && <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full">🚚 Доставка</span>}
+              {product.shipping.pvz            && <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full">📍 ПВЗ</span>}
+              {product.shipping.pickup         && <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full">🏬 Самовывоз</span>}
+              {product.shipping.fragile        && <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-full">⚠ Хрупкий</span>}
+              {product.shipping.needsPackaging && <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 rounded-full">📦 Требует упаковки</span>}
+              {(product.shipping.ageLimit ?? 0) > 0 && <span className="px-2 py-0.5 bg-red-50 border border-red-200 text-red-700 rounded-full">{product.shipping.ageLimit}+</span>}
+            </section>
+          )}
+
+          {/* Audit history */}
+          {product.audit && product.audit.length > 0 && (
+            <section className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">📜 История изменений</p>
+              <div className="space-y-1">
+                {product.audit.map((entry, i) => (
+                  <p key={i} className="text-[11px] text-slate-700">
+                    <span className="font-semibold">{entry.actor}</span> ({entry.role}) · {entry.at} · {entry.action}
+                  </p>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Boost audit (if any) */}
           {product.boostedBy && (
