@@ -4,12 +4,16 @@ import { Toaster } from 'sonner';
 
 import { useStore } from './store/useStore';
 import { AppShell } from './components/AppShell';
+import { RoleGuard } from './components/RoleGuard';
 
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ShiftPage } from './pages/ShiftPage';
+import { ShiftSettingsPage } from './pages/ShiftSettingsPage';
 import { TasksPage } from './pages/TasksPage';
+import { OrdersPage } from './pages/OrdersPage';
 import { PickingPage } from './pages/PickingPage';
+import { SortingPage } from './pages/SortingPage';
 import { PackingPage } from './pages/PackingPage';
 import { ScannerPage } from './pages/ScannerPage';
 import { ReadyPage } from './pages/ReadyPage';
@@ -18,6 +22,7 @@ import { InboundPage } from './pages/InboundPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { BinsPage } from './pages/BinsPage';
 import { CountPage } from './pages/CountPage';
+import { MovementsPage } from './pages/MovementsPage';
 import { ReturnsPage } from './pages/ReturnsPage';
 import { ProblemsPage } from './pages/ProblemsPage';
 import { DocumentsPage } from './pages/DocumentsPage';
@@ -36,24 +41,29 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
 
         <Route element={<AuthGuard><AppShell /></AuthGuard>}>
-          <Route path="/"                 element={<DashboardPage />} />
-          <Route path="/shift"            element={<ShiftPage />} />
-          <Route path="/tasks"            element={<TasksPage />} />
-          <Route path="/picking"          element={<PickingPage />} />
-          <Route path="/picking/:orderId" element={<PickingPage />} />
-          <Route path="/packing"          element={<PackingPage />} />
-          <Route path="/packing/:orderId" element={<PackingPage />} />
-          <Route path="/scanner"          element={<ScannerPage />} />
-          <Route path="/ready"            element={<ReadyPage />} />
-          <Route path="/handoff"          element={<HandoffPage />} />
-          <Route path="/inbound"          element={<InboundPage />} />
-          <Route path="/inventory"        element={<InventoryPage />} />
-          <Route path="/bins"             element={<BinsPage />} />
-          <Route path="/count"            element={<CountPage />} />
-          <Route path="/returns"          element={<ReturnsPage />} />
-          <Route path="/problems"         element={<ProblemsPage />} />
-          <Route path="/documents"        element={<DocumentsPage />} />
-          <Route path="/reports"          element={<ReportsPage />} />
+          <Route path="/"                  element={<DashboardPage />} />
+          <Route path="/shift"             element={<ShiftPage />} />
+          <Route path="/shift-settings"    element={<RoleGuard perm="configure_shift"><ShiftSettingsPage /></RoleGuard>} />
+          <Route path="/tasks"             element={<TasksPage />} />
+          <Route path="/orders"            element={<RoleGuard perm="pick"><OrdersPage /></RoleGuard>} />
+          <Route path="/picking"           element={<RoleGuard perm="pick"><PickingPage /></RoleGuard>} />
+          <Route path="/picking/:orderId"  element={<RoleGuard perm="pick"><PickingPage /></RoleGuard>} />
+          <Route path="/sorting"           element={<RoleGuard perm="sort"><SortingPage /></RoleGuard>} />
+          <Route path="/sorting/:orderId"  element={<RoleGuard perm="sort"><SortingPage /></RoleGuard>} />
+          <Route path="/packing"           element={<RoleGuard perm="pack"><PackingPage /></RoleGuard>} />
+          <Route path="/packing/:orderId"  element={<RoleGuard perm="pack"><PackingPage /></RoleGuard>} />
+          <Route path="/scanner"           element={<RoleGuard perm="scanner"><ScannerPage /></RoleGuard>} />
+          <Route path="/ready"             element={<RoleGuard perm="handoff"><ReadyPage /></RoleGuard>} />
+          <Route path="/handoff"           element={<RoleGuard perm="handoff"><HandoffPage /></RoleGuard>} />
+          <Route path="/inbound"           element={<RoleGuard perm="receive"><InboundPage /></RoleGuard>} />
+          <Route path="/inventory"         element={<RoleGuard perm="inventory"><InventoryPage /></RoleGuard>} />
+          <Route path="/bins"              element={<RoleGuard perm="inventory"><BinsPage /></RoleGuard>} />
+          <Route path="/count"             element={<RoleGuard perm="count"><CountPage /></RoleGuard>} />
+          <Route path="/movements"         element={<RoleGuard perm="move"><MovementsPage /></RoleGuard>} />
+          <Route path="/returns"           element={<RoleGuard perm="returns"><ReturnsPage /></RoleGuard>} />
+          <Route path="/problems"          element={<RoleGuard perm="problems"><ProblemsPage /></RoleGuard>} />
+          <Route path="/documents"         element={<RoleGuard perm="documents"><DocumentsPage /></RoleGuard>} />
+          <Route path="/reports"           element={<RoleGuard perm="view_reports"><ReportsPage /></RoleGuard>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

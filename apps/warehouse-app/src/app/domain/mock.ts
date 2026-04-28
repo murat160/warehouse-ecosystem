@@ -1,82 +1,167 @@
 import type {
-  Worker, WarehouseOrder, Task, Bin,
-  InventoryRow, ReturnRow, ProblemRow, DocumentRow,
+  Worker, Sku, Bin, WarehouseOrder, Task, InventoryRow, Movement,
+  CountTask, Asn, ReturnRow, Problem, DocumentRow, Courier,
 } from './types';
 
 const now = () => new Date().toISOString();
+const inMin = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
 
 export const MOCK_WORKERS: Worker[] = [
-  { id: 'W-204', name: 'Иванов И.',  role: 'picker',  shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00' },
-  { id: 'W-205', name: 'Петров П.',  role: 'packer',  shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00' },
-  { id: 'W-206', name: 'Сидоров С.', role: 'shipper', shiftStatus: 'on_break', shiftStart: '09:00', shiftEnd: '18:00' },
-  { id: 'M-001', name: 'Соколов В.', role: 'manager', shiftStatus: 'on_shift', shiftStart: '08:00', shiftEnd: '20:00' },
+  { id: 'W-100', name: 'Соколов В.', role: 'warehouse_admin',      shiftStatus: 'on_shift', shiftStart: '08:00', shiftEnd: '20:00', productivity: 99, errorRate: 0.1, tasksToday: 42 },
+  { id: 'W-101', name: 'Захарова Е.', role: 'shift_manager',        shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 96, errorRate: 0.3, tasksToday: 38 },
+  { id: 'W-204', name: 'Иванов И.',   role: 'picker',               shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 94, errorRate: 0.6, tasksToday: 27 },
+  { id: 'W-205', name: 'Петров П.',   role: 'packer',               shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 91, errorRate: 0.4, tasksToday: 19 },
+  { id: 'W-206', name: 'Сидоров С.',  role: 'dispatcher',           shiftStatus: 'on_break', shiftStart: '09:00', shiftEnd: '18:00', productivity: 88, errorRate: 0.2, tasksToday: 11 },
+  { id: 'W-301', name: 'Кузнецов А.', role: 'receiver',             shiftStatus: 'on_shift', shiftStart: '07:00', shiftEnd: '16:00', productivity: 92, errorRate: 0.5, tasksToday: 14 },
+  { id: 'W-401', name: 'Орлова М.',   role: 'inventory_controller', shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 95, errorRate: 0.2, tasksToday: 6  },
+  { id: 'W-501', name: 'Беляев К.',   role: 'returns_operator',     shiftStatus: 'off',                                            productivity: 87, errorRate: 0.7, tasksToday: 0  },
+];
+
+export const MOCK_SKUS: Sku[] = [
+  { sku: 'SHOE-00991', barcode: '5901234567890', name: 'Nike Air Max Black', category: 'Кроссовки',  sellerArticle: 'NK-AM-BLK-42', photo: '👟', weightKg: 0.9, defaultZone: 'RED' },
+  { sku: 'TS-RED-M',   barcode: '5901234567891', name: 'Футболка красная M', category: 'Одежда',     sellerArticle: 'TR-M-RED',     photo: '👕', weightKg: 0.2, defaultZone: 'YELLOW' },
+  { sku: 'JN-BLU-32',  barcode: '5901234567892', name: 'Джинсы синие 32',    category: 'Одежда',     sellerArticle: 'JN-32-BLU',    photo: '👖', weightKg: 0.6, defaultZone: 'YELLOW' },
+  { sku: 'PHN-IP15',   barcode: '5901234567893', name: 'iPhone 15 Pro 128',  category: 'Электроника', sellerArticle: 'AP-IP15-128',  photo: '📱', weightKg: 0.4, fragile: true, defaultZone: 'BLUE' },
+  { sku: 'BAG-LV-01',  barcode: '5901234567894', name: 'Сумка Louis V.',     category: 'Аксессуары', sellerArticle: 'LV-BAG-01',    photo: '👜', weightKg: 0.7, defaultZone: 'PURPLE' },
+  { sku: 'GRC-MILK',   barcode: '5901234567895', name: 'Молоко 1л',          category: 'Продукты',   sellerArticle: 'MLK-1L',       photo: '🥛', weightKg: 1.0, defaultZone: 'GREEN' },
+  { sku: 'JK-GRY-L',   barcode: '5901234567896', name: 'Куртка серая L',     category: 'Одежда',     sellerArticle: 'JK-L-GRY',     photo: '🧥', weightKg: 1.2, defaultZone: 'YELLOW' },
+  { sku: 'GIFT-FLW-1', barcode: '5901234567897', name: 'Букет роз',          category: 'Цветы',      sellerArticle: 'FLW-RZ-1',     photo: '💐', weightKg: 0.5, fragile: true, defaultZone: 'PURPLE' },
+];
+
+export const MOCK_BINS: Bin[] = [
+  { id: 'A-12-04', warehouse: 'MSK-WH-01', zone: 'RED',    row: 'R-03', rack: 'S-12', shelf: 'P-04', cell: 'A-12-04', qrCode: 'QR://BIN/A-12-04', capacity: 60, occupied: 18, status: 'active' },
+  { id: 'A-01-03', warehouse: 'MSK-WH-01', zone: 'YELLOW', row: 'R-01', rack: 'S-01', shelf: 'P-03', cell: 'A-01-03', qrCode: 'QR://BIN/A-01-03', capacity: 100, occupied: 78, status: 'active' },
+  { id: 'B-04-12', warehouse: 'MSK-WH-01', zone: 'YELLOW', row: 'R-04', rack: 'S-04', shelf: 'P-12', cell: 'B-04-12', qrCode: 'QR://BIN/B-04-12', capacity: 100, occupied: 45, status: 'active' },
+  { id: 'C-02-08', warehouse: 'MSK-WH-01', zone: 'BLUE',   row: 'R-02', rack: 'S-02', shelf: 'P-08', cell: 'C-02-08', qrCode: 'QR://BIN/C-02-08', capacity: 60, occupied: 60, status: 'active' },
+  { id: 'D-01-01', warehouse: 'MSK-WH-01', zone: 'GREEN',  row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'D-01-01', qrCode: 'QR://BIN/D-01-01', capacity: 50, occupied: 22, status: 'active' },
+  { id: 'E-03-02', warehouse: 'MSK-WH-01', zone: 'PURPLE', row: 'R-03', rack: 'S-03', shelf: 'P-02', cell: 'E-03-02', qrCode: 'QR://BIN/E-03-02', capacity: 40, occupied: 12, status: 'active' },
+  { id: 'F-01-01', warehouse: 'MSK-WH-01', zone: 'GRAY',   row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'F-01-01', qrCode: 'QR://BIN/F-01-01', capacity: 30, occupied: 5,  status: 'active' },
+  { id: 'G-01-01', warehouse: 'MSK-WH-01', zone: 'BLACK',  row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'G-01-01', qrCode: 'QR://BIN/G-01-01', capacity: 20, occupied: 2,  status: 'active' },
+  { id: 'H-01-01', warehouse: 'MSK-WH-01', zone: 'ORANGE', row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'H-01-01', qrCode: 'QR://BIN/H-01-01', capacity: 25, occupied: 0,  status: 'maintenance', blockedReason: 'Плановый осмотр' },
 ];
 
 export const MOCK_ORDERS: WarehouseOrder[] = [
   {
-    id: 'o1', code: 'ORD-2026-4512', customerName: 'Алия К.', city: 'Алматы',
-    status: 'received_by_warehouse', receivedAt: now(), updatedAt: now(),
+    id: 'o1', code: 'ORD-2026-004512', customerName: 'Алия К.', city: 'Алматы',
+    shipMethod: 'courier', priority: 'urgent', zone: 'RED',
+    status: 'received_by_warehouse', slaDeadline: inMin(120), receivedAt: now(), updatedAt: now(),
     items: [
-      { id: 'i1', sku: 'TS-RED-M',  name: 'Футболка красная M', qty: 2, pickedQty: 0, binId: 'A-01-03' },
-      { id: 'i2', sku: 'JN-BLU-32', name: 'Джинсы синие 32',    qty: 1, pickedQty: 0, binId: 'B-04-12' },
+      { id: 'i1', sku: 'SHOE-00991', qty: 2, pickedQty: 0, binId: 'A-12-04', status: 'pending' },
+      { id: 'i2', sku: 'TS-RED-M',   qty: 1, pickedQty: 0, binId: 'A-01-03', status: 'pending' },
     ],
   },
   {
-    id: 'o2', code: 'ORD-2026-4513', customerName: 'Марат Б.', city: 'Астана',
-    status: 'picking_in_progress', receivedAt: now(), updatedAt: now(), pickerId: 'W-204',
+    id: 'o2', code: 'ORD-2026-004513', customerName: 'Марат Б.', city: 'Астана',
+    shipMethod: 'pickup', priority: 'high', zone: 'BLUE',
+    status: 'picking_in_progress', slaDeadline: inMin(90), receivedAt: now(), updatedAt: now(), pickerId: 'W-204',
     items: [
-      { id: 'i3', sku: 'SH-BLK-42', name: 'Кроссовки чёрные 42', qty: 1, pickedQty: 1, binId: 'C-02-08' },
+      { id: 'i3', sku: 'PHN-IP15', qty: 1, pickedQty: 1, binId: 'C-02-08', status: 'found' },
     ],
   },
   {
-    id: 'o3', code: 'ORD-2026-4514', customerName: 'Динара С.', city: 'Шымкент',
-    status: 'packed', receivedAt: now(), updatedAt: now(),
-    pickerId: 'W-204', packerId: 'W-205', weightKg: 0.6, packageType: 'BAG-M',
-    items: [{ id: 'i4', sku: 'AC-BAG-01', name: 'Сумка', qty: 1, pickedQty: 1 }],
+    id: 'o3', code: 'ORD-2026-004514', customerName: 'Динара С.', city: 'Шымкент',
+    shipMethod: 'courier', priority: 'normal', zone: 'PURPLE',
+    status: 'sorting', slaDeadline: inMin(180), receivedAt: now(), updatedAt: now(),
+    pickerId: 'W-204', sorterId: 'W-205',
+    items: [{ id: 'i4', sku: 'BAG-LV-01', qty: 1, pickedQty: 1, binId: 'E-03-02', status: 'found' }],
   },
   {
-    id: 'o4', code: 'ORD-2026-4515', customerName: 'Олег Н.', city: 'Караганда',
-    status: 'ready_for_pickup', receivedAt: now(), updatedAt: now(),
-    pickerId: 'W-204', packerId: 'W-205', weightKg: 1.2, packageType: 'BOX-L',
-    items: [{ id: 'i5', sku: 'JK-GRY-L', name: 'Куртка серая L', qty: 1, pickedQty: 1 }],
+    id: 'o4', code: 'ORD-2026-004515', customerName: 'Олег Н.', city: 'Караганда',
+    shipMethod: 'courier', priority: 'normal', zone: 'YELLOW',
+    status: 'packed', slaDeadline: inMin(240), receivedAt: now(), updatedAt: now(),
+    pickerId: 'W-204', packerId: 'W-205', weightKg: 1.2, packageType: 'BOX-L', packagesCount: 1,
+    items: [{ id: 'i5', sku: 'JK-GRY-L', qty: 1, pickedQty: 1, binId: 'A-01-03', status: 'found' }],
+  },
+  {
+    id: 'o5', code: 'ORD-2026-004516', customerName: 'Жанна Т.', city: 'Алматы',
+    shipMethod: 'courier', priority: 'high', zone: 'PURPLE',
+    status: 'ready_for_pickup', slaDeadline: inMin(60), receivedAt: now(), updatedAt: now(),
+    pickerId: 'W-204', packerId: 'W-205', weightKg: 0.5, packageType: 'BAG-S', packagesCount: 1,
+    shippingLabel: 'LBL-998877',
+    items: [{ id: 'i6', sku: 'GIFT-FLW-1', qty: 1, pickedQty: 1, binId: 'E-03-02', status: 'found' }],
+  },
+  {
+    id: 'o6', code: 'ORD-2026-004517', customerName: 'Игорь В.', city: 'Алматы',
+    shipMethod: 'courier', priority: 'low', zone: 'GREEN',
+    status: 'received_by_warehouse', slaDeadline: inMin(360), receivedAt: now(), updatedAt: now(),
+    items: [{ id: 'i7', sku: 'GRC-MILK', qty: 6, pickedQty: 0, binId: 'D-01-01', status: 'pending' }],
   },
 ];
 
 export const MOCK_TASKS: Task[] = [
-  { id: 'T-001', type: 'PICK',    status: 'in_progress', priority: 'high',   assignedTo: 'W-204', orderId: 'o2', createdAt: now() },
-  { id: 'T-002', type: 'PACK',    status: 'created',     priority: 'normal',                       orderId: 'o3', createdAt: now() },
-  { id: 'T-003', type: 'HANDOFF', status: 'created',     priority: 'normal',                       orderId: 'o4', createdAt: now() },
-  { id: 'T-004', type: 'RECEIVE', status: 'created',     priority: 'normal',                                       createdAt: now() },
-  { id: 'T-005', type: 'COUNT',   status: 'assigned',    priority: 'low',                          binId:   'A-01-03', createdAt: now() },
-];
-
-export const MOCK_BINS: Bin[] = [
-  { id: 'b1', code: 'A-01-03', zone: 'FLD', capacity: 100, occupied: 78, status: 'active' },
-  { id: 'b2', code: 'B-04-12', zone: 'FLD', capacity: 100, occupied: 45, status: 'active' },
-  { id: 'b3', code: 'C-02-08', zone: 'SHS', capacity: 60,  occupied: 60, status: 'active' },
-  { id: 'b4', code: 'D-01-01', zone: 'HNG', capacity: 50,  occupied: 0,  status: 'maintenance' },
-  { id: 'b5', code: 'A-02-01', zone: 'ACC', capacity: 80,  occupied: 32, status: 'active' },
+  { id: 'T-001', type: 'PICK',    status: 'in_progress', priority: 'high',   assignedTo: 'W-204', orderId: 'o2', createdAt: now(), deadline: inMin(60) },
+  { id: 'T-002', type: 'SORT',    status: 'created',     priority: 'normal',                       orderId: 'o3', createdAt: now() },
+  { id: 'T-003', type: 'PACK',    status: 'created',     priority: 'normal',                       orderId: 'o3', createdAt: now() },
+  { id: 'T-004', type: 'HANDOFF', status: 'created',     priority: 'normal',                       orderId: 'o5', createdAt: now() },
+  { id: 'T-005', type: 'RECEIVE', status: 'created',     priority: 'normal', assignedTo: 'W-301',                  asnId: 'a1',  createdAt: now() },
+  { id: 'T-006', type: 'COUNT',   status: 'assigned',    priority: 'low',    assignedTo: 'W-401',                  countId: 'c1', createdAt: now() },
 ];
 
 export const MOCK_INVENTORY: InventoryRow[] = [
-  { sku: 'TS-RED-M',  name: 'Футболка красная M',   qty: 124, reserved: 8, bins: ['A-01-03'] },
-  { sku: 'JN-BLU-32', name: 'Джинсы синие 32',      qty: 65,  reserved: 4, bins: ['B-04-12'] },
-  { sku: 'SH-BLK-42', name: 'Кроссовки чёрные 42',  qty: 18,  reserved: 2, bins: ['C-02-08'] },
-  { sku: 'AC-BAG-01', name: 'Сумка',                qty: 42,  reserved: 1, bins: ['A-02-01'] },
-  { sku: 'JK-GRY-L',  name: 'Куртка серая L',       qty: 9,   reserved: 1, bins: ['A-02-01'] },
+  { sku: 'SHOE-00991', totalStock: 36, reserved: 4,  damaged: 1, returned: 0, bins: ['A-12-04'] },
+  { sku: 'TS-RED-M',   totalStock: 124,reserved: 8,  damaged: 0, returned: 2, bins: ['A-01-03'] },
+  { sku: 'JN-BLU-32',  totalStock: 65, reserved: 4,  damaged: 1, returned: 1, bins: ['B-04-12'] },
+  { sku: 'PHN-IP15',   totalStock: 18, reserved: 2,  damaged: 0, returned: 0, bins: ['C-02-08'] },
+  { sku: 'BAG-LV-01',  totalStock: 12, reserved: 1,  damaged: 0, returned: 0, bins: ['E-03-02'] },
+  { sku: 'GRC-MILK',   totalStock: 480,reserved: 12, damaged: 4, returned: 0, bins: ['D-01-01'] },
+  { sku: 'JK-GRY-L',   totalStock: 9,  reserved: 1,  damaged: 0, returned: 0, bins: ['A-01-03'] },
+  { sku: 'GIFT-FLW-1', totalStock: 14, reserved: 1,  damaged: 0, returned: 0, bins: ['E-03-02'] },
+];
+
+export const MOCK_MOVEMENTS: Movement[] = [
+  { id: 'M-001', sku: 'SHOE-00991', fromBinId: 'A-12-04', toBinId: 'A-01-03', qty: 5, reason: 'Перенос приоритета', workerId: 'W-401', createdAt: now() },
+];
+
+export const MOCK_COUNTS: CountTask[] = [
+  {
+    id: 'c1', zone: 'YELLOW', assignedTo: 'W-401', status: 'in_progress', createdAt: now(),
+    lines: [
+      { binId: 'A-01-03', sku: 'TS-RED-M',  expectedQty: 124 },
+      { binId: 'B-04-12', sku: 'JN-BLU-32', expectedQty: 65, countedQty: 64 },
+    ],
+  },
+];
+
+export const MOCK_ASNS: Asn[] = [
+  {
+    id: 'a1', supplierName: 'ТОО SneakerHub', invoiceNumber: 'INV-7711',
+    expectedAt: inMin(-30), status: 'arrived',
+    items: [
+      { id: 'ai1', sku: 'SHOE-00991', expectedQty: 20, receivedQty: 0, damagedQty: 0, binId: 'A-12-04' },
+      { id: 'ai2', sku: 'JN-BLU-32',  expectedQty: 30, receivedQty: 0, damagedQty: 0, binId: 'B-04-12' },
+    ],
+  },
 ];
 
 export const MOCK_RETURNS: ReturnRow[] = [
-  { id: 'RMA-001', orderId: 'ORD-2026-4490', reason: 'Не подошёл размер', status: 'received',   receivedAt: now() },
-  { id: 'RMA-002', orderId: 'ORD-2026-4491', reason: 'Брак',              status: 'inspecting', receivedAt: now() },
+  {
+    id: 'RMA-001', orderId: 'ORD-2026-004490', customerName: 'Аяна С.', reason: 'Не подошёл размер',
+    status: 'received', receivedAt: now(),
+    items: [{ sku: 'SHOE-00991', qty: 1, condition: 'new' }],
+  },
+  {
+    id: 'RMA-002', orderId: 'ORD-2026-004491', customerName: 'Денис К.', reason: 'Брак',
+    status: 'inspection', receivedAt: now(),
+    items: [{ sku: 'PHN-IP15', qty: 1, condition: 'damaged' }],
+  },
 ];
 
-export const MOCK_PROBLEMS: ProblemRow[] = [
-  { id: 'P-001', type: 'damage', description: 'Коробка повреждена при разгрузке', reportedBy: 'W-204', createdAt: now(), status: 'open' },
+export const MOCK_PROBLEMS: Problem[] = [
+  {
+    id: 'P-001', type: 'damaged', description: 'Коробка повреждена при разгрузке',
+    reportedBy: 'W-204', status: 'open', binId: 'A-12-04', sku: 'SHOE-00991',
+    comments: [], createdAt: now(),
+  },
 ];
 
 export const MOCK_DOCUMENTS: DocumentRow[] = [
-  { id: 'D-001', type: 'TORG-12',     number: 'ТОРГ-12 №1843',           createdAt: now() },
-  { id: 'D-002', type: 'manifest',    number: 'Манифест MAN-2026-0313',  createdAt: now() },
-  { id: 'D-003', type: 'route_sheet', number: 'Маршрутный лист RT-104',  createdAt: now() },
+  { id: 'D-001', type: 'invoice',         number: 'INV-7711',          asnId: 'a1', status: 'approved', createdAt: now() },
+  { id: 'D-002', type: 'shipping_label',  number: 'LBL-998877',        orderId: 'o5', status: 'approved', createdAt: now() },
+  { id: 'D-003', type: 'inventory_report',number: 'RPT-2026-04-28-A',  status: 'pending', createdAt: now() },
+];
+
+export const MOCK_COURIERS: Courier[] = [
+  { id: 'CR-104', name: 'Айдар А.',  phone: '+7 700 123 4567', vehiclePlate: 'A 777 AA' },
+  { id: 'CR-205', name: 'Тимур Б.',  phone: '+7 700 765 4321', vehiclePlate: 'B 555 BB' },
+  { id: 'CR-309', name: 'Кайрат В.', phone: '+7 700 999 8877', vehiclePlate: 'C 333 CC' },
 ];

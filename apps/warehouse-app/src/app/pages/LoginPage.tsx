@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
+import { ROLE_LABELS } from '../domain/roles';
 
 export function LoginPage() {
   const { workers } = useStore();
@@ -31,13 +32,12 @@ export function LoginPage() {
               className="w-full text-left rounded-2xl p-4 active-press"
               style={{
                 backgroundColor: pickedId === w.id ? '#2EA7E0' : 'rgba(255,255,255,0.08)',
-                color: 'white',
-                fontWeight: 700,
+                color: 'white', fontWeight: 700,
               }}
             >
               <div className="text-[14px]">{w.name}</div>
               <div className="text-[11px] opacity-70 mt-0.5" style={{ fontWeight: 500 }}>
-                {w.id} · {w.role}
+                {w.id} · {ROLE_LABELS[w.role]}
               </div>
             </button>
           ))}
