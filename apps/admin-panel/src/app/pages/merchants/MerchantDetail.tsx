@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowLeft, Phone, Mail, MessageSquare, Ban, ShieldAlert,
+  ArrowLeft, Phone, Mail, MessageSquare, Ban, ShieldAlert, Shield,
   DollarSign, MapPin, Package, ClipboardList, ShoppingCart,
   BarChart3, AlertTriangle, Users, FileText, CheckCircle2,
   Pause, Play, CreditCard, StickyNote, Truck, Eye, ExternalLink,
@@ -25,12 +25,13 @@ import { SellerAnalyticsTab }  from '../../components/merchants/SellerAnalyticsT
 import { SellerQualityTab }    from '../../components/merchants/SellerQualityTab';
 import { SellerTeamTab }       from '../../components/merchants/SellerTeamTab';
 import { SellerAuditTab }      from '../../components/merchants/SellerAuditTab';
+import { SellerAccessTab }     from '../../components/merchants/SellerAccessTab';
 import { SellerProfileTab }    from '../../components/merchants/SellerProfileTab';
 import { SellerCommissionTab } from '../../components/merchants/SellerCommissionTab';
 import { SellerDiscountsTab }  from '../../components/merchants/SellerDiscountsTab';
 import { toast } from 'sonner';
 
-type Tab = 'overview' | 'profile' | 'stores' | 'products' | 'orders' | 'pvz' | 'finance' | 'commission' | 'discounts' | 'analytics' | 'quality' | 'team' | 'audit';
+type Tab = 'overview' | 'profile' | 'stores' | 'products' | 'orders' | 'pvz' | 'finance' | 'commission' | 'discounts' | 'analytics' | 'quality' | 'team' | 'access' | 'audit';
 
 // Типы продавцов быстрой доставки — ПВЗ им не нужен (они работают door-to-door)
 const QUICK_DELIVERY_TYPES = new Set(['restaurant', 'cafe', 'grocery', 'bakery', 'flowers', 'beauty', 'gifts']);
@@ -48,6 +49,7 @@ const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'analytics',  label: 'Аналитика',            icon: BarChart3 },
   { id: 'quality',    label: 'Качество',             icon: AlertTriangle },
   { id: 'team',       label: 'Команда',              icon: Users },
+  { id: 'access',     label: 'Роли и доступ',         icon: Shield },
   { id: 'audit',      label: 'Аудит',                icon: ClipboardList },
 ];
 
@@ -780,6 +782,7 @@ export function MerchantDetail() {
           {safeTab === 'analytics'   && <SellerAnalyticsTab  sellerId={seller.id} />}
           {safeTab === 'quality'    && <SellerQualityTab   sellerId={seller.id} />}
           {safeTab === 'team'       && <SellerTeamTab      sellerId={seller.id} />}
+          {safeTab === 'access'     && <SellerAccessTab    seller={seller} />}
           {safeTab === 'audit'      && <SellerAuditTab     sellerId={seller.id} />}
         </div>
       </div>

@@ -1,22 +1,30 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Search, Upload, Download, Eye, CheckCircle2, XCircle, Trash2,
-  Image as ImageIcon, X, AlertCircle, Filter,
+  Image as ImageIcon, X, AlertCircle, Filter, Video as VideoIcon,
 } from 'lucide-react';
 import {
   MEDIA, PRODUCTS, MEDIA_STATUS_CFG,
-  type ProductMediaItem, type MediaStatus,
+  type ProductMediaItem, type MediaStatus, type MediaType,
 } from '../../data/products-mock';
 import { exportToCsv } from '../../utils/downloads';
+import { MediaLightbox } from '../../components/ui/MediaLightbox';
 
 type StatusFilter = MediaStatus | 'all' | 'no_photo';
+type TypeFilter   = MediaType | 'all';
 
 export function ProductMedia() {
+  const [searchParams] = useSearchParams();
+  const initialProduct  = searchParams.get('product')  ?? '';
+  const initialMerchant = searchParams.get('merchant') ?? '';
   const [media, setMedia]       = useState<ProductMediaItem[]>(MEDIA);
-  const [search, setSearch]     = useState('');
+  const [search, setSearch]     = useState(initialProduct ? PRODUCTS.find(p => p.id === initialProduct)?.name ?? '' : '');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [viewing, setViewing]   = useState<ProductMediaItem | null>(null);
+  const [typeFilter, setTypeFilter]     = useState<TypeFilter>('all');
+  const [merchantFilter] = useState<string>(initialMerchant);
+  const [lightbox, setLightbox] = useState<{ items: ProductMediaItem[]; index: number } | null>(null);
 
   // Products without any approved photo (for "Без фото" filter)
   const productsWithoutPhotos = useMemo(() => {
@@ -30,26 +38,39 @@ export function ProductMedia() {
 
   const stats = useMemo(() => ({
     total:    media.length,
+    images:   media.filter(m => (m.mediaType ?? 'image') === 'image').length,
+    videos:   media.filter(m => m.mediaType === 'video').length,
     approved: media.filter(m => m.status === 'approved').length,
     pending:  media.filter(m => m.status === 'pending').length,
     rejected: media.filter(m => m.status === 'rejected').length,
     noPhoto:  productsWithoutPhotos.size,
   }), [media, productsWithoutPhotos]);
 
+  // Map productId → merchantId for merchant filter
+  const productMerchantMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    PRODUCTS.forEach(p => { map[p.id] = p.merchantId; });
+    return map;
+  }, []);
+
   const filtered = useMemo(() => {
+    let list = media;
     if (statusFilter === 'no_photo') {
-      return media.filter(m => productsWithoutPhotos.has(m.productId));
+      list = list.filter(m => productsWithoutPhotos.has(m.productId));
+    } else {
+      if (statusFilter !== 'all') list = list.filter(m => m.status === statusFilter);
     }
-    return media.filter(m => {
+    if (typeFilter !== 'all') list = list.filter(m => (m.mediaType ?? 'image') === typeFilter);
+    if (merchantFilter) list = list.filter(m => productMerchantMap[m.productId] === merchantFilter);
+    if (search.trim()) {
       const q = search.toLowerCase();
-      const matchSearch = !q ||
+      list = list.filter(m =>
         m.productName.toLowerCase().includes(q) ||
         m.filename.toLowerCase().includes(q) ||
-        m.uploader.toLowerCase().includes(q);
-      const matchStatus = statusFilter === 'all' || m.status === statusFilter;
-      return matchSearch && matchStatus;
-    });
-  }, [media, search, statusFilter, productsWithoutPhotos]);
+        m.uploader.toLowerCase().includes(q));
+    }
+    return list;
+  }, [media, search, statusFilter, typeFilter, merchantFilter, productsWithoutPhotos, productMerchantMap]);
 
   function setMediaStatus(id: string, status: MediaStatus) {
     setMedia(prev => prev.map(m => m.id === id ? { ...m, status } : m));
@@ -87,7 +108,9 @@ export function ProductMedia() {
   }
 
   function handleUpload(file: File) {
-    if (file.size > 10 * 1024 * 1024) { toast.error('Файл больше 10 MB'); return; }
+    const isVideo = file.type.startsWith('video/');
+    if (!isVideo && file.size > 10 * 1024 * 1024) { toast.error('Фото больше 10 MB'); return; }
+    if (isVideo  && file.size > 50 * 1024 * 1024) { toast.error('Видео больше 50 MB'); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = String(reader.result || '');
@@ -95,21 +118,25 @@ export function ProductMedia() {
       const sizeLabel = sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} МБ` : `${sizeKb} КБ`;
       const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       // Default to first product (in real life — selector). User can re-attach.
-      const defaultProduct = PRODUCTS[0];
+      const defaultProduct = initialProduct
+        ? (PRODUCTS.find(p => p.id === initialProduct) ?? PRODUCTS[0])
+        : PRODUCTS[0];
       setMedia(prev => [{
-        id: `med-${Date.now()}`,
+        id: `${isVideo ? 'vid' : 'med'}-${Date.now()}`,
         productId: defaultProduct.id,
         productName: defaultProduct.name,
         url: dataUrl,
         bg: 'bg-gray-100',
-        emoji: '🖼',
+        emoji: isVideo ? '🎬' : '🖼',
         filename: file.name,
         sizeLabel,
         status: 'pending',
         uploadedAt: now,
         uploader: 'Текущий пользователь',
+        mediaType: isVideo ? 'video' : 'image',
+        ...(isVideo ? { videoMimeType: file.type || 'video/mp4' } : {}),
       }, ...prev]);
-      toast.success(`Файл загружен: ${file.name}`, { description: `Привязан к «${defaultProduct.name}». Статус: На проверке` });
+      toast.success(`${isVideo ? 'Видео' : 'Фото'} загружено: ${file.name}`, { description: `Привязан к «${defaultProduct.name}». Статус: На проверке` });
     };
     reader.readAsDataURL(file);
   }
@@ -142,10 +169,10 @@ export function ProductMedia() {
             <Download className="w-4 h-4" />Экспорт
           </button>
           <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm cursor-pointer">
-            <Upload className="w-4 h-4" />Загрузить фото
+            <Upload className="w-4 h-4" />Загрузить медиа
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,video/mp4,video/webm"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }}
             />
@@ -175,16 +202,39 @@ export function ProductMedia() {
         })}
       </div>
 
-      {/* Search */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 relative">
-        <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Поиск по товару, файлу, продавцу..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-        />
+      {/* Search + type filter */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Поиск по товару, файлу, продавцу..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          {([
+            { v: 'all'   as TypeFilter, label: 'Всё',   count: stats.total },
+            { v: 'image' as TypeFilter, label: 'Фото',  count: stats.images },
+            { v: 'video' as TypeFilter, label: 'Видео', count: stats.videos },
+          ]).map(t => (
+            <button key={t.v}
+              onClick={() => setTypeFilter(t.v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${typeFilter === t.v ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
+              {t.v === 'image' && <ImageIcon className="w-3 h-3" />}
+              {t.v === 'video' && <VideoIcon className="w-3 h-3" />}
+              {t.label}
+              <span className="opacity-60 text-[10px]">{t.count}</span>
+            </button>
+          ))}
+        </div>
+        {merchantFilter && (
+          <span className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+            Продавец: <span className="font-mono font-semibold">{merchantFilter}</span>
+          </span>
+        )}
       </div>
 
       {/* Grid */}
@@ -195,20 +245,43 @@ export function ProductMedia() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filtered.map(m => {
+          {filtered.map((m, idx) => {
             const sc = MEDIA_STATUS_CFG[m.status];
+            const isVideo = m.mediaType === 'video';
             return (
               <div key={m.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
                 {/* Thumbnail */}
-                <button onClick={() => setViewing(m)} className="block w-full relative aspect-square hover:opacity-90 transition-opacity">
-                  {m.url ? (
-                    <img src={m.url} alt={m.filename} className="w-full h-full object-cover" />
+                <button onClick={() => setLightbox({ items: filtered, index: idx })} className="block w-full relative aspect-square hover:opacity-90 transition-opacity">
+                  {isVideo ? (
+                    m.url ? (
+                      <video src={m.url} className="w-full h-full object-cover" muted preload="metadata" />
+                    ) : (
+                      <div className={`w-full h-full ${m.bg} flex items-center justify-center`}>
+                        <span className="text-6xl">{m.emoji}</span>
+                      </div>
+                    )
                   ) : (
-                    <div className={`w-full h-full ${m.bg} flex items-center justify-center`}>
-                      <span className="text-6xl">{m.emoji}</span>
+                    m.url ? (
+                      <img src={m.url} alt={m.filename} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full ${m.bg} flex items-center justify-center`}>
+                        <span className="text-6xl">{m.emoji}</span>
+                      </div>
+                    )
+                  )}
+                  {isVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+                        <span className="text-purple-600 ml-1 text-lg">▶</span>
+                      </div>
                     </div>
                   )}
                   <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${sc.cls}`}>{sc.label}</span>
+                  {isVideo && (
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-600 text-white flex items-center gap-1">
+                      <VideoIcon className="w-3 h-3" />Видео
+                    </span>
+                  )}
                 </button>
                 {/* Info */}
                 <div className="p-3">
@@ -217,7 +290,7 @@ export function ProductMedia() {
                   <p className="text-[10px] text-gray-400 mt-0.5">{m.sizeLabel} · {m.uploadedAt}</p>
                   {/* Actions */}
                   <div className="flex items-center gap-1 mt-3">
-                    <button onClick={() => setViewing(m)} className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 flex items-center justify-center gap-1" title="Просмотр">
+                    <button onClick={() => setLightbox({ items: filtered, index: idx })} className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 flex items-center justify-center gap-1" title="Просмотр">
                       <Eye className="w-3 h-3" />
                     </button>
                     <button onClick={() => downloadMedia(m)} className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 flex items-center justify-center gap-1" title="Скачать">
@@ -244,45 +317,14 @@ export function ProductMedia() {
         </div>
       )}
 
-      {/* Lightbox */}
-      {viewing && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/85 backdrop-blur-sm" onClick={() => setViewing(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <div>
-                <p className="font-bold text-gray-900">{viewing.productName}</p>
-                <p className="text-xs text-gray-400 font-mono mt-0.5">{viewing.filename}</p>
-              </div>
-              <button onClick={() => setViewing(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <div className="bg-gray-50 flex items-center justify-center p-6 min-h-[320px]">
-              {viewing.url ? (
-                <img src={viewing.url} alt={viewing.filename} className="max-w-full max-h-[60vh] rounded-xl shadow-lg" />
-              ) : (
-                <div className={`w-72 h-72 ${viewing.bg} rounded-2xl flex items-center justify-center text-9xl`}>
-                  {viewing.emoji}
-                </div>
-              )}
-            </div>
-            <div className="p-6 grid grid-cols-2 gap-3 text-sm">
-              <div className="border-b border-gray-50 pb-2"><p className="text-xs text-gray-400 mb-0.5">Размер</p><p className="font-semibold">{viewing.sizeLabel}</p></div>
-              <div className="border-b border-gray-50 pb-2"><p className="text-xs text-gray-400 mb-0.5">Загружено</p><p className="font-semibold">{viewing.uploadedAt}</p></div>
-              <div className="border-b border-gray-50 pb-2"><p className="text-xs text-gray-400 mb-0.5">Кем</p><p className="font-semibold">{viewing.uploader}</p></div>
-              <div className="border-b border-gray-50 pb-2"><p className="text-xs text-gray-400 mb-0.5">Статус</p>
-                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${MEDIA_STATUS_CFG[viewing.status].cls}`}>{MEDIA_STATUS_CFG[viewing.status].label}</span>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t flex gap-2">
-              <button onClick={() => downloadMedia(viewing)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"><Download className="w-3.5 h-3.5" />Скачать</button>
-              {viewing.status !== 'approved' && (
-                <button onClick={() => { setMediaStatus(viewing.id, 'approved'); setViewing(prev => prev ? { ...prev, status: 'approved' } : null); }} className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" />Одобрить</button>
-              )}
-              {viewing.status !== 'rejected' && (
-                <button onClick={() => { setMediaStatus(viewing.id, 'rejected'); setViewing(prev => prev ? { ...prev, status: 'rejected' } : null); }} className="flex-1 py-2 border border-red-300 text-red-700 hover:bg-red-50 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5"><XCircle className="w-3.5 h-3.5" />Отклонить</button>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Lightbox / video player (reusable component) */}
+      {lightbox && (
+        <MediaLightbox
+          items={lightbox.items}
+          initialIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+          onDownload={downloadMedia}
+        />
       )}
     </div>
   );

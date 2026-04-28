@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search, Download, Upload, Filter, Package, Eye, EyeOff,
   AlertTriangle, CheckCircle, Clock, ArrowUpDown, ImageIcon,
   ChevronRight, TrendingUp, TrendingDown, X, ZoomIn,
-  CalendarClock, Calendar, Bell,
+  CalendarClock, Calendar, Bell, ExternalLink, Sparkles, Crown,
+  Image as ImageIcon2, Video as VideoIcon,
 } from 'lucide-react';
 import {
   SellerProduct, AvailabilityStatus,
@@ -98,6 +100,29 @@ export function SellerProductsTab({ sellerId }: Props) {
     <div className={`flex gap-4 ${activeProduct ? 'items-start' : ''}`}>
       {/* ── Main table ── */}
       <div className={`space-y-4 min-w-0 ${activeProduct ? 'flex-1' : 'w-full'}`}>
+        {/* SuperAdmin quick-links: jump to platform product views filtered by this merchant */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-2">SuperAdmin · Сводный доступ к товарам продавца</p>
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/products?merchant=${encodeURIComponent(sellerId)}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold transition-colors">
+              <Package className="w-3.5 h-3.5" />Все товары<ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
+            <Link to={`/products/media?merchant=${encodeURIComponent(sellerId)}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 rounded-lg text-xs font-semibold transition-colors">
+              <ImageIcon2 className="w-3.5 h-3.5" />Медиа продавца<ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
+            <Link to={`/products/popular?merchant=${encodeURIComponent(sellerId)}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-yellow-200 hover:bg-yellow-50 text-yellow-700 rounded-lg text-xs font-semibold transition-colors">
+              <Crown className="w-3.5 h-3.5" />Популярные<ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
+            <Link to={`/products/recommended`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-pink-200 hover:bg-pink-50 text-pink-700 rounded-lg text-xs font-semibold transition-colors">
+              <Sparkles className="w-3.5 h-3.5" />Рекомендации<ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
+          </div>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3">
           <div className="text-center p-2 bg-gray-50 rounded-lg">

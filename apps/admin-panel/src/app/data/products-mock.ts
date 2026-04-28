@@ -66,6 +66,7 @@ export interface ProductCategory {
 }
 
 export type MediaStatus = 'approved' | 'pending' | 'rejected';
+export type MediaType   = 'image' | 'video';
 
 export const MEDIA_STATUS_CFG: Record<MediaStatus, { label: string; cls: string }> = {
   approved: { label: 'Одобрено',   cls: 'bg-green-100 text-green-700'   },
@@ -87,6 +88,10 @@ export interface ProductMediaItem {
   status: MediaStatus;
   uploadedAt: string;
   uploader: string;
+  /** 'image' (default) or 'video'. */
+  mediaType?: MediaType;
+  /** MIME type for videos: video/mp4, video/webm. */
+  videoMimeType?: string;
 }
 
 // ─── Categories ──────────────────────────────────────────────────────────────
@@ -166,7 +171,23 @@ export const MEDIA: ProductMediaItem[] = [
   { id: 'med-008', productId: 'p-014', productName: 'Xiaomi Redmi Note 13',    url: '', bg: 'bg-blue-100',  emoji: '📱', filename: 'xiaomi-front.jpg',       sizeLabel: '1.0 МБ', status: 'pending',  uploadedAt: '14.02.2026 08:30', uploader: 'TechStore MSK' },
   { id: 'med-009', productId: 'p-009', productName: 'Бургер двойной говяжий',  url: '', bg: 'bg-amber-100', emoji: '🍔', filename: 'burger-old.jpg',         sizeLabel: '0.7 МБ', status: 'rejected', uploadedAt: '20.01.2026 10:00', uploader: 'Кафе «Уют»' },
   { id: 'med-010', productId: 'p-015', productName: 'JBL Charge 5',            url: '', bg: 'bg-purple-100',emoji: '🔊', filename: 'jbl-charge-5.jpg',       sizeLabel: '1.1 МБ', status: 'approved', uploadedAt: '20.01.2026 14:30', uploader: 'TechStore MSK' },
+  // ── Videos (placeholder, no real source) ──
+  { id: 'vid-001', productId: 'p-001', productName: 'iPhone 15 Pro',           url: '', bg: 'bg-blue-200',  emoji: '🎬', filename: 'iphone15pro-demo.mp4',  sizeLabel: '8.4 МБ', status: 'approved', uploadedAt: '15.01.2026 10:30', uploader: 'ЭлектроМир',       mediaType: 'video', videoMimeType: 'video/mp4' },
+  { id: 'vid-002', productId: 'p-006', productName: 'Кроссовки Nike Air',     url: '', bg: 'bg-orange-200',emoji: '🎬', filename: 'nike-360.webm',         sizeLabel: '5.2 МБ', status: 'approved', uploadedAt: '01.02.2026 14:30', uploader: 'SportZone',        mediaType: 'video', videoMimeType: 'video/webm' },
+  { id: 'vid-003', productId: 'p-008', productName: 'Пицца «Маргарита»',      url: '', bg: 'bg-red-200',   emoji: '🎬', filename: 'margherita-cooking.mp4',sizeLabel: '12.1 МБ',status: 'pending',  uploadedAt: '14.02.2026 10:00', uploader: 'Кафе «Уют»',       mediaType: 'video', videoMimeType: 'video/mp4' },
+  { id: 'vid-004', productId: 'p-014', productName: 'Xiaomi Redmi Note 13',   url: '', bg: 'bg-blue-200',  emoji: '🎬', filename: 'xiaomi-unbox.mp4',      sizeLabel: '7.8 МБ', status: 'pending',  uploadedAt: '14.02.2026 09:00', uploader: 'TechStore MSK',    mediaType: 'video', videoMimeType: 'video/mp4' },
 ];
+
+// Helper: filter media by product
+export function mediaForProduct(productId: string, all: ProductMediaItem[] = MEDIA): ProductMediaItem[] {
+  return all.filter(m => m.productId === productId);
+}
+export function photosForProduct(productId: string, all: ProductMediaItem[] = MEDIA): ProductMediaItem[] {
+  return all.filter(m => m.productId === productId && (m.mediaType ?? 'image') === 'image');
+}
+export function videosForProduct(productId: string, all: ProductMediaItem[] = MEDIA): ProductMediaItem[] {
+  return all.filter(m => m.productId === productId && m.mediaType === 'video');
+}
 
 export function getCategoryName(id: string): string {
   return CATEGORIES.find(c => c.id === id)?.name ?? id;
