@@ -33,6 +33,9 @@ import { ComplianceCenter } from "./pages/compliance/ComplianceCenter";
 import { ArchitecturePage } from "./pages/system/ArchitecturePage";
 import { PromotionsPage } from "./pages/products/PromotionsPage";
 import { DiscountsPage } from "./pages/products/DiscountsPage";
+import { ProductsList } from "./pages/products/ProductsList";
+import { ProductCategories } from "./pages/products/ProductCategories";
+import { ProductMedia } from "./pages/products/ProductMedia";
 import { ApprovalCenter } from "./pages/approvals/ApprovalCenter";
 import { UsersInvitations } from "./pages/users/UsersInvitations";
 import { UsersTeams } from "./pages/users/UsersTeams";
@@ -69,6 +72,9 @@ export const router = createBrowserRouter([
       { path: "finance/payouts", Component: PayoutsList },
       { path: "finance/payouts/:id", Component: PayoutDetail },
       { path: "finance/refunds", Component: RefundCenter },
+      { path: "products", Component: ProductsList },
+      { path: "products/categories", Component: ProductCategories },
+      { path: "products/media", Component: ProductMedia },
       { path: "products/promotions", Component: PromotionsPage },
       { path: "products/discounts", Component: DiscountsPage },
       { path: "approvals", Component: ApprovalCenter },

@@ -41,6 +41,8 @@ import {
   Globe,
   AlertTriangle,
   Key,
+  Package,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -68,6 +70,13 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Distinguish: /products/(categories|media) → "Товары";
+  //              /products/(promotions|discounts) → "Продвижение"
+  const isPromotionsRoute = (p: string) =>
+    p === '/products/promotions' || p === '/products/discounts';
+  const isProductsRoute = (p: string) =>
+    p === '/products' || p.startsWith('/products/categories') || p.startsWith('/products/media');
+
   // Track which group is expanded
   const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
     if (location.pathname.startsWith('/users/')) return 'Пользователи';
@@ -75,7 +84,8 @@ export function DashboardLayout() {
       return 'Поддержка';
     }
     if (location.pathname.startsWith('/finance/')) return 'Финансы';
-    if (location.pathname.startsWith('/products/')) return 'Продвижение';
+    if (isPromotionsRoute(location.pathname)) return 'Продвижение';
+    if (isProductsRoute(location.pathname)) return 'Товары';
     if (location.pathname.startsWith('/security/') || location.pathname.startsWith('/approvals')) {
       return 'Безопасность';
     }
@@ -93,8 +103,10 @@ export function DashboardLayout() {
     if (location.pathname.startsWith('/finance/')) {
       setExpandedGroup(g => g === 'Финансы' ? g : 'Финансы');
     }
-    if (location.pathname.startsWith('/products/')) {
+    if (isPromotionsRoute(location.pathname)) {
       setExpandedGroup(g => g === 'Продвижение' ? g : 'Продвижение');
+    } else if (isProductsRoute(location.pathname)) {
+      setExpandedGroup(g => g === 'Товары' ? g : 'Товары');
     }
     if (location.pathname.startsWith('/security/')) {
       setExpandedGroup(g => g === 'Безопасность' ? g : 'Безопасность');
@@ -151,6 +163,18 @@ export function DashboardLayout() {
     { name: 'Склады',    href: '/warehouses', icon: Warehouse,      moduleKey: 'warehouses' },
     { name: 'Логистика', href: '/logistics',  icon: Route,          moduleKey: 'logistics' },
     { name: 'Продавцы',  href: '/merchants',  icon: Store,          moduleKey: 'merchants' },
+    {
+      name: 'Товары',
+      href: '/products',
+      icon: Package,
+      moduleKey: 'merchants',
+      end: true, // exact match only — sub-routes /products/promotions belong to "Продвижение"
+      children: [
+        { name: 'Все товары',         href: '/products',            icon: Package },
+        { name: 'Категории',          href: '/products/categories', icon: Layers },
+        { name: 'Медиа товаров',      href: '/products/media',      icon: ImageIcon },
+      ],
+    },
     {
       name: 'Продвижение',
       href: '/products/promotions',
@@ -243,6 +267,10 @@ export function DashboardLayout() {
           const isGroupActive = hasChildren && item.children!.some(c => {
             if (c.tab) return location.pathname === c.href && location.search === `?tab=${c.tab}`;
             if (c.href === '/users') return location.pathname === '/users';
+            // '/products' is a child of "Товары" group; '/products/promotions' & '/products/discounts'
+            // belong to "Продвижение" — match the bare '/products' route exactly so that
+            // Promotions/Discounts don't accidentally light up the Товары header.
+            if (c.href === '/products') return location.pathname === '/products';
             return location.pathname.startsWith(c.href);
           });
 
@@ -253,6 +281,7 @@ export function DashboardLayout() {
                 <div className="flex items-center gap-1">
                   <NavLink
                     to={item.href}
+                    end={item.end ?? false}
                     onClick={onNavClick}
                     className={({ isActive }) =>
                       `flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
@@ -309,7 +338,7 @@ export function DashboardLayout() {
                         <NavLink
                           key={child.name}
                           to={child.href}
-                          end={child.href === '/users' || child.href === '/pvz'}
+                          end={child.href === '/users' || child.href === '/pvz' || child.href === '/products'}
                           onClick={onNavClick}
                           className={({ isActive }) =>
                             `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${

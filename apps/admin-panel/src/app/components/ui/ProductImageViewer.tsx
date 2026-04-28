@@ -31,6 +31,8 @@ interface Props {
   sku?:         string;
   category?:    string;
   hasDamage?:   boolean;
+  /** If provided, the "Добавить" tile becomes a real file picker that calls this. */
+  onAddImage?:  (file: File, dataUrl: string) => void;
 }
 
 // ─── Barcode SVG ──────────────────────────────────────────────────────────────
@@ -322,7 +324,7 @@ function Lightbox({
 
 // ─── Public Component ─────────────────────────────────────────────────────────
 
-export function ProductImageViewer({ images, productName, barcode, sku, category, hasDamage }: Props) {
+export function ProductImageViewer({ images, productName, barcode, sku, category, hasDamage, onAddImage }: Props) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [copied, setCopied]           = useState(false);
 
@@ -384,12 +386,37 @@ export function ProductImageViewer({ images, productName, barcode, sku, category
             </button>
           ))}
 
-          {/* Add photo placeholder */}
-          <button onClick={() => { import('sonner').then(m => m.toast.info('Добавить фото товара', { description: 'Перетащите файл или выберите PNG/JPG до 10 MB' })); }}
-            className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-blue-500 transition-colors">
+          {/* Add photo placeholder — real file picker */}
+          <label className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-blue-500 transition-colors cursor-pointer">
             <ImageIcon className="w-5 h-5" />
             <span className="text-[9px] font-medium">Добавить</span>
-          </button>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                if (f.size > 10 * 1024 * 1024) {
+                  import('sonner').then(m => m.toast.error('Файл больше 10 MB'));
+                  e.target.value = '';
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const dataUrl = String(reader.result || '');
+                  if (onAddImage) {
+                    onAddImage(f, dataUrl);
+                    import('sonner').then(m => m.toast.success(`Фото добавлено: ${f.name}`));
+                  } else {
+                    import('sonner').then(m => m.toast.success(`Фото загружено: ${f.name}`, { description: 'Подключите prop onAddImage чтобы сохранить файл в state' }));
+                  }
+                };
+                reader.readAsDataURL(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
         </div>
       </div>
 
