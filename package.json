@@ -17,6 +17,7 @@
     "dev:courier":    "npm --workspace apps/courier-app run dev",
     "dev:customer":   "npm --workspace apps/customer-app run dev",
     "dev:pickup":     "npm --workspace apps/pickup-point-app run dev",
+    "dev:warehouse":  "npm --workspace apps/warehouse-app run dev",
     "dev": "npm-run-all --parallel dev:api dev:admin dev:staff dev:supervisor dev:seller dev:courier dev:customer dev:pickup",
 
     "build:api":         "npm --workspace backend/api run build",
@@ -27,6 +28,7 @@
     "build:courier":     "npm --workspace apps/courier-app run build",
     "build:customer":    "npm --workspace apps/customer-app run build",
     "build:pickup":      "npm --workspace apps/pickup-point-app run build",
+    "build:warehouse":   "npm --workspace apps/warehouse-app run build",
     "build:apps": "npm-run-all --parallel build:admin build:staff build:supervisor build:seller build:courier build:customer build:pickup",
     "build": "npm-run-all build:api build:apps",
 

@@ -1,0 +1,37 @@
+name: Deploy Warehouse App to VPS
+
+# Триггерится только при изменениях в самом warehouse-app или в этом
+# workflow — не дёргает деплой при правках в других apps/backend.
+# Также можно запускать вручную через workflow_dispatch.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/warehouse-app/**'
+      - '.github/workflows/deploy-warehouse-app.yml'
+      - 'deploy/deploy-warehouse.sh'
+  workflow_dispatch:
+
+# Та же группа, что и у других deploy-workflow — деплои не пересекаются.
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger warehouse-app deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.VPS_APP_DIR }}
+            chmod +x ./deploy/deploy-warehouse.sh
+            ./deploy/deploy-warehouse.sh
+            echo "=== WAREHOUSE APP DEPLOY DONE ==="
