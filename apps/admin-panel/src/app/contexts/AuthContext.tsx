@@ -46,9 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Демо-пользователь для демонстрации
   const [user, setUser] = useState<User | null>({
     id: '1',
-    name: 'Администратор Системы',
-    email: 'admin@platform.com',
-    role: 'Admin',
+    name: 'Супер Админ',
+    email: 'superadmin@platform.com',
+    role: 'SuperAdmin',
     scope: { type: 'ALL' },
     twoFactorEnabled: true,
     permissions: ['*'], // все права для демо
@@ -58,9 +58,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Демо-реализация
     setUser({
       id: '1',
-      name: 'Администратор Системы',
+      name: 'Супер Админ',
       email,
-      role: 'Admin',
+      role: 'SuperAdmin',
       scope: { type: 'ALL' },
       twoFactorEnabled: true,
       permissions: ['*'],

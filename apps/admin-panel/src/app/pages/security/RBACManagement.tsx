@@ -4,7 +4,7 @@ import {
   ChevronRight, Eye, Package, MapPin, Bike, Warehouse, Store, DollarSign,
   MessageSquare, BarChart3, Settings, LayoutDashboard, AlertTriangle,
   Copy, Search, UserCheck, Globe, Building2, Info, ShieldCheck, ShieldAlert,
-  ToggleLeft, ToggleRight,
+  ToggleLeft, ToggleRight, Megaphone, ClipboardList, Route, CheckCircle2,
 } from 'lucide-react';
 
 // ─── Permission registry ──────────────────────────────────────────────────────
@@ -56,9 +56,73 @@ const MODULES = [
   {
     key: 'merchants', label: 'Продавцы', icon: Store,
     perms: [
-      { key: 'merchants.view', label: 'Просматривать продавцов' },
-      { key: 'merchants.manage', label: 'Управлять продавцами' },
-      { key: 'merchants.finance', label: 'Финансы продавцов' },
+      { key: 'merchants.view',     label: 'Просматривать продавцов' },
+      { key: 'merchants.create',   label: 'Создавать (приглашать)' },
+      { key: 'merchants.edit',     label: 'Редактировать профиль' },
+      { key: 'merchants.delete',   label: 'Блокировать / архивировать' },
+      { key: 'merchants.export',   label: 'Экспорт реестра' },
+      { key: 'merchants.approve',  label: 'Одобрять новые заявки' },
+      { key: 'merchants.finance',  label: 'Финансы продавцов' },
+    ],
+  },
+  {
+    key: 'products', label: 'Товары', icon: Package,
+    perms: [
+      { key: 'products.view',        label: 'Просматривать каталог' },
+      { key: 'products.create',      label: 'Создавать товары' },
+      { key: 'products.edit',        label: 'Редактировать товары' },
+      { key: 'products.delete',      label: 'Архивировать / блокировать' },
+      { key: 'products.export',      label: 'Экспорт CSV' },
+      { key: 'products.moderate',    label: 'Модерация (approve/reject)' },
+      { key: 'products.media',       label: 'Управление фото и медиа' },
+      { key: 'products.recommend',   label: 'Управление рекомендациями' },
+      { key: 'products.own',         label: 'Товары нашей фирмы' },
+    ],
+  },
+  {
+    key: 'promotions', label: 'Продвижение', icon: Megaphone,
+    perms: [
+      { key: 'promotions.view',     label: 'Просматривать акции' },
+      { key: 'promotions.create',   label: 'Создавать акции / скидки' },
+      { key: 'promotions.edit',     label: 'Редактировать акции' },
+      { key: 'promotions.delete',   label: 'Архивировать' },
+      { key: 'promotions.approve',  label: 'Одобрять заявки' },
+      { key: 'promotions.export',   label: 'Экспорт' },
+    ],
+  },
+  {
+    key: 'logistics', label: 'Логистика', icon: Route,
+    perms: [
+      { key: 'logistics.view',      label: 'Просматривать дашборд' },
+      { key: 'logistics.manage',    label: 'Управлять зонами и маршрутами' },
+      { key: 'logistics.export',    label: 'Экспорт' },
+    ],
+  },
+  {
+    key: 'compliance', label: 'Проверка документов', icon: ClipboardList,
+    perms: [
+      { key: 'compliance.view',     label: 'Просматривать документы' },
+      { key: 'compliance.approve',  label: 'Одобрять документы' },
+      { key: 'compliance.reject',   label: 'Отклонять документы' },
+      { key: 'compliance.export',   label: 'Экспорт реестра' },
+    ],
+  },
+  {
+    key: 'chat', label: 'Чат-центр', icon: MessageSquare,
+    perms: [
+      { key: 'chat.view',           label: 'Просматривать диалоги' },
+      { key: 'chat.reply',          label: 'Отвечать в чатах' },
+      { key: 'chat.assign',         label: 'Назначать агента' },
+      { key: 'chat.close',          label: 'Закрывать диалоги' },
+    ],
+  },
+  {
+    key: 'approvals', label: 'Центр одобрения', icon: CheckCircle2,
+    perms: [
+      { key: 'approvals.view',      label: 'Просматривать запросы' },
+      { key: 'approvals.approve',   label: 'Одобрять запросы' },
+      { key: 'approvals.reject',    label: 'Отклонять запросы' },
+      { key: 'approvals.export',    label: 'Экспорт' },
     ],
   },
   {

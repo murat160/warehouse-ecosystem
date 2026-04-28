@@ -22,11 +22,14 @@ export function ProductsList() {
   const [search, setSearch]           = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>(searchParams.get('category') ?? 'all');
+  const [merchantFilter, setMerchantFilter] = useState<string>(searchParams.get('merchant') ?? 'all');
 
-  // Sync ?category=… from URL when user comes from Categories page.
+  // Sync ?category=… / ?merchant=… from URL (Categories page, MerchantDetail, PopularProducts → Открыть).
   useEffect(() => {
     const c = searchParams.get('category');
+    const m = searchParams.get('merchant');
     if (c) setCategoryFilter(c);
+    if (m) setMerchantFilter(m);
   }, [searchParams]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewingId, setViewingId]     = useState<string | null>(null);
@@ -53,12 +56,13 @@ export function ProductsList() {
         p.merchant.toLowerCase().includes(q) ||
         getCategoryName(p.categoryId).toLowerCase().includes(q);
       const matchCategory = categoryFilter === 'all' || p.categoryId === categoryFilter;
+      const matchMerchant = merchantFilter === 'all' || p.merchantId === merchantFilter;
       let matchStatus = true;
       if (statusFilter === 'no_photo') matchStatus = p.photoCount === 0;
       else if (statusFilter !== 'all') matchStatus = p.status === statusFilter;
-      return matchSearch && matchCategory && matchStatus;
+      return matchSearch && matchCategory && matchMerchant && matchStatus;
     });
-  }, [products, search, statusFilter, categoryFilter]);
+  }, [products, search, statusFilter, categoryFilter, merchantFilter]);
 
   function setStatus(id: string, status: ProductStatus) {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, status, updatedAt: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } : p));
@@ -93,6 +97,7 @@ export function ProductsList() {
       setProducts(prev => [{
         id: `p-${Date.now()}`, sku: form.sku.trim(), name, categoryId: form.categoryId,
         merchant: form.merchant.trim() || 'Не указан', merchantId: 'm-new',
+        ownerType: 'merchant', revenue: 0,
         status: 'moderation', price, stock, photoCount: 0, rating: 0, sales: 0,
         createdAt: now, updatedAt: now,
       }, ...prev]);
@@ -192,13 +197,22 @@ export function ProductsList() {
           <option value="archived">В архиве</option>
           <option value="no_photo">Без фото</option>
         </select>
-        {(search || categoryFilter !== 'all' || statusFilter !== 'all') && (
-          <button onClick={() => { setSearch(''); setCategoryFilter('all'); setStatusFilter('all'); }}
+        {(search || categoryFilter !== 'all' || statusFilter !== 'all' || merchantFilter !== 'all') && (
+          <button onClick={() => { setSearch(''); setCategoryFilter('all'); setStatusFilter('all'); setMerchantFilter('all'); }}
             className="px-3 py-2 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg text-sm hover:bg-orange-100 flex items-center gap-1.5">
             <X className="w-3.5 h-3.5" />Сбросить
           </button>
         )}
       </div>
+
+      {merchantFilter !== 'all' && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm">
+          <span className="text-blue-700">Фильтр по продавцу: <span className="font-mono font-semibold">{merchantFilter}</span></span>
+          <button onClick={() => setMerchantFilter('all')} className="ml-auto p-0.5 hover:bg-blue-200 rounded text-blue-600">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <p className="text-sm text-gray-500">Найдено: <span className="font-semibold text-gray-800">{filtered.length}</span> из {products.length}</p>
 

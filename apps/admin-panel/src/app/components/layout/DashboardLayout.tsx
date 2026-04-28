@@ -43,6 +43,8 @@ import {
   Key,
   Package,
   Image as ImageIcon,
+  TrendingUp,
+  Sparkles,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -75,7 +77,12 @@ export function DashboardLayout() {
   const isPromotionsRoute = (p: string) =>
     p === '/products/promotions' || p === '/products/discounts';
   const isProductsRoute = (p: string) =>
-    p === '/products' || p.startsWith('/products/categories') || p.startsWith('/products/media');
+    p === '/products' ||
+    p.startsWith('/products/own') ||
+    p.startsWith('/products/popular') ||
+    p.startsWith('/products/recommended') ||
+    p.startsWith('/products/categories') ||
+    p.startsWith('/products/media');
 
   // Track which group is expanded
   const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
@@ -170,9 +177,12 @@ export function DashboardLayout() {
       moduleKey: 'merchants',
       end: true, // exact match only — sub-routes /products/promotions belong to "Продвижение"
       children: [
-        { name: 'Все товары',         href: '/products',            icon: Package },
-        { name: 'Категории',          href: '/products/categories', icon: Layers },
-        { name: 'Медиа товаров',      href: '/products/media',      icon: ImageIcon },
+        { name: 'Все товары',         href: '/products',             icon: Package },
+        { name: 'Товары нашей фирмы', href: '/products/own',         icon: ShieldCheck },
+        { name: 'Популярные',         href: '/products/popular',     icon: TrendingUp },
+        { name: 'Рекомендуемые',      href: '/products/recommended', icon: Sparkles },
+        { name: 'Категории',          href: '/products/categories',  icon: Layers },
+        { name: 'Медиа товаров',      href: '/products/media',       icon: ImageIcon },
       ],
     },
     {
@@ -411,26 +421,45 @@ export function DashboardLayout() {
       </nav>
 
       {/* User info at bottom */}
-      {user && (
-        <div className="p-4 border-t">
-          <NavLink to="/cabinet" onClick={onNavClick} className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-50 transition-colors group">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium shrink-0">
-              {user.name.split(' ').map(n => n[0]).join('')}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">{user.role} · Мой кабинет →</p>
-            </div>
-          </NavLink>
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Выйти
-          </button>
-        </div>
-      )}
+      {user && (() => {
+        const isSuper = user.role === 'SuperAdmin';
+        const subtitle = isSuper
+          ? 'Полный доступ · Мой кабинет →'
+          : `${user.role} · Мой кабинет →`;
+        return (
+          <div className="p-4 border-t">
+            <NavLink to="/cabinet" onClick={onNavClick} className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-50 transition-colors group">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${
+                isSuper
+                  ? 'bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 ring-2 ring-amber-300/60'
+                  : 'bg-gradient-to-br from-blue-500 to-purple-600'
+              }`}>
+                {user.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                  {isSuper && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full uppercase tracking-wide leading-none">
+                      Super
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs transition-colors group-hover:text-blue-600 ${isSuper ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}>
+                  {subtitle}
+                </p>
+              </div>
+            </NavLink>
+            <button
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Выйти
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 
@@ -512,16 +541,25 @@ export function DashboardLayout() {
                 )}
               </div>
               
-              {user && (
-                <NavLink to="/cabinet"
-                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors group">
-                  <Shield className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">{user.role}</span>
-                  {user.twoFactorEnabled && (
-                    <span className="text-xs text-green-600">2FA</span>
-                  )}
-                </NavLink>
-              )}
+              {user && (() => {
+                const isSuper = user.role === 'SuperAdmin';
+                return (
+                  <NavLink to="/cabinet"
+                    className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors group ${
+                      isSuper
+                        ? 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 hover:from-amber-100 hover:to-orange-100'
+                        : 'bg-gray-100 hover:bg-blue-50 hover:text-blue-700'
+                    }`}>
+                    <Shield className={`w-4 h-4 ${isSuper ? 'text-amber-600' : 'text-blue-600'}`} />
+                    <span className={`text-sm font-semibold ${isSuper ? 'text-amber-700' : 'text-gray-700 group-hover:text-blue-700'}`}>
+                      {isSuper ? 'Супер админ' : user.role}
+                    </span>
+                    {user.twoFactorEnabled && (
+                      <span className="text-xs text-green-600">2FA</span>
+                    )}
+                  </NavLink>
+                );
+              })()}
             </div>
           </div>
         </header>

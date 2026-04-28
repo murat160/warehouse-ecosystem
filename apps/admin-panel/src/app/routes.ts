@@ -36,6 +36,9 @@ import { DiscountsPage } from "./pages/products/DiscountsPage";
 import { ProductsList } from "./pages/products/ProductsList";
 import { ProductCategories } from "./pages/products/ProductCategories";
 import { ProductMedia } from "./pages/products/ProductMedia";
+import { OwnProducts } from "./pages/products/OwnProducts";
+import { PopularProducts } from "./pages/products/PopularProducts";
+import { RecommendedProducts } from "./pages/products/RecommendedProducts";
 import { ApprovalCenter } from "./pages/approvals/ApprovalCenter";
 import { UsersInvitations } from "./pages/users/UsersInvitations";
 import { UsersTeams } from "./pages/users/UsersTeams";
@@ -73,6 +76,9 @@ export const router = createBrowserRouter([
       { path: "finance/payouts/:id", Component: PayoutDetail },
       { path: "finance/refunds", Component: RefundCenter },
       { path: "products", Component: ProductsList },
+      { path: "products/own", Component: OwnProducts },
+      { path: "products/popular", Component: PopularProducts },
+      { path: "products/recommended", Component: RecommendedProducts },
       { path: "products/categories", Component: ProductCategories },
       { path: "products/media", Component: ProductMedia },
       { path: "products/promotions", Component: PromotionsPage },
