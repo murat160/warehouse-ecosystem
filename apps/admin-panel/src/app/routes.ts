@@ -44,6 +44,33 @@ import { ApprovalCenter } from "./pages/approvals/ApprovalCenter";
 import { UsersInvitations } from "./pages/users/UsersInvitations";
 import { UsersTeams } from "./pages/users/UsersTeams";
 import { UsersCabinets } from "./pages/users/UsersCabinets";
+// Accounting
+import { AccountingDashboard } from "./pages/accounting/AccountingDashboard";
+import { AccountingReconciliations } from "./pages/accounting/Reconciliations";
+import { AccountingReports } from "./pages/accounting/AccountingReports";
+import { AccountingExports } from "./pages/accounting/AccountingExports";
+import { AccountingTaxes } from "./pages/accounting/AccountingTaxes";
+// Legal
+import { LegalDashboard } from "./pages/legal/LegalDashboard";
+import { LegalContracts } from "./pages/legal/LegalContracts";
+import { LegalClaims } from "./pages/legal/LegalClaims";
+import { LegalDisputes } from "./pages/legal/LegalDisputes";
+import { LegalComplaints } from "./pages/legal/LegalComplaints";
+import { LegalDocuments } from "./pages/legal/LegalDocuments";
+import { LegalReports } from "./pages/legal/LegalReports";
+// Reports
+import {
+  ReportsDashboard, ReportsOrders, ReportsFinance, ReportsSellers,
+  ReportsCouriers, ReportsPVZ, ReportsWarehouses, ReportsLegal,
+  ReportsAccounting, ReportsMarketing,
+} from "./pages/reports";
+// Finance extensions
+import {
+  FinanceCommissions, FinanceInvoices, FinanceTaxes, FinanceReports,
+} from "./pages/finance/FinanceExtensions";
+// Promotions extensions
+import { BoostPage } from "./pages/products/BoostPage";
+import { CampaignsPage } from "./pages/products/CampaignsPage";
 
 export const router = createBrowserRouter([
   {
@@ -85,6 +112,38 @@ export const router = createBrowserRouter([
       { path: "products/media", Component: ProductMedia },
       { path: "products/promotions", Component: PromotionsPage },
       { path: "products/discounts", Component: DiscountsPage },
+      { path: "products/boost", Component: BoostPage },
+      { path: "products/campaigns", Component: CampaignsPage },
+      // Finance extensions
+      { path: "finance/commissions", Component: FinanceCommissions },
+      { path: "finance/invoices",    Component: FinanceInvoices    },
+      { path: "finance/taxes",       Component: FinanceTaxes       },
+      { path: "finance/reports",     Component: FinanceReports     },
+      // Accounting
+      { path: "accounting",                  Component: AccountingDashboard       },
+      { path: "accounting/reconciliations",  Component: AccountingReconciliations },
+      { path: "accounting/reports",          Component: AccountingReports         },
+      { path: "accounting/exports",          Component: AccountingExports         },
+      { path: "accounting/taxes",            Component: AccountingTaxes           },
+      // Legal
+      { path: "legal",            Component: LegalDashboard  },
+      { path: "legal/contracts",  Component: LegalContracts  },
+      { path: "legal/claims",     Component: LegalClaims     },
+      { path: "legal/disputes",   Component: LegalDisputes   },
+      { path: "legal/complaints", Component: LegalComplaints },
+      { path: "legal/documents",  Component: LegalDocuments  },
+      { path: "legal/reports",    Component: LegalReports    },
+      // Reports
+      { path: "reports",            Component: ReportsDashboard  },
+      { path: "reports/orders",     Component: ReportsOrders     },
+      { path: "reports/finance",    Component: ReportsFinance    },
+      { path: "reports/sellers",    Component: ReportsSellers    },
+      { path: "reports/couriers",   Component: ReportsCouriers   },
+      { path: "reports/pvz",        Component: ReportsPVZ        },
+      { path: "reports/warehouses", Component: ReportsWarehouses },
+      { path: "reports/legal",      Component: ReportsLegal      },
+      { path: "reports/accounting", Component: ReportsAccounting },
+      { path: "reports/marketing",  Component: ReportsMarketing  },
       { path: "approvals", Component: ApprovalCenter },
       { path: "support/tickets", Component: TicketsList },
       { path: "support/tickets/:id", Component: TicketDetail },

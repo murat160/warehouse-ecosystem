@@ -1,692 +1,619 @@
-import { useState } from 'react';
+/**
+ * RBACManagement — single screen to administer roles & permissions.
+ *
+ * Tabs:
+ *  - Roles      — list of roles with search/filter, role detail panel,
+ *                 actions (create / edit / copy / disable / delete / export).
+ *  - Matrix     — role × permission matrix (one column per role, rows are
+ *                 modules with their verbs).
+ *  - Assignments — sample list of users, change role inline.
+ *  - Audit      — log of role changes (in-memory, persists during session).
+ *
+ * Built on the registry from data/rbac.ts (PREDEFINED_ROLES + SIDEBAR_MODULES
+ * + BASE_VERBS + SPECIAL_PERMS).
+ */
+import { Fragment, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
-  Plus, Users, Shield, Lock, Pencil as Edit2, Trash2, X, Check, ChevronDown,
-  ChevronRight, Eye, Package, MapPin, Bike, Warehouse, Store, DollarSign,
-  MessageSquare, BarChart3, Settings, LayoutDashboard, AlertTriangle,
-  Copy, Search, UserCheck, Globe, Building2, Info, ShieldCheck, ShieldAlert,
-  ToggleLeft, ToggleRight, Megaphone, ClipboardList, Route, CheckCircle2,
+  Plus, Search, Pencil, Copy, Trash2, Ban, CheckCircle2, X, Download,
+  ShieldCheck, Shield, Users as UsersIcon, ChevronRight, ChevronDown,
+  History, FileText, Eye, Crown, Layers, AlertTriangle, UserCheck,
 } from 'lucide-react';
+import {
+  PREDEFINED_ROLES, SIDEBAR_MODULES, BASE_VERBS, SPECIAL_PERMS,
+  permsForModule,
+  type PredefinedRole,
+} from '../../data/rbac';
+import { exportToCsv } from '../../utils/downloads';
 
-// ─── Permission registry ──────────────────────────────────────────────────────
+type Tab = 'roles' | 'matrix' | 'assignments' | 'audit';
 
-const MODULES = [
-  {
-    key: 'dashboard', label: 'Главная панель', icon: LayoutDashboard,
-    perms: [
-      { key: 'dashboard.view', label: 'Просматривать панель' },
-      { key: 'dashboard.kpi', label: 'Видеть KPI и метрики' },
-      { key: 'dashboard.alerts', label: 'Видеть срочные задачи' },
-    ],
-  },
-  {
-    key: 'pvz', label: 'ПВЗ', icon: MapPin,
-    perms: [
-      { key: 'pvz.view', label: 'Просматривать список ПВЗ' },
-      { key: 'pvz.operate', label: 'Сканер: приёмка / выдача / возврат' },
-      { key: 'pvz.manage', label: 'Создавать и редактировать ПВЗ' },
-      { key: 'pvz.pause', label: 'Ставить ПВЗ на паузу' },
-      { key: 'pvz.delete', label: 'Удалять ПВЗ' },
-      { key: 'pvz.invite', label: 'Приглашать операторов' },
-    ],
-  },
-  {
-    key: 'orders', label: 'Заказы', icon: Package,
-    perms: [
-      { key: 'orders.view', label: 'Просматривать заказы' },
-      { key: 'orders.manage', label: 'Редактировать заказы' },
-      { key: 'orders.cancel', label: 'Отменять заказы' },
-      { key: 'orders.export', label: 'Экспортировать данные' },
-    ],
-  },
-  {
-    key: 'couriers', label: 'Курьеры', icon: Bike,
-    perms: [
-      { key: 'couriers.view', label: 'Просматривать курьеров' },
-      { key: 'couriers.manage', label: 'Управлять курьерами' },
-      { key: 'couriers.assign', label: 'Назначать на заказы' },
-    ],
-  },
-  {
-    key: 'warehouses', label: 'Склады', icon: Warehouse,
-    perms: [
-      { key: 'warehouses.view', label: 'Просматривать склады' },
-      { key: 'warehouses.manage', label: 'Управлять складами' },
-    ],
-  },
-  {
-    key: 'merchants', label: 'Продавцы', icon: Store,
-    perms: [
-      { key: 'merchants.view',     label: 'Просматривать продавцов' },
-      { key: 'merchants.create',   label: 'Создавать (приглашать)' },
-      { key: 'merchants.edit',     label: 'Редактировать профиль' },
-      { key: 'merchants.delete',   label: 'Блокировать / архивировать' },
-      { key: 'merchants.export',   label: 'Экспорт реестра' },
-      { key: 'merchants.approve',  label: 'Одобрять новые заявки' },
-      { key: 'merchants.finance',  label: 'Финансы продавцов' },
-    ],
-  },
-  {
-    key: 'products', label: 'Товары', icon: Package,
-    perms: [
-      { key: 'products.view',        label: 'Просматривать каталог' },
-      { key: 'products.create',      label: 'Создавать товары' },
-      { key: 'products.edit',        label: 'Редактировать товары' },
-      { key: 'products.delete',      label: 'Архивировать / блокировать' },
-      { key: 'products.export',      label: 'Экспорт CSV' },
-      { key: 'products.moderate',    label: 'Модерация (approve/reject)' },
-      { key: 'products.media',       label: 'Управление фото и медиа' },
-      { key: 'products.own',         label: 'Товары нашей фирмы' },
-      { key: 'products.categories',  label: 'Управлять категориями' },
-    ],
-  },
-  {
-    key: 'popular', label: 'Популярные', icon: Package,
-    perms: [
-      { key: 'products.popular.view',    label: 'Просматривать популярные' },
-      { key: 'products.popular.manage',  label: 'Переключать режим (авто/ручной)' },
-      { key: 'products.popular.pin',     label: 'Закреплять товар в популярных' },
-      { key: 'products.popular.hide',    label: 'Скрывать из популярных' },
-      { key: 'products.popular.reorder', label: 'Менять порядок (поднять/опустить)' },
-      { key: 'products.popular.export',  label: 'Экспорт реестра' },
-    ],
-  },
-  {
-    key: 'recommended', label: 'Рекомендации', icon: Package,
-    perms: [
-      { key: 'products.recommended.view',    label: 'Просматривать рекомендации' },
-      { key: 'products.recommended.create',  label: 'Создавать рекомендации' },
-      { key: 'products.recommended.edit',    label: 'Редактировать слоты' },
-      { key: 'products.recommended.pause',   label: 'Включать / выключать' },
-      { key: 'products.recommended.delete',  label: 'Удалять слоты' },
-      { key: 'products.recommended.reorder', label: 'Менять приоритет' },
-      { key: 'products.recommended.audience',label: 'Управлять аудиторией' },
-      { key: 'products.recommended.sponsored',label:'Sponsored размещения' },
-    ],
-  },
-  {
-    key: 'showcase', label: 'Витрина / Первые ряды', icon: Package,
-    perms: [
-      { key: 'products.showcase.view',    label: 'Просматривать витрину' },
-      { key: 'products.showcase.manage',  label: 'Управлять витриной' },
-      { key: 'products.showcase.create',  label: 'Добавлять слоты' },
-      { key: 'products.showcase.edit',    label: 'Редактировать слоты' },
-      { key: 'products.showcase.pause',   label: 'Включать / выключать слоты' },
-      { key: 'products.showcase.delete',  label: 'Удалять слоты' },
-      { key: 'products.showcase.reorder', label: 'Менять порядок (#1, #2...)' },
-    ],
-  },
-  {
-    key: 'boost', label: 'Boost / Продвижение товаров', icon: Megaphone,
-    perms: [
-      { key: 'products.boost.company',  label: 'Продвигать товары нашей фирмы' },
-      { key: 'products.boost.merchant', label: 'Продвигать товары продавцов' },
-      { key: 'products.boost.category', label: 'Boost в категории' },
-      { key: 'products.boost.search',   label: 'Boost в поиске' },
-      { key: 'products.boost.homepage', label: 'Boost на главной' },
-    ],
-  },
-  {
-    key: 'promotions', label: 'Акции / Скидки', icon: Megaphone,
-    perms: [
-      { key: 'promotions.view',          label: 'Просматривать акции' },
-      { key: 'promotions.create',        label: 'Создавать акции' },
-      { key: 'promotions.edit',          label: 'Редактировать акции' },
-      { key: 'promotions.delete',        label: 'Архивировать' },
-      { key: 'promotions.approve',       label: 'Одобрять заявки' },
-      { key: 'promotions.export',        label: 'Экспорт' },
-      { key: 'promotions.products.manage',label:'Привязывать товары к акциям' },
-      { key: 'discounts.products.manage', label: 'Привязывать товары к скидкам' },
-    ],
-  },
-  {
-    key: 'logistics', label: 'Логистика', icon: Route,
-    perms: [
-      { key: 'logistics.view',      label: 'Просматривать дашборд' },
-      { key: 'logistics.manage',    label: 'Управлять зонами и маршрутами' },
-      { key: 'logistics.export',    label: 'Экспорт' },
-    ],
-  },
-  {
-    key: 'compliance', label: 'Проверка документов', icon: ClipboardList,
-    perms: [
-      { key: 'compliance.view',     label: 'Просматривать документы' },
-      { key: 'compliance.approve',  label: 'Одобрять документы' },
-      { key: 'compliance.reject',   label: 'Отклонять документы' },
-      { key: 'compliance.export',   label: 'Экспорт реестра' },
-    ],
-  },
-  {
-    key: 'chat', label: 'Чат-центр', icon: MessageSquare,
-    perms: [
-      { key: 'chat.view',           label: 'Просматривать диалоги' },
-      { key: 'chat.reply',          label: 'Отвечать в чатах' },
-      { key: 'chat.assign',         label: 'Назначать агента' },
-      { key: 'chat.close',          label: 'Закрывать диалоги' },
-    ],
-  },
-  {
-    key: 'approvals', label: 'Центр одобрения', icon: CheckCircle2,
-    perms: [
-      { key: 'approvals.view',      label: 'Просматривать запросы' },
-      { key: 'approvals.approve',   label: 'Одобрять запросы' },
-      { key: 'approvals.reject',    label: 'Отклонять запросы' },
-      { key: 'approvals.export',    label: 'Экспорт' },
-    ],
-  },
-  {
-    key: 'finance', label: 'Финансы', icon: DollarSign,
-    perms: [
-      { key: 'finance.view', label: 'Просматривать отчёты' },
-      { key: 'finance.manage', label: 'Управлять финансами' },
-      { key: 'payouts.approve', label: 'Утверждать выплаты' },
-      { key: 'finance.export', label: 'Экспортировать данные' },
-    ],
-  },
-  {
-    key: 'support', label: 'Поддержка', icon: MessageSquare,
-    perms: [
-      { key: 'support.view', label: 'Просматривать тикеты' },
-      { key: 'support.reply', label: 'Отвечать на тикеты' },
-      { key: 'support.close', label: 'Закрывать тикеты' },
-    ],
-  },
-  {
-    key: 'analytics', label: 'Аналитика', icon: BarChart3,
-    perms: [
-      { key: 'analytics.view', label: 'Просматривать аналитику' },
-      { key: 'analytics.export', label: 'Экспортировать отчёты' },
-    ],
-  },
-  {
-    key: 'security', label: 'Безопасность', icon: Shield,
-    perms: [
-      { key: 'security.audit', label: 'Журнал аудита' },
-      { key: 'security.rbac', label: 'Управление ролями (RBAC)' },
-      { key: 'users.manage', label: 'Управление пользователями' },
-    ],
-  },
-  {
-    key: 'settings', label: 'Настройки', icon: Settings,
-    perms: [
-      { key: 'settings.view', label: 'Просматривать настройки' },
-      { key: 'settings.manage', label: 'Изменять настройки системы' },
-    ],
-  },
-];
-
-const SCOPES = [
-  { value: 'ALL', label: 'Вся сеть', desc: 'Доступ ко всем объектам системы' },
-  { value: 'COUNTRY', label: 'Страна', desc: 'Доступ в пределах одной страны' },
-  { value: 'REGION', label: 'Регион', desc: 'Доступ в пределах региона/города' },
-  { value: 'CITY', label: 'Город', desc: 'Только объекты в одном городе' },
-  { value: 'PVZ', label: 'Один ПВЗ', desc: 'Только один конкретный ПВЗ' },
-  { value: 'WAREHOUSE', label: 'Склад', desc: 'Только один склад' },
-  { value: 'SELF', label: 'Себя', desc: 'Только собственные данные' },
-];
-
-// ─── Role definitions ─────────────────────────────────────────────────────────
-
-interface RoleDef {
-  id: string;
-  name: string;
-  label: string;
-  description: string;
-  users: number;
-  permissions: string[];
-  scope: string;
-  color: string;
-  isSystem: boolean;
-  dashboardModules: string[]; // what tabs appear in personal cabinet
-}
-
-const INITIAL_ROLES: RoleDef[] = [
-  {
-    id: '1', name: 'SuperAdmin', label: 'Супер-администратор',
-    description: 'Полный доступ ко всей системе. Создаёт роли, управляет правами.',
-    users: 2, permissions: ['*'], scope: 'ALL', color: 'red', isSystem: true,
-    dashboardModules: ['dashboard', 'pvz', 'orders', 'couriers', 'warehouses', 'merchants', 'finance', 'support', 'analytics', 'security', 'settings'],
-  },
-  {
-    id: '2', name: 'Admin', label: 'Администратор',
-    description: 'Управляет ПВЗ, заказами, пользователями. Не может менять роли.',
-    users: 5,
-    permissions: ['dashboard.view', 'dashboard.kpi', 'dashboard.alerts', 'pvz.view', 'pvz.manage', 'pvz.pause', 'pvz.invite', 'orders.view', 'orders.manage', 'orders.cancel', 'couriers.view', 'couriers.manage', 'couriers.assign', 'warehouses.view', 'warehouses.manage', 'merchants.view', 'finance.view', 'analytics.view', 'support.view', 'support.reply', 'users.manage'],
-    scope: 'ALL', color: 'purple', isSystem: true,
-    dashboardModules: ['dashboard', 'pvz', 'orders', 'couriers', 'warehouses', 'merchants', 'finance', 'analytics', 'support', 'security'],
-  },
-  {
-    id: '3', name: 'RegionalManager', label: 'Региональный менеджер',
-    description: 'Управляет ПВЗ и заказами в своём регионе.',
-    users: 12,
-    permissions: ['dashboard.view', 'dashboard.kpi', 'pvz.view', 'pvz.manage', 'pvz.pause', 'orders.view', 'orders.manage', 'couriers.view', 'couriers.assign', 'analytics.view', 'support.view'],
-    scope: 'REGION', color: 'blue', isSystem: true,
-    dashboardModules: ['dashboard', 'pvz', 'orders', 'couriers', 'analytics'],
-  },
-  {
-    id: '4', name: 'PVZOperator', label: 'Оператор ПВЗ',
-    description: 'Работает с одним ПВЗ: сканер, приёмка, выдача, чат.',
-    users: 45,
-    permissions: ['pvz.view', 'pvz.operate', 'orders.view'],
-    scope: 'PVZ', color: 'green', isSystem: true,
-    dashboardModules: ['pvz', 'orders'],
-  },
-  {
-    id: '5', name: 'Finance', label: 'Финансист',
-    description: 'Доступ к финансовым отчётам и выплатам.',
-    users: 3,
-    permissions: ['dashboard.view', 'dashboard.kpi', 'finance.view', 'finance.manage', 'payouts.approve', 'finance.export', 'merchants.finance', 'analytics.view'],
-    scope: 'ALL', color: 'orange', isSystem: true,
-    dashboardModules: ['dashboard', 'finance', 'merchants', 'analytics'],
-  },
-  {
-    id: '6', name: 'Support', label: 'Агент поддержки',
-    description: 'Работает с тикетами клиентов и просматривает заказы.',
-    users: 8,
-    permissions: ['orders.view', 'support.view', 'support.reply', 'support.close'],
-    scope: 'ALL', color: 'teal', isSystem: true,
-    dashboardModules: ['orders', 'support'],
-  },
-  {
-    id: '7', name: 'ShowcaseManager', label: 'Менеджер витрины',
-    description: 'Управляет витриной (первые ряды), популярными и рекомендуемыми товарами. Делегируется SuperAdmin.',
-    users: 1,
-    permissions: [
-      'dashboard.view', 'products.view',
-      'products.popular.view',     'products.popular.manage', 'products.popular.pin',
-      'products.popular.hide',     'products.popular.reorder', 'products.popular.export',
-      'products.recommended.view', 'products.recommended.create', 'products.recommended.edit',
-      'products.recommended.pause','products.recommended.delete', 'products.recommended.reorder',
-      'products.recommended.audience',
-      'products.showcase.view',    'products.showcase.manage', 'products.showcase.create',
-      'products.showcase.edit',    'products.showcase.pause',  'products.showcase.delete',
-      'products.showcase.reorder',
-      'products.boost.company',    'products.boost.merchant', 'products.boost.category',
-      'products.boost.search',     'products.boost.homepage',
-    ],
-    scope: 'ALL', color: 'yellow', isSystem: false,
-    dashboardModules: ['dashboard', 'products', 'popular', 'recommended', 'showcase', 'boost'],
-  },
-  {
-    id: '8', name: 'PromotionsManager', label: 'Менеджер акций',
-    description: 'Создаёт и ведёт акции и скидки, привязывает к ним товары.',
-    users: 2,
-    permissions: [
-      'dashboard.view', 'products.view',
-      'promotions.view', 'promotions.create', 'promotions.edit', 'promotions.delete',
-      'promotions.export', 'promotions.products.manage', 'discounts.products.manage',
-    ],
-    scope: 'ALL', color: 'pink', isSystem: false,
-    dashboardModules: ['dashboard', 'products', 'promotions'],
-  },
-];
-
-const COLOR_OPTIONS = ['red', 'purple', 'blue', 'green', 'orange', 'teal', 'yellow', 'pink'];
-const COLOR_CLASSES: Record<string, { bg: string; text: string; border: string; badge: string }> = {
-  red:    { bg: 'bg-red-100',    text: 'text-red-600',    border: 'border-red-200',    badge: 'bg-red-100 text-red-700' },
-  purple: { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
-  blue:   { bg: 'bg-blue-100',   text: 'text-blue-600',   border: 'border-blue-200',   badge: 'bg-blue-100 text-blue-700' },
-  green:  { bg: 'bg-green-100',  text: 'text-green-600',  border: 'border-green-200',  badge: 'bg-green-100 text-green-700' },
-  orange: { bg: 'bg-orange-100', text: 'text-orange-600', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700' },
-  teal:   { bg: 'bg-teal-100',   text: 'text-teal-600',   border: 'border-teal-200',   badge: 'bg-teal-100 text-teal-700' },
-  yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600', border: 'border-yellow-200', badge: 'bg-yellow-100 text-yellow-700' },
-  pink:   { bg: 'bg-pink-100',   text: 'text-pink-600',   border: 'border-pink-200',   badge: 'bg-pink-100 text-pink-700' },
+const VERB_LABELS: Record<string, string> = {
+  view: 'Просмотр', create: 'Создание', edit: 'Редактирование',
+  delete: 'Удаление', archive: 'Архив', export: 'Экспорт',
+  approve: 'Одобрение', reject: 'Отклонение', upload: 'Загрузка',
+  download: 'Скачивание', manage: 'Управление', assign: 'Назначение',
+  block: 'Блокировка', unblock: 'Разблокировка',
+  request_documents: 'Запрос документов', resolve: 'Решение',
+  audit_view: 'Аудит-лог',
 };
 
-function clr(color: string) {
-  return COLOR_CLASSES[color] || COLOR_CLASSES.blue;
+const COLOR_BG: Record<string, string> = {
+  red:    'bg-red-50 border-red-200', purple: 'bg-purple-50 border-purple-200',
+  blue:   'bg-blue-50 border-blue-200', green:  'bg-green-50 border-green-200',
+  teal:   'bg-teal-50 border-teal-200', yellow: 'bg-yellow-50 border-yellow-200',
+  orange: 'bg-orange-50 border-orange-200', pink:'bg-pink-50 border-pink-200',
+  gray:   'bg-gray-50 border-gray-200', indigo: 'bg-indigo-50 border-indigo-200',
+  violet: 'bg-violet-50 border-violet-200',
+};
+const COLOR_DOT: Record<string, string> = {
+  red:'bg-red-500',purple:'bg-purple-500',blue:'bg-blue-500',green:'bg-green-500',
+  teal:'bg-teal-500',yellow:'bg-yellow-500',orange:'bg-orange-500',pink:'bg-pink-500',
+  gray:'bg-gray-500',indigo:'bg-indigo-500',violet:'bg-violet-500',
+};
+const COLOR_BADGE: Record<string, string> = {
+  red:'bg-red-100 text-red-700',purple:'bg-purple-100 text-purple-700',
+  blue:'bg-blue-100 text-blue-700',green:'bg-green-100 text-green-700',
+  teal:'bg-teal-100 text-teal-700',yellow:'bg-yellow-100 text-yellow-700',
+  orange:'bg-orange-100 text-orange-700',pink:'bg-pink-100 text-pink-700',
+  gray:'bg-gray-100 text-gray-700',indigo:'bg-indigo-100 text-indigo-700',
+  violet:'bg-violet-100 text-violet-700',
+};
+
+interface AuditEntry {
+  at:     string;
+  actor:  string;
+  action: string;
 }
 
-function countGranted(perms: string[]): number {
-  if (perms.includes('*')) return MODULES.reduce((s, m) => s + m.perms.length, 0);
-  return perms.length;
+interface AssignedUser {
+  id:    string;
+  name:  string;
+  email: string;
+  role:  string;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const INITIAL_USERS: AssignedUser[] = [
+  { id: 'u-1', name: 'Карпова Анна',    email: 'karpova@platform.com',    role: 'ShowcaseManager' },
+  { id: 'u-2', name: 'Иванов Иван',     email: 'ivanov@platform.com',     role: 'OperationsManager' },
+  { id: 'u-3', name: 'Петрова Мария',   email: 'petrova@platform.com',    role: 'PVZManager' },
+  { id: 'u-4', name: 'Сидоров Петр',    email: 'sidorov@platform.com',    role: 'Accountant' },
+  { id: 'u-5', name: 'Козлова Елена',   email: 'kozlova@platform.com',    role: 'SupportAgent' },
+  { id: 'u-6', name: 'Соколов Артём',   email: 'sokolov@platform.com',    role: 'Lawyer' },
+  { id: 'u-7', name: 'Морозова Ольга',  email: 'morozova@platform.com',   role: 'ChiefAccountant' },
+  { id: 'u-8', name: 'Никитин Денис',   email: 'nikitin@platform.com',    role: 'SecurityOfficer' },
+  { id: 'u-9', name: 'Васильева Юлия',  email: 'vasilieva@platform.com',  role: 'MarketingManager' },
+  { id: 'u-10', name: 'Лебедев Илья',   email: 'lebedev@platform.com',    role: 'ProductManager' },
+  { id: 'u-11', name: 'Осипова Дарья',  email: 'osipova@platform.com',    role: 'Analyst' },
+  { id: 'u-12', name: 'Кузнецов Глеб',  email: 'kuznetsov@platform.com',  role: 'WarehouseManager' },
+];
+
+function nowStr(): string {
+  return new Date().toLocaleString('ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function RBACManagement() {
-  const [roles, setRoles] = useState<RoleDef[]>(INITIAL_ROLES);
-  const [selectedRole, setSelectedRole] = useState<RoleDef | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [editingRole, setEditingRole] = useState<RoleDef | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'roles' | 'matrix'>('roles');
-  const [searchPerms, setSearchPerms] = useState('');
+  const [tab, setTab] = useState<Tab>('roles');
+  const [roles, setRoles] = useState<PredefinedRole[]>(PREDEFINED_ROLES);
+  const [users, setUsers] = useState<AssignedUser[]>(INITIAL_USERS);
+  const [audit, setAudit] = useState<AuditEntry[]>([
+    { at: '14.02.2026 09:00', actor: 'Супер Админ', action: 'Создана роль ShowcaseManager' },
+    { at: '12.02.2026 14:30', actor: 'Супер Админ', action: 'Назначена роль Accountant: sidorov@platform.com' },
+    { at: '01.02.2026 10:00', actor: 'Супер Админ', action: 'Инициализирована RBAC матрица (17 ролей)' },
+  ]);
 
-  // Form state
-  const [form, setForm] = useState({
-    name: '', label: '', description: '', scope: 'ALL', color: 'blue', permissions: [] as string[],
-  });
-  const [expandedModules, setExpandedModules] = useState<string[]>(MODULES.map(m => m.key));
+  const [search, setSearch]                 = useState('');
+  const [selectedRole, setSelectedRole]     = useState<PredefinedRole | null>(roles[0] ?? null);
+  const [showRoleEditor, setShowRoleEditor] = useState(false);
+  const [editing, setEditing]               = useState<PredefinedRole | null>(null);
+  const [confirmDelete, setConfirmDelete]   = useState<string | null>(null);
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(['products']));
 
-  const openCreate = () => {
-    setEditingRole(null);
-    setForm({ name: '', label: '', description: '', scope: 'ALL', color: 'blue', permissions: [] });
-    setExpandedModules(MODULES.map(m => m.key));
-    setShowModal(true);
-  };
+  // ── Filtered roles ────────────────────────────────────────────────────────
+  const filteredRoles = useMemo(() => {
+    const q = search.toLowerCase();
+    return roles.filter(r =>
+      !q || r.name.toLowerCase().includes(q) ||
+      r.label.toLowerCase().includes(q) ||
+      r.description.toLowerCase().includes(q)
+    );
+  }, [roles, search]);
 
-  const openEdit = (role: RoleDef) => {
-    setEditingRole(role);
-    setForm({
-      name: role.name, label: role.label, description: role.description,
-      scope: role.scope, color: role.color,
-      permissions: role.permissions.includes('*') ? MODULES.flatMap(m => m.perms.map(p => p.key)) : [...role.permissions],
-    });
-    setExpandedModules(MODULES.map(m => m.key));
-    setShowModal(true);
-  };
-
-  const closeModal = () => { setShowModal(false); setEditingRole(null); };
-
-  const togglePerm = (key: string) => {
-    setForm(f => ({
-      ...f, permissions: f.permissions.includes(key)
-        ? f.permissions.filter(p => p !== key)
-        : [...f.permissions, key],
-    }));
-  };
-
-  const toggleModule = (moduleKey: string, allPerms: string[]) => {
-    const all = allPerms.every(p => form.permissions.includes(p));
-    setForm(f => ({
-      ...f, permissions: all
-        ? f.permissions.filter(p => !allPerms.includes(p))
-        : [...new Set([...f.permissions, ...allPerms])],
-    }));
-  };
-
-  const selectAllPerms = () => {
-    setForm(f => ({ ...f, permissions: MODULES.flatMap(m => m.perms.map(p => p.key)) }));
-  };
-  const clearAllPerms = () => setForm(f => ({ ...f, permissions: [] }));
-
-  const saveRole = () => {
-    if (!form.name.trim() || !form.label.trim()) return;
-    const modulesWithAccess = MODULES.filter(m => m.perms.some(p => form.permissions.includes(p))).map(m => m.key);
-    if (editingRole) {
-      setRoles(prev => prev.map(r => r.id === editingRole.id
-        ? { ...r, ...form, dashboardModules: modulesWithAccess }
-        : r));
-      if (selectedRole?.id === editingRole.id) {
-        setSelectedRole(prev => prev ? { ...prev, ...form, dashboardModules: modulesWithAccess } : null);
+  // ── Matrix data ──────────────────────────────────────────────────────────
+  const matrixModules = useMemo(() => {
+    const result: { key: string; label: string; perms: string[] }[] = [];
+    for (const m of SIDEBAR_MODULES) {
+      result.push({ key: m.key, label: m.label, perms: permsForModule(m.key) });
+      for (const c of m.children ?? []) {
+        result.push({ key: c.key, label: `  └ ${c.label}`, perms: permsForModule(c.key) });
       }
-    } else {
-      const newRole: RoleDef = {
-        id: String(Date.now()), ...form,
-        users: 0, isSystem: false,
-        dashboardModules: modulesWithAccess,
-      };
-      setRoles(prev => [...prev, newRole]);
     }
-    closeModal();
-  };
+    // Special perms group
+    result.push({ key: '__special__', label: 'Специальные', perms: [...SPECIAL_PERMS] });
+    return result;
+  }, []);
 
-  const deleteRole = (id: string) => {
-    setRoles(prev => prev.filter(r => r.id !== id));
-    if (selectedRole?.id === id) setSelectedRole(null);
-    setShowDeleteConfirm(null);
-  };
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function pushAudit(action: string) {
+    setAudit(prev => [{ at: nowStr(), actor: 'Супер Админ', action }, ...prev]);
+  }
 
-  const totalUsers = roles.reduce((s, r) => s + r.users, 0);
-  const totalPerms = MODULES.reduce((s, m) => s + m.perms.length, 0);
+  function totalPermsFor(role: PredefinedRole): number {
+    if (role.permissions.includes('*')) return Number.POSITIVE_INFINITY;
+    return role.permissions.length;
+  }
 
+  function isWildcard(role: PredefinedRole): boolean {
+    return role.permissions.includes('*');
+  }
+
+  function toggleModuleExpansion(key: string) {
+    setExpandedModules(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  function rolePermissionsForModule(role: PredefinedRole, moduleKey: string): string[] {
+    if (isWildcard(role)) return permsForModule(moduleKey);
+    return role.permissions.filter(p => p.startsWith(moduleKey + '.'));
+  }
+
+  // ── Role actions ─────────────────────────────────────────────────────────
+  function openCreate() {
+    setEditing({
+      id: `r-${Date.now()}`, name: 'NewRole', label: 'Новая роль',
+      description: '', color: 'blue', isSystem: false, active: true,
+      permissions: [], users: 0,
+    });
+    setShowRoleEditor(true);
+  }
+
+  function openEdit(r: PredefinedRole) {
+    setEditing({ ...r, permissions: [...r.permissions] });
+    setShowRoleEditor(true);
+  }
+
+  function openCopy(r: PredefinedRole) {
+    setEditing({
+      ...r,
+      id: `r-${Date.now()}`,
+      name: `${r.name}_Copy`,
+      label: `${r.label} (копия)`,
+      isSystem: false,
+      users: 0,
+      permissions: [...r.permissions],
+    });
+    setShowRoleEditor(true);
+  }
+
+  function saveRole() {
+    if (!editing) return;
+    if (!editing.name.trim()) { toast.error('Введите внутреннее имя роли'); return; }
+    if (!editing.label.trim()) { toast.error('Введите отображаемое название'); return; }
+
+    const exists = roles.some(r => r.id === editing.id);
+    if (exists) {
+      setRoles(prev => prev.map(r => r.id === editing.id ? editing : r));
+      pushAudit(`Изменена роль: ${editing.label} (${editing.permissions.length} прав)`);
+      toast.success(`Роль обновлена: ${editing.label}`);
+    } else {
+      setRoles(prev => [...prev, editing]);
+      pushAudit(`Создана роль: ${editing.label} (${editing.permissions.length} прав)`);
+      toast.success(`Роль создана: ${editing.label}`);
+    }
+    setSelectedRole(editing);
+    setShowRoleEditor(false);
+    setEditing(null);
+  }
+
+  function toggleActive(r: PredefinedRole) {
+    if (r.name === 'SuperAdmin') {
+      toast.warning('SuperAdmin нельзя отключить'); return;
+    }
+    setRoles(prev => prev.map(x => x.id === r.id ? { ...x, active: !x.active } : x));
+    pushAudit(`${r.active ? 'Отключена' : 'Включена'} роль: ${r.label}`);
+    toast.success(`Роль ${r.active ? 'отключена' : 'включена'}: ${r.label}`);
+  }
+
+  function deleteRole(id: string) {
+    const r = roles.find(x => x.id === id);
+    if (!r) return;
+    if (r.isSystem) { toast.error(`Системную роль «${r.label}» нельзя удалить`); return; }
+    setRoles(prev => prev.filter(x => x.id !== id));
+    if (selectedRole?.id === id) setSelectedRole(roles[0]);
+    pushAudit(`Удалена роль: ${r.label}`);
+    toast.success(`Роль удалена: ${r.label}`);
+    setConfirmDelete(null);
+  }
+
+  function exportRolesCsv() {
+    exportToCsv(roles.map(r => ({
+      name: r.name, label: r.label, description: r.description,
+      permissions: r.permissions.join(' | '),
+      permsCount: r.permissions.includes('*') ? '∞' : String(r.permissions.length),
+      users: String(r.users ?? 0),
+      isSystem: r.isSystem ? 'да' : 'нет',
+      active: r.active ? 'да' : 'нет',
+    })) as any[], [
+      { key: 'name',         label: 'Имя'            },
+      { key: 'label',        label: 'Название'        },
+      { key: 'description',  label: 'Описание'        },
+      { key: 'permsCount',   label: 'Прав'            },
+      { key: 'users',        label: 'Пользователей'   },
+      { key: 'isSystem',     label: 'Системная'       },
+      { key: 'active',       label: 'Активна'         },
+      { key: 'permissions',  label: 'Permissions'     },
+    ], 'rbac-roles');
+    toast.success(`Скачан CSV: ${roles.length} ролей`);
+  }
+
+  function changeUserRole(userId: string, newRole: string) {
+    const u = users.find(x => x.id === userId);
+    if (!u) return;
+    setUsers(prev => prev.map(x => x.id === userId ? { ...x, role: newRole } : x));
+    pushAudit(`Назначена роль ${newRole} → ${u.email}`);
+    toast.success(`${u.name}: ${newRole}`);
+  }
+
+  // ── Permission editor helpers (inside the role editor modal) ─────────────
+  function togglePermission(perm: string) {
+    if (!editing) return;
+    if (isWildcard(editing)) {
+      // can't toggle individual perms when wildcard set
+      toast.info('Эта роль имеет полный доступ (*). Снимите wildcard перед отключением отдельных прав.');
+      return;
+    }
+    setEditing({
+      ...editing,
+      permissions: editing.permissions.includes(perm)
+        ? editing.permissions.filter(p => p !== perm)
+        : [...editing.permissions, perm],
+    });
+  }
+
+  function toggleWildcard() {
+    if (!editing) return;
+    setEditing({ ...editing, permissions: isWildcard(editing) ? [] : ['*'] });
+  }
+
+  function toggleAllInModule(moduleKey: string, on: boolean) {
+    if (!editing || isWildcard(editing)) return;
+    const modPerms = permsForModule(moduleKey);
+    setEditing({
+      ...editing,
+      permissions: on
+        ? Array.from(new Set([...editing.permissions, ...modPerms]))
+        : editing.permissions.filter(p => !modPerms.includes(p)),
+    });
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Управление RBAC</h1>
-          <p className="text-gray-500">Роли, разрешения и личные кабинеты · {roles.length} ролей · {totalUsers} пользователей</p>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-900">Роли и права (RBAC)</h1>
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider">
+              {roles.length} ролей
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">Единый реестр ролей и permissions. Каждый раздел sidebar и каждое действие подвязаны сюда.</p>
         </div>
-        <button onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-          <Plus className="w-5 h-5" />Создать роль
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={exportRolesCsv}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm">
+            <Download className="w-4 h-4" />Экспорт CSV
+          </button>
+          <button onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold">
+            <Plus className="w-4 h-4" />Создать роль
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {(['roles', 'matrix'] as const).map(t => (
-          <button key={t} onClick={() => setActiveTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {t === 'roles' ? 'Роли и разрешения' : 'Матрица доступа'}
-          </button>
-        ))}
+      <div className="border-b border-gray-200">
+        <div className="flex flex-wrap gap-1">
+          {([
+            { id: 'roles',       label: 'Роли',        icon: ShieldCheck },
+            { id: 'matrix',      label: 'Матрица',     icon: Layers },
+            { id: 'assignments', label: 'Назначения',  icon: UsersIcon },
+            { id: 'audit',       label: 'Audit log',   icon: History },
+          ] as const).map(t => {
+            const isActive = tab === t.id;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                  isActive ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}>
+                <t.icon className="w-4 h-4" />{t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ══════════ ROLES VIEW ══════════ */}
-      {activeTab === 'roles' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: role cards */}
-          <div className="lg:col-span-2 space-y-3">
-            {roles.map(role => {
-              const c = clr(role.color);
-              const granted = countGranted(role.permissions);
-              const isSelected = selectedRole?.id === role.id;
-              return (
-                <div key={role.id}
-                  onClick={() => setSelectedRole(isSelected ? null : role)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSelectedRole(isSelected ? null : role)}
-                  className={`bg-white rounded-xl border-2 p-5 cursor-pointer transition-all hover:shadow-md text-left w-full active:scale-[0.98] ${isSelected ? `${c.border} shadow-md` : 'border-gray-200'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className={`w-10 h-10 ${c.bg} rounded-xl flex items-center justify-center shrink-0`}>
-                        <Shield className={`w-5 h-5 ${c.text}`} />
-                      </div>
+      {/* TAB: ROLES ─────────────────────────────────────────────────────────── */}
+      {tab === 'roles' && (
+        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
+          {/* Left: list */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="p-3 border-b">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Поиск роли..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto divide-y divide-gray-50">
+              {filteredRoles.map(r => {
+                const isSelected = selectedRole?.id === r.id;
+                return (
+                  <button key={r.id} onClick={() => setSelectedRole(r)}
+                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                      isSelected ? 'bg-blue-50' : r.active ? '' : 'opacity-60'
+                    }`}>
+                    <div className="flex items-start gap-2">
+                      <span className={`w-2 h-2 rounded-full mt-1.5 ${COLOR_DOT[r.color] ?? 'bg-gray-400'}`} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-gray-900">{role.label}</span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full font-mono font-medium ${c.badge}`}>{role.name}</span>
-                          {role.isSystem && (
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">Системная</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className={`font-semibold ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>{r.label}</p>
+                          {isWildcard(r) && (
+                            <span className="px-1.5 py-0 bg-amber-100 text-amber-700 rounded text-[9px] font-bold uppercase tracking-wide flex items-center gap-0.5">
+                              <Crown className="w-2.5 h-2.5" />Полный
+                            </span>
+                          )}
+                          {r.isSystem && (
+                            <span className="px-1.5 py-0 bg-gray-100 text-gray-600 rounded text-[9px] font-bold uppercase tracking-wide">
+                              Sys
+                            </span>
+                          )}
+                          {!r.active && (
+                            <span className="px-1.5 py-0 bg-red-100 text-red-700 rounded text-[9px] font-bold uppercase tracking-wide">
+                              Off
+                            </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 mt-0.5 truncate">{role.description}</p>
+                        <p className="text-[11px] text-gray-500 truncate font-mono">{r.name}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-2">
+                          <span><UsersIcon className="w-2.5 h-2.5 inline mr-0.5" />{r.users ?? 0}</span>
+                          <span>•</span>
+                          <span>{isWildcard(r) ? 'все права' : `${r.permissions.length} прав`}</span>
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={e => { e.stopPropagation(); openEdit(role); }}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {!role.isSystem && (
-                        <button onClick={e => { e.stopPropagation(); setShowDeleteConfirm(role.id); }}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 mt-3 flex-wrap">
-                    <span className="flex items-center gap-1 text-sm text-gray-500">
-                      <Users className="w-3.5 h-3.5" />{role.users} польз.
-                    </span>
-                    <span className="flex items-center gap-1 text-sm text-gray-500">
-                      <Globe className="w-3.5 h-3.5" />Scope: <span className="font-medium text-gray-700">{role.scope}</span>
-                    </span>
-                    <span className="flex items-center gap-1 text-sm text-gray-500">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      {role.permissions.includes('*')
-                        ? <span className="text-red-600 font-medium">Все права (*)</span>
-                        : <span>{granted} из {totalPerms} прав</span>
-                      }
-                    </span>
-                    {/* Permission chips */}
-                    <div className="flex flex-wrap gap-1 mt-1 w-full">
-                      {role.permissions.includes('*')
-                        ? <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs rounded font-mono">*</span>
-                        : role.permissions.slice(0, 5).map(p => (
-                          <span key={p} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded font-mono">{p}</span>
-                        ))
-                      }
-                      {!role.permissions.includes('*') && role.permissions.length > 5 && (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded">+{role.permissions.length - 5}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  </button>
+                );
+              })}
+              {filteredRoles.length === 0 && (
+                <div className="p-8 text-center text-sm text-gray-400">Роли не найдены</div>
+              )}
+            </div>
           </div>
 
-          {/* Right: role detail / cabinet preview */}
-          <div className="space-y-4">
-            {selectedRole ? (
-              <div style={{display:'contents'}}>
-                {/* Permissions detail */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900 text-sm">Права: {selectedRole.label}</h3>
-                    <button onClick={() => openEdit(selectedRole)}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
-                      <Edit2 className="w-3 h-3" />Изменить
+          {/* Right: detail */}
+          {selectedRole ? (
+            <div className={`rounded-xl border ${COLOR_BG[selectedRole.color] ?? 'bg-white border-gray-200'} p-5`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-xl font-bold text-gray-900">{selectedRole.label}</h2>
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${COLOR_BADGE[selectedRole.color] ?? 'bg-gray-100 text-gray-700'}`}>
+                      {selectedRole.name}
+                    </span>
+                    {isWildcard(selectedRole) && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded-full text-[10px] font-bold">
+                        <Crown className="w-3 h-3" />Полный доступ
+                      </span>
+                    )}
+                    {!selectedRole.active && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 border border-red-300 text-red-700 rounded-full text-[10px] font-bold">
+                        <Ban className="w-3 h-3" />Отключена
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1">{selectedRole.description}</p>
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    <UsersIcon className="w-3 h-3 inline mr-1" />{selectedRole.users ?? 0} пользователей · {' '}
+                    {isWildcard(selectedRole) ? '∞' : selectedRole.permissions.length} прав
+                  </p>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button onClick={() => openEdit(selectedRole)} className="p-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg" title="Редактировать">
+                    <Pencil className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                  <button onClick={() => openCopy(selectedRole)} className="p-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg" title="Копировать">
+                    <Copy className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                  {selectedRole.name !== 'SuperAdmin' && (
+                    <button onClick={() => toggleActive(selectedRole)} className={`p-2 border rounded-lg ${selectedRole.active ? 'bg-white border-gray-200 hover:bg-gray-50' : 'bg-green-50 border-green-200 hover:bg-green-100'}`} title={selectedRole.active ? 'Отключить' : 'Включить'}>
+                      {selectedRole.active ? <Ban className="w-3.5 h-3.5 text-orange-600" /> : <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />}
                     </button>
-                  </div>
-                  <div className="p-3 space-y-2 max-h-72 overflow-y-auto">
-                    {MODULES.map(mod => {
-                      const granted = selectedRole.permissions.includes('*')
-                        ? mod.perms.map(p => p.key)
-                        : mod.perms.filter(p => selectedRole.permissions.includes(p.key));
-                      if (granted.length === 0) return null;
-                      const Icon = mod.icon;
-                      return (
-                        <div key={mod.key} className="p-2.5 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <Icon className="w-3.5 h-3.5 text-gray-500" />
-                            <span className="text-xs font-semibold text-gray-700">{mod.label}</span>
-                            <span className="text-xs text-gray-400">({granted.length}/{mod.perms.length})</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {granted.map(pk => {
-                              const p = mod.perms.find(x => x.key === pk);
-                              return p ? (
-                                <span key={pk} className="text-xs px-1.5 py-0.5 bg-white border border-gray-200 text-gray-600 rounded flex items-center gap-0.5">
-                                  <Check className="w-2.5 h-2.5 text-green-500" />{p.label}
-                                </span>
-                              ) : null;
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  )}
+                  {!selectedRole.isSystem && (
+                    <button onClick={() => setConfirmDelete(selectedRole.id)} className="p-2 bg-white border border-red-200 hover:bg-red-50 rounded-lg" title="Удалить">
+                      <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                    </button>
+                  )}
                 </div>
+              </div>
 
-                {/* Personal cabinet preview */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
-                      <Eye className="w-4 h-4 text-gray-400" />Личный кабинет
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Какие разделы видит пользователь с этой ролью</p>
-                  </div>
-                  <div className="p-3">
-                    <div className="bg-gray-900 rounded-xl p-3 space-y-0.5">
-                      {MODULES.map(mod => {
-                        const hasAccess = selectedRole.dashboardModules.includes(mod.key);
-                        const Icon = mod.icon;
-                        return (
-                          <div key={mod.key} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs ${hasAccess ? 'text-white' : 'text-gray-600 opacity-40 line-through'}`}>
-                            <Icon className="w-3.5 h-3.5 shrink-0" />
-                            <span>{mod.label}</span>
-                            {hasAccess && <Check className="w-3 h-3 text-green-400 ml-auto" />}
-                          </div>
-                        );
-                      })}
+              {/* Module-grouped permissions */}
+              <div className="mt-5 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                {SIDEBAR_MODULES.map(mod => {
+                  const granted = rolePermissionsForModule(selectedRole, mod.key);
+                  const total   = permsForModule(mod.key).length;
+                  if (granted.length === 0 && !isWildcard(selectedRole)) return null;
+                  const isExpanded = expandedModules.has(mod.key);
+                  return (
+                    <div key={mod.key}>
+                      <button onClick={() => toggleModuleExpansion(mod.key)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 text-left">
+                        <mod.icon className="w-4 h-4 text-gray-500 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-800">{mod.label}</span>
+                        <span className="text-xs text-gray-500 ml-auto">{granted.length}/{total}</span>
+                        {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      </button>
+                      {isExpanded && (
+                        <div className="px-4 pb-3 flex flex-wrap gap-1">
+                          {granted.map(p => {
+                            const verb = p.split('.').pop() ?? p;
+                            return (
+                              <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 text-green-700 rounded-full text-[10px]">
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                {VERB_LABELS[verb] ?? verb}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                      <Info className="w-3 h-3" />Scope: {SCOPES.find(s => s.value === selectedRole.scope)?.label} — {SCOPES.find(s => s.value === selectedRole.scope)?.desc}
-                    </p>
-                  </div>
-                </div>
+                  );
+                })}
+                {/* Special perms */}
+                {(() => {
+                  const specials = isWildcard(selectedRole)
+                    ? [...SPECIAL_PERMS]
+                    : selectedRole.permissions.filter(p => (SPECIAL_PERMS as readonly string[]).includes(p));
+                  if (specials.length === 0) return null;
+                  return (
+                    <div>
+                      <div className="px-4 py-2.5 bg-amber-50/60 flex items-center gap-2">
+                        <Crown className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-semibold text-amber-900">Специальные</span>
+                        <span className="text-xs text-amber-700 ml-auto">{specials.length} прав</span>
+                      </div>
+                      <div className="px-4 py-2 flex flex-wrap gap-1">
+                        {specials.map(p => (
+                          <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-full text-[10px] font-mono">
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Shield className="w-6 h-6 text-gray-300" />
-                </div>
-                <p className="font-medium text-gray-500 text-sm">Выберите роль</p>
-                <p className="text-xs text-gray-400 mt-1">Кликните на любую роль слева,<br/>чтобы увидеть детали и превью кабинета</p>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+              <Shield className="w-10 h-10 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Выберите роль слева</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ══════════ MATRIX VIEW ══════════ */}
-      {activeTab === 'matrix' && (
+      {/* TAB: MATRIX ────────────────────────────────────────────────────────── */}
+      {tab === 'matrix' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-            <h3 className="font-semibold text-gray-900">Матрица прав доступа</h3>
-            <div className="relative ml-auto">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input value={searchPerms} onChange={e => setSearchPerms(e.target.value)}
-                placeholder="Найти право..."
-                className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-48" />
-            </div>
-          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-gray-600 font-semibold w-56 sticky left-0 bg-gray-50 z-10">Право / Модуль</th>
+              <thead className="bg-gray-50/70 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-50/70 min-w-[160px]">Раздел / Право</th>
                   {roles.map(r => (
-                    <th key={r.id} className="px-3 py-3 text-center min-w-[100px]">
-                      <div className={`inline-flex flex-col items-center gap-0.5`}>
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${clr(r.color).badge}`}>{r.name}</span>
-                        <span className="text-gray-400 text-xs">{r.users} польз.</span>
+                    <th key={r.id} className="px-2 py-2 text-center font-semibold whitespace-nowrap" title={r.description}>
+                      <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${COLOR_BADGE[r.color] ?? 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${COLOR_DOT[r.color] ?? 'bg-gray-400'}`} />
+                        {r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name}
                       </div>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {MODULES.map(mod => {
-                  const filteredPerms = mod.perms.filter(p =>
-                    !searchPerms || p.label.toLowerCase().includes(searchPerms.toLowerCase()) || p.key.toLowerCase().includes(searchPerms.toLowerCase())
-                  );
-                  if (filteredPerms.length === 0) return null;
-                  const Icon = mod.icon;
-                  return [
-                    // Module header row
-                    <tr key={`hdr-${mod.key}`} className="bg-gray-50/70">
-                      <td className="px-4 py-2 font-semibold text-gray-700 sticky left-0 bg-gray-50/70 z-10" colSpan={1}>
-                        <div className="flex items-center gap-1.5">
-                          <Icon className="w-3.5 h-3.5 text-gray-500" />{mod.label}
-                        </div>
+                {matrixModules.map(g => (
+                  <Fragment key={g.key}>
+                    <tr className="bg-gray-50/40">
+                      <td className="px-3 py-1.5 font-bold text-gray-800 sticky left-0 bg-gray-50/40 text-[11px]" colSpan={1 + roles.length}>
+                        {g.label}
                       </td>
-                      {roles.map(r => <td key={r.id} className="px-3 py-2" />)}
-                    </tr>,
-                    // Permission rows
-                    ...filteredPerms.map(perm => (
-                      <tr key={perm.key} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="px-4 py-2 sticky left-0 bg-white z-10 hover:bg-blue-50/30">
-                          <div>
-                            <p className="text-gray-700">{perm.label}</p>
-                            <p className="text-gray-400 font-mono text-xs">{perm.key}</p>
-                          </div>
-                        </td>
-                        {roles.map(r => {
-                          const has = r.permissions.includes('*') || r.permissions.includes(perm.key);
-                          return (
-                            <td key={r.id} className="px-3 py-2 text-center">
-                              {has
-                                ? <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                                    <Check className="w-3.5 h-3.5 text-green-600" />
-                                  </div>
-                                : <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                                    <X className="w-3 h-3 text-gray-300" />
-                                  </div>
-                              }
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    )),
-                  ];
+                    </tr>
+                    {g.perms.map(p => {
+                      const verb = p.split('.').pop() ?? p;
+                      const label = VERB_LABELS[verb] ?? verb;
+                      return (
+                        <tr key={`${g.key}-${p}`} className="hover:bg-gray-50/40">
+                          <td className="px-3 py-1.5 text-gray-700 sticky left-0 bg-white text-[11px] whitespace-nowrap">
+                            <span className="text-gray-400 ml-3">{label}</span>
+                            <span className="text-gray-300 text-[9px] ml-1 font-mono">{p}</span>
+                          </td>
+                          {roles.map(r => {
+                            const has = isWildcard(r) || r.permissions.includes(p);
+                            return (
+                              <td key={`${r.id}-${p}`} className="px-2 py-1.5 text-center">
+                                {has
+                                  ? <span className="inline-block w-3.5 h-3.5 bg-green-500 rounded-sm" />
+                                  : <span className="inline-block w-3.5 h-3.5 bg-gray-100 rounded-sm" />
+                                }
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: ASSIGNMENTS ───────────────────────────────────────────────────── */}
+      {tab === 'assignments' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50/70">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Пользователь</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-500">Email</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-500">Текущая роль</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-500">Действия</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {users.map(u => {
+                  const role = roles.find(r => r.name === u.role);
+                  return (
+                    <tr key={u.id} className="hover:bg-gray-50/40">
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-gray-900">{u.name}</p>
+                      </td>
+                      <td className="px-3 py-3 text-gray-700 font-mono text-xs">{u.email}</td>
+                      <td className="px-3 py-3">
+                        {role ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${COLOR_BADGE[role.color] ?? 'bg-gray-100 text-gray-700'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${COLOR_DOT[role.color] ?? 'bg-gray-400'}`} />
+                            {role.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <select value={u.role} onChange={e => changeUserRole(u.id, e.target.value)}
+                          className="px-2 py-1 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          {roles.filter(r => r.active).map(r => (
+                            <option key={r.id} value={r.name}>{r.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
                 })}
               </tbody>
             </table>
@@ -694,211 +621,171 @@ export function RBACManagement() {
         </div>
       )}
 
-      {/* SoD notice */}
-      <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
-        <div className="flex items-start gap-3">
-          <Lock className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold text-yellow-900">Separation of Duties (SoD)</p>
-            <p className="text-sm text-yellow-700 mt-1">
-              Критические финансовые операции требуют двухэтапного подтверждения: один пользователь создаёт, другой утверждает. Права <code className="font-mono text-xs bg-yellow-100 px-1 py-0.5 rounded">payouts.approve</code> и <code className="font-mono text-xs bg-yellow-100 px-1 py-0.5 rounded">finance.manage</code> не могут быть у одного пользователя без 2FA.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ══════════ CREATE / EDIT MODAL ══════════ */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">
-                  {editingRole ? `Редактировать роль: ${editingRole.label}` : 'Создать новую роль'}
-                </h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Задайте название, scope и разрешения. Личный кабинет формируется автоматически.
-                </p>
+      {/* TAB: AUDIT ─────────────────────────────────────────────────────────── */}
+      {tab === 'audit' && (
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-50">
+          {audit.length === 0 ? (
+            <div className="p-12 text-center text-sm text-gray-400">Журнал пуст</div>
+          ) : audit.map((entry, i) => (
+            <div key={i} className="px-4 py-3 flex items-start gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                <UserCheck className="w-4 h-4 text-blue-600" />
               </div>
-              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                <X className="w-5 h-5 text-gray-500" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-800">{entry.action}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{entry.actor} · {entry.at}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Role editor modal */}
+      {showRoleEditor && editing && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowRoleEditor(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between shrink-0">
+              <p className="font-bold text-gray-900">{roles.some(r => r.id === editing.id) ? 'Редактировать роль' : 'Новая роль'}</p>
+              <button onClick={() => setShowRoleEditor(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-6 space-y-6">
-                {/* Basic info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Системное имя роли *</label>
-                    <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value.replace(/\s/g, '')}))}
-                      placeholder="MyCustomRole"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono" />
-                    <p className="text-xs text-gray-400 mt-1">Без пробелов, латиницей</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Отображаемое название *</label>
-                    <input value={form.label} onChange={e => setForm(f => ({...f, label: e.target.value}))}
-                      placeholder="Менеджер по городу"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Описание роли</label>
-                    <input value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))}
-                      placeholder="Краткое описание что может делать этот пользователь"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                  </div>
-                </div>
-
-                {/* Scope */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Область видимости (Scope)</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {SCOPES.map(s => (
-                      <button key={s.value} onClick={() => setForm(f => ({...f, scope: s.value}))}
-                        className={`p-3 border-2 rounded-xl text-left transition-all ${form.scope === s.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <p className={`text-sm font-semibold ${form.scope === s.value ? 'text-blue-700' : 'text-gray-800'}`}>{s.label}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 leading-tight">{s.desc}</p>
-                      </button>
-                    ))}
-                  </div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Внутреннее имя *</label>
+                  <input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })}
+                    placeholder="MyCustomRole"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-
-                {/* Color */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Цвет роли</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {COLOR_OPTIONS.map(c => (
-                      <button key={c} onClick={() => setForm(f => ({...f, color: c}))}
-                        className={`w-8 h-8 rounded-full border-4 transition-all ${clr(c).bg} ${form.color === c ? 'border-gray-700 scale-110' : 'border-transparent'}`} />
-                    ))}
-                  </div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Отображаемое название *</label>
+                  <input value={editing.label} onChange={e => setEditing({ ...editing, label: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-
-                {/* Permissions */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Описание</label>
+                  <input value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-semibold text-gray-700">
-                      Разрешения <span className="text-gray-400 font-normal">({form.permissions.length} из {totalPerms})</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <button onClick={selectAllPerms} className="text-xs text-blue-600 hover:text-blue-700 font-medium">Все</button>
-                      <span className="text-gray-300">|</span>
-                      <button onClick={clearAllPerms} className="text-xs text-gray-500 hover:text-gray-700 font-medium">Сбросить</button>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Цвет</label>
+                  <select value={editing.color} onChange={e => setEditing({ ...editing, color: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {Object.keys(COLOR_BG).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <button onClick={toggleWildcard}
+                    className={`flex-1 px-3 py-2 border rounded-xl text-xs font-semibold transition-colors ${
+                      isWildcard(editing) ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>
+                    <Crown className="w-3.5 h-3.5 inline mr-1" />
+                    {isWildcard(editing) ? 'Полный доступ (✓)' : 'Дать полный доступ (*)'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Permissions matrix per module */}
+              <div className="border-t pt-4">
+                <p className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4" />Permissions по разделам
+                  <span className="text-[10px] text-gray-400 font-normal">
+                    {isWildcard(editing) ? 'все права (*)' : `${editing.permissions.length} выбрано`}
+                  </span>
+                </p>
+                <div className="space-y-1">
+                  {SIDEBAR_MODULES.map(mod => {
+                    const modPerms = permsForModule(mod.key);
+                    const granted  = isWildcard(editing) ? modPerms : editing.permissions.filter(p => modPerms.includes(p));
+                    const allOn    = granted.length === modPerms.length;
+                    return (
+                      <details key={mod.key} className="border border-gray-100 rounded-lg" open={granted.length > 0}>
+                        <summary className="cursor-pointer flex items-center gap-2 px-3 py-2 hover:bg-gray-50">
+                          <mod.icon className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-semibold text-gray-800 flex-1">{mod.label}</span>
+                          <span className="text-xs text-gray-500">{granted.length}/{modPerms.length}</span>
+                          <input type="checkbox" checked={allOn}
+                            disabled={isWildcard(editing)}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => toggleAllInModule(mod.key, e.target.checked)}
+                            className="ml-2" />
+                        </summary>
+                        <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {modPerms.map(p => {
+                            const verb = p.split('.').pop() ?? p;
+                            const checked = isWildcard(editing) || editing.permissions.includes(p);
+                            return (
+                              <label key={p} className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded ${
+                                checked ? 'bg-green-50 text-green-800' : 'text-gray-600'
+                              }`}>
+                                <input type="checkbox" checked={checked}
+                                  disabled={isWildcard(editing)}
+                                  onChange={() => togglePermission(p)} />
+                                {VERB_LABELS[verb] ?? verb}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  })}
+                  {/* Special perms section */}
+                  <details className="border border-amber-200 rounded-lg bg-amber-50/30" open>
+                    <summary className="cursor-pointer flex items-center gap-2 px-3 py-2 hover:bg-amber-50/50">
+                      <Crown className="w-4 h-4 text-amber-600" />
+                      <span className="text-sm font-semibold text-amber-900 flex-1">Специальные permissions</span>
+                      <span className="text-xs text-amber-700">
+                        {isWildcard(editing) ? SPECIAL_PERMS.length : editing.permissions.filter(p => (SPECIAL_PERMS as readonly string[]).includes(p)).length}/{SPECIAL_PERMS.length}
+                      </span>
+                    </summary>
+                    <div className="px-4 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {SPECIAL_PERMS.map(p => {
+                        const checked = isWildcard(editing) || editing.permissions.includes(p);
+                        return (
+                          <label key={p} className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded font-mono ${
+                            checked ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:bg-amber-50/40'
+                          }`}>
+                            <input type="checkbox" checked={checked}
+                              disabled={isWildcard(editing)}
+                              onChange={() => togglePermission(p)} />
+                            {p}
+                          </label>
+                        );
+                      })}
                     </div>
-                  </div>
-
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {MODULES.map(mod => {
-                      const Icon = mod.icon;
-                      const modPermsKeys = mod.perms.map(p => p.key);
-                      const checkedCount = modPermsKeys.filter(k => form.permissions.includes(k)).length;
-                      const allChecked = checkedCount === mod.perms.length;
-                      const isExpanded = expandedModules.includes(mod.key);
-
-                      return (
-                        <div key={mod.key} className="border border-gray-200 rounded-xl overflow-hidden">
-                          {/* Module header */}
-                          <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
-                            <input type="checkbox" checked={allChecked} onChange={() => toggleModule(mod.key, modPermsKeys)}
-                              className="w-4 h-4 rounded text-blue-600 cursor-pointer" />
-                            <button onClick={() => setExpandedModules(prev =>
-                              prev.includes(mod.key) ? prev.filter(k => k !== mod.key) : [...prev, mod.key]
-                            )} className="flex-1 flex items-center gap-2 text-left">
-                              <Icon className="w-4 h-4 text-gray-500 shrink-0" />
-                              <span className="text-sm font-semibold text-gray-700">{mod.label}</span>
-                              <span className="text-xs text-gray-400 ml-auto">{checkedCount}/{mod.perms.length}</span>
-                              {isExpanded
-                                ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-                                : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-                            </button>
-                          </div>
-                          {/* Permission list */}
-                          {isExpanded && (
-                            <div className="divide-y divide-gray-50">
-                              {mod.perms.map(perm => (
-                                <label key={perm.key} className="flex items-start gap-3 px-4 py-2.5 hover:bg-blue-50/30 cursor-pointer transition-colors">
-                                  <input type="checkbox" checked={form.permissions.includes(perm.key)}
-                                    onChange={() => togglePerm(perm.key)}
-                                    className="w-4 h-4 rounded text-blue-600 mt-0.5 cursor-pointer" />
-                                  <div className="flex-1">
-                                    <p className="text-sm text-gray-800">{perm.label}</p>
-                                    <p className="text-xs text-gray-400 font-mono">{perm.key}</p>
-                                  </div>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Cabinet preview */}
-                <div className="bg-gray-900 rounded-xl p-4">
-                  <p className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5" />Превью личного кабинета для этой роли
-                  </p>
-                  <div className="grid grid-cols-2 gap-1">
-                    {MODULES.map(mod => {
-                      const hasAny = mod.perms.some(p => form.permissions.includes(p.key));
-                      const Icon = mod.icon;
-                      return (
-                        <div key={mod.key} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs ${hasAny ? 'text-white' : 'text-gray-600 opacity-30'}`}>
-                          <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span>{mod.label}</span>
-                          {hasAny && <Check className="w-3 h-3 text-green-400 ml-auto" />}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  </details>
                 </div>
               </div>
             </div>
-
-            {/* Modal footer */}
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-200 shrink-0">
-              <button onClick={closeModal} className="px-6 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-sm font-medium transition-colors">
+            <div className="px-6 py-4 border-t flex gap-3 shrink-0">
+              <button onClick={() => setShowRoleEditor(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">
                 Отмена
               </button>
-              <button onClick={saveRole} disabled={!form.name.trim() || !form.label.trim()}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 text-sm">
-                <ShieldCheck className="w-4 h-4" />
-                {editingRole ? 'Сохранить изменения' : 'Создать роль'}
+              <button onClick={saveRole} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">
+                {roles.some(r => r.id === editing.id) ? 'Сохранить' : 'Создать'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete confirm */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-gray-900/60" onClick={() => setShowDeleteConfirm(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <ShieldAlert className="w-6 h-6 text-red-600" />
+      {/* Confirm delete */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="font-bold text-gray-900">Удалить роль?</h3>
-                <p className="text-sm text-gray-500">Это действие нельзя отменить</p>
+                <p className="font-bold text-gray-900">Удалить роль?</p>
+                <p className="text-sm text-gray-600 mt-1">Это действие необратимо. Пользователи с этой ролью потеряют доступ.</p>
               </div>
             </div>
-            <p className="text-sm text-gray-700 mb-5 p-3 bg-red-50 rounded-lg border border-red-200">
-              Все пользователи с этой ролью потеряют доступ. Убедитесь, что сначала перевел их на другую роль.
-            </p>
             <div className="flex gap-3">
-              <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl font-medium text-sm transition-colors">
-                Отмена
-              </button>
-              <button onClick={() => deleteRole(showDeleteConfirm)} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2">
-                <Trash2 className="w-4 h-4" />Удалить
-              </button>
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={() => deleteRole(confirmDelete)} className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold">Удалить</button>
             </div>
           </div>
         </div>

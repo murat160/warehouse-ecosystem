@@ -27,22 +27,42 @@ export const ALL_MODULES = [
 export type ModuleKey = typeof ALL_MODULES[number]['key'];
 
 // Role → default modules mapping
+//
+// Note: this is a *legacy* helper kept for screens that don't read the new
+// rbac.ts registry yet (UsersList, UsersCabinets, ...). The DashboardLayout
+// no longer reads this map directly — it uses hasPermission() instead.
 export const ROLE_DEFAULT_MODULES: Record<string, ModuleKey[]> = {
-  SuperAdmin:       ['dashboard','pvz','orders','couriers','warehouses','logistics','merchants','finance','support','security','analytics','users','settings','compliance'],
-  Admin:            ['dashboard','pvz','orders','couriers','warehouses','merchants','finance','support','analytics','users','compliance'],
-  RegionalManager:  ['dashboard','pvz','orders','couriers','analytics'],
-  PVZOperator:      ['pvz','orders'],
-  Warehouse:        ['warehouses','orders'],
-  Courier:          ['orders'],
-  Finance:          ['dashboard','finance','merchants','analytics'],
-  Support:          ['orders','support'],
-  QA:               ['dashboard','pvz','orders','analytics'],
-  Partner:          ['pvz','orders','finance'],
-  Merchant:         ['orders','merchants'],
-  // ── New compliance-specific roles ──────────────────────────────────────────
-  DocumentReviewer: ['dashboard','compliance'],
-  ComplianceAdmin:  ['dashboard','compliance','security','users'],
-  LegalReviewer:    ['compliance'],
+  SuperAdmin:        ['dashboard','pvz','orders','couriers','warehouses','logistics','merchants','finance','support','security','analytics','users','settings','compliance'],
+  Admin:             ['dashboard','pvz','orders','couriers','warehouses','merchants','finance','support','analytics','users','compliance'],
+  RegionalManager:   ['dashboard','pvz','orders','couriers','analytics'],
+  PVZOperator:       ['pvz','orders'],
+  Warehouse:         ['warehouses','orders'],
+  Courier:           ['orders'],
+  Finance:           ['dashboard','finance','merchants','analytics'],
+  Support:           ['orders','support'],
+  QA:                ['dashboard','pvz','orders','analytics'],
+  Partner:           ['pvz','orders','finance'],
+  Merchant:          ['orders','merchants'],
+  DocumentReviewer:  ['dashboard','compliance'],
+  ComplianceAdmin:   ['dashboard','compliance','security','users'],
+  LegalReviewer:     ['compliance'],
+  // ── 17 new predefined roles ────────────────────────────────────────────────
+  OperationsManager: ['dashboard','pvz','orders','couriers','warehouses','logistics','analytics'],
+  PVZManager:        ['pvz','orders','users'],
+  WarehouseManager:  ['warehouses','orders'],
+  CourierManager:    ['couriers','orders','logistics','support'],
+  SupportAgent:      ['support','orders','users'],
+  Accountant:        ['dashboard','finance','merchants','analytics'],
+  ChiefAccountant:   ['dashboard','finance','merchants','analytics','users'],
+  Lawyer:            ['compliance','merchants','analytics'],
+  ComplianceManager: ['compliance','merchants','users','security','analytics'],
+  SellerManager:     ['merchants','analytics','users'],
+  ProductManager:    ['merchants','analytics'],
+  ShowcaseManager:   ['merchants','analytics'],
+  MarketingManager:  ['merchants','analytics'],
+  SecurityOfficer:   ['security','users','analytics'],
+  Analyst:           ['dashboard','analytics','orders'],
+  PromotionsManager: ['merchants','analytics'],
 };
 
 // Scopes
@@ -58,20 +78,36 @@ export const SCOPES = [
 
 // Role display names
 export const ROLE_LABELS: Record<string, string> = {
-  SuperAdmin:       'Супер-администратор',
-  Admin:            'Администратор',
-  RegionalManager:  'Региональный менеджер',
-  PVZOperator:      'Оператор ПВЗ',
-  Warehouse:        'Кладовщик',
-  Courier:          'Курьер',
-  Finance:          'Финансист',
-  Support:          'Агент поддержки',
-  QA:               'Контроль качества',
-  Partner:          'Партнёр',
-  Merchant:         'Мерчант',
-  DocumentReviewer: 'Document Reviewer',
-  ComplianceAdmin:  'Compliance Admin',
-  LegalReviewer:    'Legal Reviewer',
+  SuperAdmin:        'Супер-администратор',
+  Admin:             'Администратор',
+  RegionalManager:   'Региональный менеджер',
+  PVZOperator:       'Оператор ПВЗ',
+  Warehouse:         'Кладовщик',
+  Courier:           'Курьер',
+  Finance:           'Финансист',
+  Support:           'Агент поддержки',
+  QA:                'Контроль качества',
+  Partner:           'Партнёр',
+  Merchant:          'Мерчант',
+  DocumentReviewer:  'Document Reviewer',
+  ComplianceAdmin:   'Compliance Admin',
+  LegalReviewer:     'Legal Reviewer',
+  OperationsManager: 'Операционный менеджер',
+  PVZManager:        'Менеджер ПВЗ',
+  WarehouseManager:  'Менеджер склада',
+  CourierManager:    'Менеджер курьеров',
+  SupportAgent:      'Поддержка',
+  Accountant:        'Бухгалтер',
+  ChiefAccountant:   'Главный бухгалтер',
+  Lawyer:            'Юрист',
+  ComplianceManager: 'Compliance manager',
+  SellerManager:     'Менеджер продавцов',
+  ProductManager:    'Product manager',
+  ShowcaseManager:   'Менеджер витрины',
+  MarketingManager:  'Маркетинг-менеджер',
+  SecurityOfficer:   'Офицер безопасности',
+  Analyst:           'Аналитик',
+  PromotionsManager: 'Менеджер акций',
 };
 
 // Role descriptions for UI

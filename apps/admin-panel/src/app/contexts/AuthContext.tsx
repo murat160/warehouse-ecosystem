@@ -1,21 +1,24 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, ReactNode } from 'react';
+import { PREDEFINED_ROLES, getRoleByName, hasPerm as registryHasPerm } from '../data/rbac';
 
-export type Role = 
-  | 'SuperAdmin' 
-  | 'Admin' 
-  | 'RegionalManager' 
-  | 'PVZOperator' 
-  | 'Warehouse' 
-  | 'Courier' 
-  | 'Finance' 
-  | 'Support' 
-  | 'QA' 
-  | 'Partner' 
-  | 'Merchant'
-  // ── Compliance roles ──
-  | 'DocumentReviewer'
-  | 'ComplianceAdmin'
-  | 'LegalReviewer';
+/**
+ * Role union.
+ * Includes the 17 predefined roles + a handful of legacy ones still
+ * referenced elsewhere (Warehouse, Courier, Finance, QA, Partner, Merchant,
+ * RegionalManager, PVZOperator, DocumentReviewer, ComplianceAdmin,
+ * LegalReviewer). Legacy roles are kept so existing code doesn't break.
+ */
+export type Role =
+  // Predefined (rbac.ts)
+  | 'SuperAdmin' | 'Admin' | 'OperationsManager' | 'PVZManager' | 'WarehouseManager'
+  | 'CourierManager' | 'SupportAgent' | 'Accountant' | 'ChiefAccountant'
+  | 'Lawyer' | 'ComplianceManager' | 'SellerManager' | 'ProductManager'
+  | 'ShowcaseManager' | 'MarketingManager' | 'SecurityOfficer' | 'Analyst'
+  // Legacy
+  | 'RegionalManager' | 'PVZOperator' | 'Warehouse' | 'Courier' | 'Finance'
+  | 'Support' | 'QA' | 'Partner' | 'Merchant'
+  | 'DocumentReviewer' | 'ComplianceAdmin' | 'LegalReviewer'
+  | 'PromotionsManager';
 
 export type Scope = {
   type: 'ALL' | 'COUNTRY' | 'REGION' | 'CITY' | 'PVZ' | 'WAREHOUSE' | 'PARTNER' | 'SELF';
@@ -34,46 +37,64 @@ export type User = {
 
 type AuthContextType = {
   user: User | null;
+  /** True when SuperAdmin is currently impersonating another role for testing. */
+  isImpersonating: boolean;
+  /** SuperAdmin's real role saved while impersonating. */
+  realUser: User | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   canAccessScope: (scopeType: string, scopeId?: string) => boolean;
+  /**
+   * Switch to a predefined role for testing. Only available to SuperAdmin
+   * (or wildcard `*` permissions). Pass `null` to revert to real role.
+   */
+  impersonateRole: (roleName: Role | null) => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  // Демо-пользователь для демонстрации
-  const [user, setUser] = useState<User | null>({
-    id: '1',
-    name: 'Супер Админ',
-    email: 'superadmin@platform.com',
-    role: 'SuperAdmin',
-    scope: { type: 'ALL' },
-    twoFactorEnabled: true,
-    permissions: ['*'], // все права для демо
-  });
+const DEMO_SUPERADMIN: User = {
+  id: '1',
+  name: 'Супер Админ',
+  email: 'superadmin@platform.com',
+  role: 'SuperAdmin',
+  scope: { type: 'ALL' },
+  twoFactorEnabled: true,
+  permissions: ['*'],
+};
 
-  const login = async (email: string, password: string) => {
-    // Демо-реализация
-    setUser({
-      id: '1',
-      name: 'Супер Админ',
-      email,
-      role: 'SuperAdmin',
-      scope: { type: 'ALL' },
-      twoFactorEnabled: true,
-      permissions: ['*'],
-    });
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [realUser, setRealUser]   = useState<User | null>(DEMO_SUPERADMIN);
+  const [imperRole, setImperRole] = useState<Role | null>(null);
+
+  // The "effective" user — either the real user, or a fake user mirroring
+  // a predefined role (for testing). Real user identity is preserved
+  // (name/email/scope), only role + permissions change.
+  const user = useMemo<User | null>(() => {
+    if (!realUser) return null;
+    if (!imperRole) return realUser;
+    const role = getRoleByName(imperRole);
+    return {
+      ...realUser,
+      role: imperRole,
+      permissions: role.permissions,
+    };
+  }, [realUser, imperRole]);
+
+  const login = async (email: string, _password: string) => {
+    setRealUser({ ...DEMO_SUPERADMIN, email });
+    setImperRole(null);
   };
 
   const logout = () => {
-    setUser(null);
+    setRealUser(null);
+    setImperRole(null);
   };
 
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
-    return user.permissions.includes('*') || user.permissions.includes(permission);
+    return registryHasPerm(user.permissions, permission);
   };
 
   const canAccessScope = (scopeType: string, scopeId?: string): boolean => {
@@ -86,8 +107,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
+  const impersonateRole = (roleName: Role | null) => {
+    if (!realUser) return;
+    // Only the real SuperAdmin (or '*') can impersonate.
+    const isRealSuper = realUser.role === 'SuperAdmin' || realUser.permissions.includes('*');
+    if (!isRealSuper) return;
+    if (roleName === null || roleName === realUser.role) {
+      setImperRole(null);
+    } else {
+      // Make sure target exists in PREDEFINED_ROLES; if not, ignore.
+      if (PREDEFINED_ROLES.some(r => r.name === roleName)) setImperRole(roleName);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, hasPermission, canAccessScope }}>
+    <AuthContext.Provider value={{
+      user, realUser, isImpersonating: imperRole !== null,
+      login, logout, hasPermission, canAccessScope, impersonateRole,
+    }}>
       {children}
     </AuthContext.Provider>
   );
