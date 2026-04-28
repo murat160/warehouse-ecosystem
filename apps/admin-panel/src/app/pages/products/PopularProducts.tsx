@@ -1,50 +1,97 @@
 import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Search, Download, Eye, Image as ImageIcon, TrendingUp, DollarSign,
   Star, AlertTriangle, ArrowDown, ArrowUp, ExternalLink, Crown, Plus,
+  Pin, EyeOff, Sparkles,
 } from 'lucide-react';
 import {
-  PRODUCTS, getCategoryName, fmtPrice, PRODUCT_STATUS_CFG,
-  type Product,
+  PRODUCTS, getCategoryName, fmtPrice, PRODUCT_STATUS_CFG, photosForProduct, MEDIA,
+  type Product, type PopularityMode,
 } from '../../data/products-mock';
 import { exportToCsv } from '../../utils/downloads';
+import { ProductPreviewModal } from '../../components/products/ProductPreviewModal';
 
 type SortField = 'sales' | 'revenue' | 'rating' | 'stock';
+type ListMode  = 'auto' | 'manual';
 
 export function PopularProducts() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const merchantFilter = searchParams.get('merchant');
+  const [products, setProducts]   = useState<Product[]>(PRODUCTS);
+  const [listMode, setListMode]   = useState<ListMode>('auto');
   const [sortField, setSortField] = useState<SortField>('sales');
   const [sortDir, setSortDir]     = useState<'desc' | 'asc'>('desc');
   const [search, setSearch]       = useState('');
-  // Filter applied via KPI card click
   const [kpiFilter, setKpiFilter] = useState<'all' | 'low_stock' | 'no_photo'>('all');
-  const [recommended, setRecommended] = useState<Set<string>>(new Set());
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
 
-  // Take all NON-archived products and sort by chosen metric.
+  function patchProduct(id: string, patch: Partial<Product>) {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+  }
+
+  function pinProduct(p: Product) {
+    const isPinned = p.popularityMode === 'pinned';
+    const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    patchProduct(p.id, isPinned
+      ? { popularityMode: 'auto', boostedBy: undefined, boostedByRole: undefined, boostedAt: undefined, boostReason: undefined }
+      : { popularityMode: 'pinned', boostedBy: 'Супер Админ', boostedByRole: 'SuperAdmin', boostedAt: now, boostReason: 'Закреплён вручную' });
+    toast.success(isPinned ? `«${p.name}» откреплён` : `«${p.name}» закреплён в популярных`);
+  }
+
+  function hideProduct(p: Product) {
+    const isHidden = p.popularityMode === 'hidden';
+    const now = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    patchProduct(p.id, isHidden
+      ? { popularityMode: 'auto', boostedBy: undefined, boostedAt: undefined }
+      : { popularityMode: 'hidden', boostedBy: 'Супер Админ', boostedByRole: 'SuperAdmin', boostedAt: now, boostReason: 'Скрыт из популярных' });
+    toast.success(isHidden ? `«${p.name}» снова в популярных` : `«${p.name}» скрыт из популярных`);
+  }
+
+  function setRank(p: Product, newRank: number) {
+    patchProduct(p.id, { popularityMode: 'manual', showcaseRank: newRank, boostedBy: 'Супер Админ', boostedByRole: 'SuperAdmin', boostedAt: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) });
+  }
+
+  // Sort logic — auto mode uses metric; manual mode shows pinned first, then by showcaseRank/popularityMode.
   const sorted = useMemo(() => {
-    const live = PRODUCTS.filter(p => p.status !== 'archived' && p.sales > 0);
+    const live = products.filter(p => p.status !== 'archived' && p.popularityMode !== 'hidden' && (merchantFilter ? p.merchantId === merchantFilter : true) && p.sales > 0);
+    if (listMode === 'manual') {
+      return [...live].sort((a, b) => {
+        // Pinned first
+        if (a.popularityMode === 'pinned' && b.popularityMode !== 'pinned') return -1;
+        if (b.popularityMode === 'pinned' && a.popularityMode !== 'pinned') return  1;
+        // Then by showcaseRank ascending
+        const ra = a.showcaseRank ?? Number.POSITIVE_INFINITY;
+        const rb = b.showcaseRank ?? Number.POSITIVE_INFINITY;
+        if (ra !== rb) return ra - rb;
+        // Fallback by sales
+        return b.sales - a.sales;
+      });
+    }
     return [...live].sort((a, b) => {
       const av = a[sortField], bv = b[sortField];
       return sortDir === 'desc' ? (bv as number) - (av as number) : (av as number) - (bv as number);
     });
-  }, [sortField, sortDir]);
+  }, [products, listMode, sortField, sortDir, merchantFilter]);
 
-  const popular = sorted; // top across all metrics
+  const popular = sorted;
 
   const stats = useMemo(() => {
-    const top = [...PRODUCTS].sort((a, b) => b.sales - a.sales)[0];
-    const topRev = [...PRODUCTS].sort((a, b) => b.revenue - a.revenue)[0];
-    const highRated = [...PRODUCTS].filter(p => p.rating > 0).sort((a, b) => b.rating - a.rating)[0];
+    const top = [...products].sort((a, b) => b.sales - a.sales)[0];
+    const topRev = [...products].sort((a, b) => b.revenue - a.revenue)[0];
+    const highRated = [...products].filter(p => p.rating > 0).sort((a, b) => b.rating - a.rating)[0];
     return {
       topSeller:   top,
       topRevenue:  topRev,
       highRated:   highRated,
-      lowStock:    PRODUCTS.filter(p => p.sales > 0 && p.stock > 0 && p.stock < 20).length,
-      noPhoto:     PRODUCTS.filter(p => p.sales > 0 && p.photoCount === 0).length,
+      lowStock:    products.filter(p => p.sales > 0 && p.stock > 0 && p.stock < 20).length,
+      noPhoto:     products.filter(p => p.sales > 0 && p.photoCount === 0).length,
+      pinned:      products.filter(p => p.popularityMode === 'pinned').length,
+      hidden:      products.filter(p => p.popularityMode === 'hidden').length,
     };
-  }, []);
+  }, [products]);
 
   const filtered = useMemo(() => {
     return popular.filter(p => {
@@ -63,8 +110,22 @@ export function PopularProducts() {
   }
 
   function recommendProduct(p: Product) {
-    setRecommended(prev => new Set(prev).add(p.id));
-    toast.success(`«${p.name}» добавлен в рекомендации`, { description: 'Откройте /products/recommended для управления' });
+    toast.success(`«${p.name}» добавлен в рекомендации`, { description: 'Откройте /products/recommended для управления (роль с products.recommended.create)' });
+    navigate('/products/recommended');
+  }
+
+  function moveRank(p: Product, dir: -1 | 1) {
+    // Find neighbour in current sorted list (manual mode) and swap ranks.
+    const list = popular;
+    const idx = list.findIndex(x => x.id === p.id);
+    const swapIdx = idx + dir;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
+    const me = list[idx], other = list[swapIdx];
+    const myRank    = me.showcaseRank ?? idx + 1;
+    const otherRank = other.showcaseRank ?? swapIdx + 1;
+    setRank(me,    otherRank);
+    setRank(other, myRank);
+    toast.success(`«${me.name}» ${dir === -1 ? 'поднят выше' : 'опущен ниже'}`);
   }
 
   const SortIcon = ({ f }: { f: SortField }) => {
@@ -136,50 +197,88 @@ export function PopularProducts() {
         </button>
       </div>
 
-      {/* Sort + search */}
+      {/* Mode toggle */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          {([
+            { v: 'auto'   as ListMode, label: 'Авто (по метрикам)' },
+            { v: 'manual' as ListMode, label: 'Ручной (SuperAdmin)' },
+          ]).map(({ v, label }) => (
+            <button key={v} onClick={() => setListMode(v)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${listMode === v ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Поиск по товару, продавцу..."
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-          {([
-            { f: 'sales'   as const, label: 'Продажи'  },
-            { f: 'revenue' as const, label: 'Выручка'  },
-            { f: 'rating'  as const, label: 'Рейтинг'  },
-            { f: 'stock'   as const, label: 'Остаток'  },
-          ]).map(({ f, label }) => (
-            <button key={f} onClick={() => toggleSort(f)}
-              className={`group flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${sortField === f ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
-              {label}<SortIcon f={f} />
-            </button>
-          ))}
-        </div>
+        {listMode === 'auto' && (
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {([
+              { f: 'sales'   as const, label: 'Продажи'  },
+              { f: 'revenue' as const, label: 'Выручка'  },
+              { f: 'rating'  as const, label: 'Рейтинг'  },
+              { f: 'stock'   as const, label: 'Остаток'  },
+            ]).map(({ f, label }) => (
+              <button key={f} onClick={() => toggleSort(f)}
+                className={`group flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${sortField === f ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                {label}<SortIcon f={f} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <p className="text-sm text-gray-500">Показано: <span className="font-semibold text-gray-800">{filtered.length}</span> · Сортировка: {sortField} {sortDir === 'desc' ? '↓' : '↑'}</p>
+      <div className="flex items-center justify-between text-sm text-gray-500 px-1">
+        <span>Показано: <span className="font-semibold text-gray-800">{filtered.length}</span> · Режим: <span className="font-semibold">{listMode === 'auto' ? 'авто' : 'ручной'}</span></span>
+        <span className="flex items-center gap-3 text-xs">
+          <span className="flex items-center gap-1"><Pin className="w-3 h-3 text-yellow-600" />Закреплено: <span className="font-bold">{stats.pinned}</span></span>
+          <span className="flex items-center gap-1"><EyeOff className="w-3 h-3 text-gray-400" />Скрыто: <span className="font-bold">{stats.hidden}</span></span>
+        </span>
+      </div>
 
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((p, idx) => {
           const sc = PRODUCT_STATUS_CFG[p.status];
-          const isRecommended = recommended.has(p.id);
+          const photo = photosForProduct(p.id, MEDIA)[0];
+          const isPinned = p.popularityMode === 'pinned';
+          const isHidden = p.popularityMode === 'hidden';
+          const rank = p.showcaseRank ?? idx + 1;
           return (
-            <div key={p.id} className="bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow overflow-hidden">
-              <div className="aspect-[16/9] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center relative">
-                <span className="absolute top-2 left-2 px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-[10px] font-bold flex items-center gap-1">
-                  <Crown className="w-3 h-3" />#{idx + 1}
+            <div key={p.id} className={`bg-white rounded-xl border ${isPinned ? 'border-yellow-300 ring-2 ring-yellow-200/50' : isHidden ? 'border-gray-300 opacity-60' : 'border-gray-200'} hover:shadow-md transition-all overflow-hidden flex flex-col`}>
+              <button onClick={() => setPreviewProduct(p)} className="aspect-[16/9] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center relative w-full overflow-hidden group">
+                {photo ? (
+                  photo.url
+                    ? <img src={photo.url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    : <div className={`w-full h-full ${photo.bg} flex items-center justify-center text-6xl`}>{photo.emoji}</div>
+                ) : (
+                  <span className="text-6xl">📦</span>
+                )}
+                <span className={`absolute top-2 left-2 px-2 py-0.5 ${isPinned ? 'bg-yellow-400 text-yellow-900' : 'bg-white/90 text-gray-800'} rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm`}>
+                  {isPinned ? <Pin className="w-3 h-3" /> : <Crown className="w-3 h-3" />}#{rank}
                 </span>
                 <span className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-medium ${sc.cls}`}>{sc.label}</span>
-                <span className="text-6xl">{getCategoryName(p.categoryId).match(/^[\p{Emoji}]/u) ? getCategoryName(p.categoryId)[0] : '📦'}</span>
-              </div>
-              <div className="p-4 space-y-2">
-                <div>
-                  <p className="font-semibold text-gray-900 truncate">{p.name}</p>
+                {isHidden && (
+                  <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-gray-700 text-white rounded-full text-[10px] font-bold flex items-center gap-1">
+                    <EyeOff className="w-3 h-3" />Скрыт
+                  </span>
+                )}
+                {p.boostedBy && (
+                  <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-amber-500 text-white rounded-full text-[10px] font-bold flex items-center gap-1 shadow">
+                    <Sparkles className="w-3 h-3" />Boost
+                  </span>
+                )}
+              </button>
+              <div className="p-4 space-y-2 flex-1 flex flex-col">
+                <button onClick={() => setPreviewProduct(p)} className="text-left">
+                  <p className="font-semibold text-gray-900 truncate hover:text-blue-700">{p.name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.merchant} · <span className="font-mono">{p.sku}</span></p>
-                </div>
+                </button>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-2 bg-yellow-50 rounded-lg">
                     <p className="text-[10px] text-gray-500">Продаж</p>
@@ -194,22 +293,42 @@ export function PopularProducts() {
                     <p className="text-sm font-bold text-purple-700">{p.rating ? `★ ${p.rating}` : '—'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 pt-2">
-                  <button onClick={() => navigate(`/products?merchant=${encodeURIComponent(p.merchantId)}`)} className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 flex items-center justify-center gap-1">
-                    <Eye className="w-3 h-3" />Открыть
-                  </button>
-                  <Link to="/products/media" className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 flex items-center justify-center gap-1">
-                    <ImageIcon className="w-3 h-3" />Фото
-                  </Link>
-                  {isRecommended ? (
-                    <span className="flex-1 py-1.5 bg-green-100 text-green-700 rounded-md text-xs flex items-center justify-center gap-1 font-semibold">
-                      ✓ В рекомендациях
-                    </span>
-                  ) : (
-                    <button onClick={() => recommendProduct(p)} className="flex-1 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-md text-xs flex items-center justify-center gap-1 font-semibold">
-                      <Plus className="w-3 h-3" />Рекомендовать
+                {p.boostedBy && (
+                  <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 truncate" title={`${p.boostedBy} (${p.boostedByRole}) · ${p.boostedAt}`}>
+                    <Sparkles className="w-2.5 h-2.5 inline mr-1" />{p.boostedBy} · {p.boostedAt}
+                  </p>
+                )}
+                <div className="flex-1" />
+                {/* Manual reorder (only in manual mode) */}
+                {listMode === 'manual' && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => moveRank(p, -1)} disabled={idx === 0}
+                      className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1">
+                      <ArrowUp className="w-3 h-3" />Выше
                     </button>
-                  )}
+                    <button onClick={() => moveRank(p, +1)} disabled={idx === filtered.length - 1}
+                      className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1">
+                      <ArrowDown className="w-3 h-3" />Ниже
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPreviewProduct(p)} className="flex-1 py-1.5 border border-gray-200 rounded-md text-xs hover:bg-gray-50 flex items-center justify-center gap-1" title="Открыть превью">
+                    <Eye className="w-3 h-3" />Превью
+                  </button>
+                  <button onClick={() => pinProduct(p)} className={`py-1.5 px-2.5 rounded-md text-xs flex items-center justify-center gap-1 ${isPinned ? 'bg-yellow-200 hover:bg-yellow-300 text-yellow-900' : 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border border-yellow-200'}`} title={isPinned ? 'Открепить' : 'Закрепить'}>
+                    <Pin className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => hideProduct(p)} className={`py-1.5 px-2.5 rounded-md text-xs flex items-center justify-center gap-1 ${isHidden ? 'bg-gray-300 hover:bg-gray-400 text-gray-900' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200'}`} title={isHidden ? 'Показать' : 'Скрыть'}>
+                    <EyeOff className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => recommendProduct(p)} className="py-1.5 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-md text-xs flex items-center justify-center gap-1" title="В рекомендации">
+                    <Sparkles className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => { toast.success(`«${p.name}» добавлен в первые ряды`, { description: 'Откройте /products/showcase для размещения' }); navigate('/products/showcase'); }}
+                    className="py-1.5 px-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-md text-xs flex items-center justify-center gap-1" title="В первые ряды">
+                    <Crown className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -222,6 +341,21 @@ export function PopularProducts() {
           </div>
         )}
       </div>
+
+      {/* Preview modal */}
+      {previewProduct && (
+        <ProductPreviewModal
+          product={previewProduct}
+          onClose={() => setPreviewProduct(null)}
+          onPinPopular={p => { pinProduct(p); setPreviewProduct({ ...p, popularityMode: p.popularityMode === 'pinned' ? 'auto' : 'pinned' }); }}
+          onHidePopular={p => { hideProduct(p); setPreviewProduct({ ...p, popularityMode: p.popularityMode === 'hidden' ? 'auto' : 'hidden' }); }}
+          onAddToShowcase={p => { toast.success(`«${p.name}» добавлен в первые ряды`); navigate('/products/showcase'); }}
+          onRecommend={recommendProduct}
+          onAddPromotion={p => { toast.success(`«${p.name}» добавлен в акции`); navigate('/products/promotions'); }}
+          onAddDiscount={p => { toast.success(`«${p.name}» добавлен в скидки`); navigate('/products/discounts'); }}
+          onEdit={p => { toast.info(`Редактирование «${p.name}»`); navigate('/products'); }}
+        />
+      )}
     </div>
   );
 }

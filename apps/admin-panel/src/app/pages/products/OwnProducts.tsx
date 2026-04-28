@@ -1,20 +1,22 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Search, Plus, Download, Eye, Pencil as Edit2, Image as ImageIcon,
-  CheckCircle2, Ban, Archive, Send, X, Package, ShieldCheck, Building2,
+  CheckCircle2, Ban, Archive, Send, X, ShieldCheck, Building2,
 } from 'lucide-react';
 import {
   PRODUCTS, CATEGORIES, PRODUCT_STATUS_CFG, COMPANY_MERCHANT_ID,
-  getCategoryName, fmtPrice,
+  getCategoryName, fmtPrice, photosForProduct, MEDIA,
   type Product, type ProductStatus,
 } from '../../data/products-mock';
 import { exportToCsv } from '../../utils/downloads';
+import { ProductPreviewModal } from '../../components/products/ProductPreviewModal';
 
 type StatusFilter = ProductStatus | 'all' | 'low_stock' | 'no_photo';
 
 export function OwnProducts() {
+  const navigate = useNavigate();
   // Only platform-owned products (ownerType === 'company')
   const [products, setProducts] = useState<Product[]>(() => PRODUCTS.filter(p => p.ownerType === 'company'));
   const [search, setSearch]     = useState('');
@@ -22,7 +24,7 @@ export function OwnProducts() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({ name: '', sku: '', categoryId: 'cat-bags', price: '', stock: '' });
 
   const stats = useMemo(() => ({
@@ -85,8 +87,6 @@ export function OwnProducts() {
     setShowAddModal(false);
     setEditingId(null);
   }
-
-  const viewing = products.find(p => p.id === viewingId);
 
   return (
     <div className="space-y-5">
@@ -186,15 +186,22 @@ export function OwnProducts() {
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(p => {
                   const sc = PRODUCT_STATUS_CFG[p.status];
+                  const photo = photosForProduct(p.id, MEDIA)[0];
                   return (
                     <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center text-white text-xs shrink-0">
-                            {p.name.slice(0, 2).toUpperCase()}
-                          </div>
+                          <button onClick={() => setPreviewProduct(p)} className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shrink-0 bg-gradient-to-br from-amber-400 to-orange-500 hover:ring-2 hover:ring-amber-300 transition-all">
+                            {photo ? (
+                              photo.url
+                                ? <img src={photo.url} alt={p.name} className="w-full h-full object-cover" />
+                                : <div className={`w-full h-full ${photo.bg} flex items-center justify-center text-base`}>{photo.emoji}</div>
+                            ) : (
+                              <span className="text-white text-xs flex w-full h-full items-center justify-center font-bold">{p.name.slice(0, 2).toUpperCase()}</span>
+                            )}
+                          </button>
                           <div>
-                            <button onClick={() => setViewingId(p.id)} className="font-medium text-gray-900 hover:text-amber-700 text-left">{p.name}</button>
+                            <button onClick={() => setPreviewProduct(p)} className="font-medium text-gray-900 hover:text-amber-700 text-left">{p.name}</button>
                             <p className="text-xs text-gray-500 mt-0.5 font-mono">{p.sku}</p>
                           </div>
                         </div>
@@ -212,7 +219,7 @@ export function OwnProducts() {
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => setViewingId(p.id)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md" title="Открыть"><Eye className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setPreviewProduct(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md" title="Открыть"><Eye className="w-3.5 h-3.5" /></button>
                           <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md" title="Редактировать"><Edit2 className="w-3.5 h-3.5" /></button>
                           <Link to={`/products/media`} className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md" title="Фото товара"><ImageIcon className="w-3.5 h-3.5" /></Link>
                           {p.status !== 'moderation' && p.status !== 'archived' && (
@@ -284,40 +291,21 @@ export function OwnProducts() {
         </div>
       )}
 
-      {/* View modal */}
-      {viewing && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingId(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <div>
-                <p className="font-bold text-gray-900">{viewing.name}</p>
-                <p className="text-xs text-gray-400 font-mono mt-0.5">{viewing.sku}</p>
-              </div>
-              <button onClick={() => setViewingId(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <div className="p-6 space-y-2 text-sm">
-              {[
-                ['Категория',     getCategoryName(viewing.categoryId)],
-                ['Цена',          fmtPrice(viewing.price)],
-                ['Остаток',       `${viewing.stock} шт.`],
-                ['Продано',       String(viewing.sales)],
-                ['Выручка',       fmtPrice(viewing.revenue)],
-                ['Рейтинг',       viewing.rating ? `★ ${viewing.rating}` : '—'],
-                ['Фото',          String(viewing.photoCount)],
-                ['Создан',        viewing.createdAt],
-                ['Обновлён',      viewing.updatedAt],
-              ].map(([k, v]) => (
-                <div key={k as string} className="flex justify-between border-b border-gray-50 pb-2 last:border-0">
-                  <span className="text-gray-500">{k}</span><span className="font-semibold text-gray-900 text-right">{v}</span>
-                </div>
-              ))}
-            </div>
-            <div className="px-6 py-4 border-t flex gap-2">
-              <button onClick={() => { setViewingId(null); openEdit(viewing); }} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"><Edit2 className="w-3.5 h-3.5" />Редактировать</button>
-              <Link to="/products/media" onClick={() => setViewingId(null)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5"><ImageIcon className="w-3.5 h-3.5" />Фото</Link>
-            </div>
-          </div>
-        </div>
+      {/* Product preview */}
+      {previewProduct && (
+        <ProductPreviewModal
+          product={previewProduct}
+          onClose={() => setPreviewProduct(null)}
+          onEdit={p => { setPreviewProduct(null); openEdit(p); }}
+          onActivate={p => { setStatus(p.id, 'active'); toast.success(`«${p.name}» активирован`); setPreviewProduct({ ...p, status: 'active' }); }}
+          onBlock={p => { setStatus(p.id, 'blocked'); toast.warning(`«${p.name}» заблокирован`); setPreviewProduct({ ...p, status: 'blocked' }); }}
+          onArchive={p => { setStatus(p.id, 'archived'); toast.info(`«${p.name}» в архиве`); setPreviewProduct(null); }}
+          onAddToShowcase={p => { toast.success(`«${p.name}» добавлен в первые ряды`); navigate('/products/showcase'); }}
+          onRecommend={p => { toast.success(`«${p.name}» в рекомендациях`); navigate('/products/recommended'); }}
+          onAddPromotion={p => { toast.success(`«${p.name}» в акции`); navigate('/products/promotions'); }}
+          onAddDiscount={p => { toast.success(`«${p.name}» в скидке`); navigate('/products/discounts'); }}
+          onPinPopular={p => { toast.success(`«${p.name}» закреплён в популярных`); navigate('/products/popular'); }}
+        />
       )}
     </div>
   );

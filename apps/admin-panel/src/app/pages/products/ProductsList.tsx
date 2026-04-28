@@ -5,6 +5,7 @@ import {
   Search, Plus, Download, Filter, Eye, Pencil as Edit2, Image as ImageIcon,
   CheckCircle2, AlertCircle, Ban, Archive, Send, X, Package,
   Tag, Store, Star, Video as VideoIcon, Trash2, XCircle, Upload,
+  Pin, Crown, Sparkles, Megaphone,
 } from 'lucide-react';
 import {
   PRODUCTS, CATEGORIES, PRODUCT_STATUS_CFG,
@@ -602,12 +603,37 @@ export function ProductsList() {
                 </section>
               </div>
 
-              <div className="px-6 py-4 border-t flex gap-2 shrink-0">
-                <button onClick={() => { setViewingId(null); openEditModal(viewing); }} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"><Edit2 className="w-3.5 h-3.5" />Редактировать</button>
-                <Link to={`/products/media?product=${viewing.id}`} onClick={() => setViewingId(null)}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5" />Открыть в медиа-библиотеке
-                </Link>
+              <div className="px-6 py-3 border-t bg-gray-50 shrink-0 space-y-2">
+                {/* Showcase / boost actions (RBAC hook — visible only to roles with the corresponding perms) */}
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => { toast.success(`«${viewing.name}» закреплён в популярных`); navigate('/products/popular'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg text-xs font-semibold">
+                    <Pin className="w-3.5 h-3.5" />В популярные
+                  </button>
+                  <button onClick={() => { toast.success(`«${viewing.name}» добавлен в первые ряды`); navigate('/products/showcase'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg text-xs font-semibold">
+                    <Crown className="w-3.5 h-3.5" />В первые ряды
+                  </button>
+                  <button onClick={() => { toast.success(`«${viewing.name}» в рекомендациях`); navigate('/products/recommended'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-semibold">
+                    <Sparkles className="w-3.5 h-3.5" />Рекомендовать
+                  </button>
+                  <button onClick={() => { toast.success(`«${viewing.name}» в акции`); navigate('/products/promotions'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-lg text-xs font-semibold">
+                    <Megaphone className="w-3.5 h-3.5" />В акцию
+                  </button>
+                  <button onClick={() => { toast.success(`«${viewing.name}» в скидку`); navigate('/products/discounts'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-lg text-xs font-semibold">
+                    <Tag className="w-3.5 h-3.5" />В скидку
+                  </button>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => { setViewingId(null); openEditModal(viewing); }} className="flex-1 py-2 border border-gray-200 bg-white rounded-xl text-sm hover:bg-gray-50 flex items-center justify-center gap-1.5"><Edit2 className="w-3.5 h-3.5" />Редактировать</button>
+                  <Link to={`/products/media?product=${viewing.id}`} onClick={() => setViewingId(null)}
+                    className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5" />Открыть в медиа-библиотеке
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

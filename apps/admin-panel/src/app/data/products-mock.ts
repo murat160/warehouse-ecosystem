@@ -13,6 +13,15 @@ export const PRODUCT_STATUS_CFG: Record<ProductStatus, { label: string; cls: str
 
 export type ProductOwnerType = 'company' | 'merchant';
 
+/**
+ * popularityMode controls SuperAdmin override of automatic popularity ranking.
+ *  - 'auto'   — system-driven (default), sorts by sales/revenue/rating.
+ *  - 'pinned' — SuperAdmin pinned this product to the popular block (always visible).
+ *  - 'hidden' — SuperAdmin hidden from the popular block (never visible there).
+ *  - 'manual' — SuperAdmin set manual rank but didn't pin (showcaseRank applied).
+ */
+export type PopularityMode = 'auto' | 'manual' | 'pinned' | 'hidden';
+
 export interface Product {
   id: string;
   sku: string;
@@ -32,13 +41,54 @@ export interface Product {
   revenue: number;
   createdAt: string;
   updatedAt: string;
+  /** SuperAdmin override of popular ranking. Default: 'auto'. */
+  popularityMode?: PopularityMode;
+  /** Manual rank for 'manual' / 'pinned' mode. Lower = higher position. */
+  showcaseRank?: number;
+  /** Audit: who boosted this product. */
+  boostedBy?: string;
+  boostedByRole?: string;
+  boostedAt?: string;
+  boostReason?: string;
+  /** Whether the product is visible to customers (independent of status). */
+  visibleToCustomers?: boolean;
 }
+
+export type RecommendationPosition =
+  | 'home' | 'first_rows' | 'for_you' | 'popular_block' | 'sale_of_week'
+  | 'category_top' | 'search_boost' | 'merchant_card';
+
+export type RecommendationMode =
+  | 'automatic'        // System auto-promotes
+  | 'manual'           // SuperAdmin / role manually placed
+  | 'sponsored'        // Paid placement
+  | 'company_priority';// Company-owned products forced top
+
+export type RecommendationAudience =
+  | 'all' | 'by_city' | 'by_category' | 'by_interests'
+  | 'new_customers' | 'returning_customers';
+
+export const RECOMMENDATION_AUDIENCE_LABELS: Record<RecommendationAudience, string> = {
+  all:                  'Все покупатели',
+  by_city:              'По городу',
+  by_category:          'По категории',
+  by_interests:         'По интересам',
+  new_customers:        'Новые клиенты',
+  returning_customers:  'Постоянные клиенты',
+};
+
+export const RECOMMENDATION_MODE_LABELS: Record<RecommendationMode, string> = {
+  automatic:        'Авто',
+  manual:           'Ручной',
+  sponsored:        'Sponsored',
+  company_priority: 'Приоритет фирмы',
+};
 
 export interface RecommendationSlot {
   id: string;
   productId: string;
   productName: string;
-  position: 'home' | 'first_rows' | 'for_you' | 'popular_block' | 'sale_of_week';
+  position: RecommendationPosition;
   priority: number;            // 1 = highest
   startDate: string;
   endDate: string;
@@ -46,14 +96,55 @@ export interface RecommendationSlot {
   addedBy: string;
   addedByRole: string;
   addedAt: string;
+  /** New (batch 9) */
+  mode?: RecommendationMode;
+  audience?: RecommendationAudience;
+  audienceValue?: string; // e.g., city name when audience='by_city'
 }
 
-export const RECOMMENDATION_POSITIONS: { id: RecommendationSlot['position']; label: string }[] = [
+export const RECOMMENDATION_POSITIONS: { id: RecommendationPosition; label: string }[] = [
   { id: 'home',          label: 'Главная страница'      },
   { id: 'first_rows',    label: 'Первые ряды'           },
   { id: 'for_you',       label: 'Рекомендовано для вас' },
   { id: 'popular_block', label: 'Блок «Популярное»'     },
   { id: 'sale_of_week',  label: 'Акция недели'          },
+  { id: 'category_top',  label: 'Топ категории'         },
+  { id: 'search_boost',  label: 'Boosted search'        },
+  { id: 'merchant_card', label: 'Карточка продавца'     },
+];
+
+// ─── Showcase (homepage / first-rows) slots ──────────────────────────────────
+
+export type ShowcaseLocation = 'home' | 'category' | 'search' | 'merchant_page' | 'promotion_page';
+
+export const SHOWCASE_LOCATION_LABELS: Record<ShowcaseLocation, string> = {
+  home:           'Главная',
+  category:       'Категория',
+  search:         'Поиск',
+  merchant_page:  'Продавец',
+  promotion_page: 'Акция',
+};
+
+export interface ShowcaseSlot {
+  id: string;
+  /** Slot # — 1 = first, 2 = second, etc. */
+  slotNumber: number;
+  productId: string;
+  productName: string;
+  location: ShowcaseLocation;
+  /** locationContext: category id / merchant id / promo id depending on location. */
+  locationContext?: string;
+  active: boolean;
+  addedBy: string;
+  addedByRole: string;
+  addedAt: string;
+}
+
+export const SHOWCASE_INITIAL: ShowcaseSlot[] = [
+  { id: 'show-001', slotNumber: 1, productId: 'p-001', productName: 'iPhone 15 Pro 256 GB',          location: 'home', active: true,  addedBy: 'Супер Админ',  addedByRole: 'SuperAdmin',           addedAt: '01.02.2026 10:00' },
+  { id: 'show-002', slotNumber: 2, productId: 'p-008', productName: 'Пицца «Маргарита» 30 см',       location: 'home', active: true,  addedBy: 'Карпова А.И.', addedByRole: 'Showcase Manager',     addedAt: '10.02.2026 09:30' },
+  { id: 'show-003', slotNumber: 3, productId: 'p-006', productName: 'Кроссовки Nike Air 42',         location: 'home', active: true,  addedBy: 'Иванов И.И.',  addedByRole: 'Manager',              addedAt: '05.02.2026 11:00' },
+  { id: 'show-004', slotNumber: 4, productId: 'p-c01', productName: 'PVZ · Брендированный картон',   location: 'home', active: false, addedBy: 'Супер Админ',  addedByRole: 'SuperAdmin',           addedAt: '01.02.2026 10:30' },
 ];
 
 export interface ProductCategory {

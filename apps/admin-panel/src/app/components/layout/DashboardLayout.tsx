@@ -45,6 +45,7 @@ import {
   Image as ImageIcon,
   TrendingUp,
   Sparkles,
+  Crown,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -81,6 +82,7 @@ export function DashboardLayout() {
     p.startsWith('/products/own') ||
     p.startsWith('/products/popular') ||
     p.startsWith('/products/recommended') ||
+    p.startsWith('/products/showcase') ||
     p.startsWith('/products/categories') ||
     p.startsWith('/products/media');
 
@@ -181,6 +183,7 @@ export function DashboardLayout() {
         { name: 'Товары нашей фирмы', href: '/products/own',         icon: ShieldCheck },
         { name: 'Популярные',         href: '/products/popular',     icon: TrendingUp },
         { name: 'Рекомендуемые',      href: '/products/recommended', icon: Sparkles },
+        { name: 'Витрина / Первые ряды', href: '/products/showcase', icon: Crown },
         { name: 'Категории',          href: '/products/categories',  icon: Layers },
         { name: 'Медиа товаров',      href: '/products/media',       icon: ImageIcon },
       ],
