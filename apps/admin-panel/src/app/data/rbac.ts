@@ -742,6 +742,35 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
       'foreign_delivery.accounting_export',
     ],
   },
+  // ── External / mobile-app preview roles ────────────────────────────────────
+  // These don't actually do anything in the admin panel — they exist so
+  // SuperAdmin can test "what does the sidebar look like for a courier?"
+  // by impersonating them. Permissions are minimal / self-only.
+  {
+    id: 'r-courier', name: 'Courier', label: 'Курьер (мобильное прил.)',
+    description: 'Только свои доставки. Используется для preview, реальный кабинет — в курьерском приложении.',
+    color: 'yellow', isSystem: true, active: true, users: 0,
+    permissions: [
+      ...m('dashboard', 'view'),
+      ...m('orders', 'view'),
+    ],
+  },
+  {
+    id: 'r-customer', name: 'Customer', label: 'Покупатель (preview)',
+    description: 'Минимальный набор для preview. Покупатель не пользуется админкой.',
+    color: 'gray', isSystem: true, active: true, users: 0,
+    permissions: [],
+  },
+  {
+    id: 'r-seller', name: 'Seller', label: 'Продавец (preview)',
+    description: 'Только свои товары и заказы. Реальный кабинет — в Seller Portal.',
+    color: 'green', isSystem: true, active: true, users: 0,
+    permissions: [
+      ...m('dashboard', 'view'),
+      ...m('products', 'view'),
+      ...m('orders', 'view'),
+    ],
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

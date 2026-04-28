@@ -16,6 +16,8 @@ export type Role =
   | 'ShowcaseManager' | 'MarketingManager' | 'SecurityOfficer' | 'Analyst'
   // Foreign delivery roles
   | 'PolandFinance' | 'TurkmenistanOperator' | 'SupplierAccountant'
+  // External / preview roles
+  | 'Customer' | 'Seller'
   // Legacy
   | 'RegionalManager' | 'PVZOperator' | 'Warehouse' | 'Courier' | 'Finance'
   | 'Support' | 'QA' | 'Partner' | 'Merchant'

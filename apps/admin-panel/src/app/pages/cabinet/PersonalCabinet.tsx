@@ -121,6 +121,118 @@ const ROLE_KPIS: Record<string, KPI[]> = {
     { label: 'Доход за месяц',   value: '₽124K',  sub: 'агентская доля',trend: 'up',      trendVal: '+₽9K',         color: 'orange', icon: DollarSign,href: '/finance' },
     { label: 'Рейтинг партнёра', value: '4.91',   sub: 'из 5.00',       trend: 'up',      trendVal: '+0.01',        color: 'purple', icon: Star,      href: '/analytics' },
   ],
+  // ── New roles (batch 13) ──────────────────────────────────────────────────
+  Accountant: [
+    { label: 'К сверке',           value: '14',         sub: 'на этой неделе',    trend: 'neutral', trendVal: 'в работе', color: 'orange', icon: AlertCircle, href: '/accounting/reconciliations' },
+    { label: 'Налогов к уплате',   value: '₽284K',      sub: 'до 25.02',          trend: 'down',    trendVal: 'срок',     color: 'red',    icon: DollarSign,  href: '/accounting/taxes' },
+    { label: 'Готовых отчётов',    value: '24',         sub: 'за период',         trend: 'up',      trendVal: '+6',       color: 'green',  icon: FileText,    href: '/accounting/reports' },
+    { label: 'Закрыто за месяц',   value: '₽4.2 млн',   sub: 'операций',          trend: 'up',      trendVal: '+12%',     color: 'blue',   icon: TrendingUp,  href: '/accounting' },
+  ],
+  ChiefAccountant: [
+    { label: 'Утверждений ждут',  value: '8',           sub: 'крупных выплат',    trend: 'neutral', trendVal: 'на проверке', color: 'orange', icon: AlertCircle, href: '/finance/payouts' },
+    { label: 'Налоговые отчёты',  value: '3',           sub: 'готовы к подаче',   trend: 'up',      trendVal: 'все ОК',     color: 'green',  icon: FileText,    href: '/accounting/taxes' },
+    { label: 'Сверки',            value: '12',          sub: 'закрыты',           trend: 'up',      trendVal: '+4',         color: 'blue',   icon: CheckCircle2,href: '/accounting/reconciliations' },
+    { label: 'Финансовый архив',  value: '24 мес.',     sub: 'доступен',           trend: 'neutral', trendVal: 'полный',     color: 'purple', icon: Package,    href: '/accounting/exports' },
+  ],
+  Lawyer: [
+    { label: 'Открытые споры',    value: '6',           sub: '2 в суде',          trend: 'down',    trendVal: '−1',         color: 'red',    icon: AlertTriangle, href: '/legal/disputes' },
+    { label: 'Активные договоры', value: '142',         sub: '6 истекают',         trend: 'neutral', trendVal: 'плановое',   color: 'green',  icon: FileText,      href: '/legal/contracts' },
+    { label: 'Претензии',         value: '11',          sub: '5 в работе',         trend: 'down',    trendVal: '−2',         color: 'orange', icon: AlertCircle,   href: '/legal/claims' },
+    { label: 'Документов',        value: '24',          sub: 'в работе',           trend: 'up',      trendVal: '+3',         color: 'blue',   icon: Package,      href: '/legal/documents' },
+  ],
+  ComplianceManager: [
+    { label: 'На проверке',       value: '18',          sub: 'документов',        trend: 'neutral', trendVal: 'в очереди',  color: 'orange', icon: ShieldCheck,   href: '/compliance' },
+    { label: 'Одобрено сегодня',  value: '12',          sub: 'документов',         trend: 'up',      trendVal: '+5',         color: 'green',  icon: CheckCircle2,  href: '/compliance' },
+    { label: 'Заблокированных',   value: '2',           sub: 'продавца',           trend: 'down',    trendVal: 'риск',       color: 'red',    icon: AlertTriangle, href: '/merchants' },
+    { label: 'Аудит-лог',         value: '524',         sub: 'записи',             trend: 'up',      trendVal: 'за неделю',  color: 'purple', icon: FileText,      href: '/security/audit' },
+  ],
+  SupportAgent: [
+    { label: 'Открытых тикетов',  value: '8',           sub: 'в моей очереди',    trend: 'down',    trendVal: '-3',         color: 'blue',   icon: Inbox,         href: '/support/tickets' },
+    { label: 'Активных чатов',    value: '4',           sub: 'идут сейчас',        trend: 'neutral', trendVal: 'в реальном времени', color: 'green', icon: MessageSquare, href: '/chat' },
+    { label: 'Эскалаций',         value: '2',           sub: 'к юристу/финансам',  trend: 'neutral', trendVal: 'передано',  color: 'orange', icon: ArrowUpRight,   href: '/legal/complaints' },
+    { label: 'CSAT за неделю',    value: '96%',         sub: 'удовлетворённость',  trend: 'up',      trendVal: '+2%',        color: 'purple', icon: Star,           href: '/analytics' },
+  ],
+  OperationsManager: [
+    { label: 'Заказов в работе',  value: '12 847',      sub: 'по сети',            trend: 'up',      trendVal: '+8.2%',     color: 'blue',   icon: Package,       href: '/orders' },
+    { label: 'SLA выдержан',      value: '96.4%',       sub: 'за сегодня',         trend: 'up',      trendVal: '+0.4%',     color: 'green',  icon: CheckCircle2,  href: '/logistics' },
+    { label: 'Курьеров на маршрутах', value: '89',      sub: 'из 102 активных',   trend: 'neutral', trendVal: 'норма',    color: 'orange', icon: Bike,          href: '/couriers' },
+    { label: 'Загрузка складов',   value: '78%',        sub: 'средняя',            trend: 'neutral', trendVal: 'оптимум',  color: 'purple', icon: Warehouse,     href: '/warehouses' },
+  ],
+  PVZManager: [
+    { label: 'Принято за смену',  value: '142',         sub: 'посылок',            trend: 'up',      trendVal: '+12 к норме', color: 'blue',  icon: Package,      href: '/pvz' },
+    { label: 'Выдано',            value: '128',         sub: 'клиентам',           trend: 'up',      trendVal: 'норма',     color: 'green',  icon: CheckCircle2, href: '/orders' },
+    { label: 'Возвратов',         value: '7',           sub: 'на оформлении',      trend: 'neutral', trendVal: 'в работе', color: 'orange', icon: RotateCcw,    href: '/orders' },
+    { label: 'Касса смены',       value: '₽184K',       sub: 'оборот',             trend: 'up',      trendVal: '+8%',      color: 'purple', icon: DollarSign,   href: '/finance' },
+  ],
+  WarehouseManager: [
+    { label: 'Поставок сегодня',  value: '8',           sub: 'единиц',             trend: 'up',      trendVal: '+2',       color: 'blue',  icon: Truck,         href: '/warehouses' },
+    { label: 'Отгружено',         value: '184',         sub: 'заказов',            trend: 'up',      trendVal: '+18%',     color: 'green', icon: Package,       href: '/orders' },
+    { label: 'Низкий остаток',    value: '12',          sub: 'позиций',            trend: 'down',    trendVal: 'нужно пополнить', color: 'orange', icon: AlertTriangle, href: '/warehouses' },
+    { label: 'Персонал смены',    value: '14',          sub: 'на месте',           trend: 'neutral', trendVal: 'норма',    color: 'purple', icon: Users,         href: '/users' },
+  ],
+  CourierManager: [
+    { label: 'Курьеров в смене',  value: '54',          sub: 'на маршрутах',       trend: 'up',     trendVal: '+3',        color: 'blue',  icon: Bike,         href: '/couriers' },
+    { label: 'Доставок сегодня',  value: '342',         sub: 'выполнено',          trend: 'up',     trendVal: '+18%',      color: 'green', icon: CheckCircle2, href: '/orders' },
+    { label: 'Проблемных',        value: '5',           sub: 'требуют решения',    trend: 'down',   trendVal: '−2',        color: 'orange',icon: AlertCircle,  href: '/support/tickets' },
+    { label: 'Средний SLA',       value: '94.2%',       sub: 'на этой неделе',     trend: 'up',     trendVal: '+1.4%',     color: 'purple',icon: Timer,        href: '/logistics' },
+  ],
+  ProductManager: [
+    { label: 'Товаров в каталоге',value: '4 821',       sub: 'активных',           trend: 'up',     trendVal: '+18',       color: 'blue',  icon: Package,      href: '/products' },
+    { label: 'На модерации',      value: '14',          sub: 'требуют проверки',   trend: 'neutral',trendVal: 'в очереди', color: 'orange',icon: AlertCircle,  href: '/products' },
+    { label: 'Категории',         value: '12',          sub: 'активных',           trend: 'neutral',trendVal: 'стабильно', color: 'green', icon: Layers,       href: '/products/categories' },
+    { label: 'Медиа',             value: '14 832',      sub: 'фото и видео',       trend: 'up',     trendVal: '+128',      color: 'purple',icon: Eye,          href: '/products/media' },
+  ],
+  ShowcaseManager: [
+    { label: 'В витрине',         value: '24',          sub: 'товара на главной',  trend: 'neutral',trendVal: 'без изменений', color: 'blue', icon: Star,        href: '/products/showcase' },
+    { label: 'Популярные',        value: '18',          sub: 'закреплено',         trend: 'up',     trendVal: '+3',        color: 'green', icon: TrendingUp,   href: '/products/popular' },
+    { label: 'Рекомендуемые',     value: '32',          sub: 'активных',           trend: 'up',     trendVal: '+2',        color: 'purple',icon: Star,         href: '/products/recommended' },
+    { label: 'Продвижение',       value: '8',           sub: 'кампаний',           trend: 'neutral',trendVal: 'идут',      color: 'orange',icon: Zap,          href: '/products/campaigns' },
+  ],
+  MarketingManager: [
+    { label: 'Акций активных',    value: '8',           sub: 'идут сейчас',        trend: 'up',     trendVal: '+2',        color: 'blue',  icon: Zap,          href: '/products/promotions' },
+    { label: 'Скидок',            value: '24',          sub: 'опубликованных',     trend: 'up',     trendVal: '+6',        color: 'green', icon: Hash,         href: '/products/discounts' },
+    { label: 'CTR кампаний',      value: '4.2%',        sub: 'за неделю',          trend: 'up',     trendVal: '+0.4%',     color: 'purple',icon: BarChart2,    href: '/reports/marketing' },
+    { label: 'Конверсия',         value: '8.7%',        sub: 'из показа в заказ',  trend: 'up',     trendVal: '+1.2%',     color: 'orange',icon: TrendingUp,   href: '/analytics' },
+  ],
+  SecurityOfficer: [
+    { label: 'Активные сессии',   value: '142',         sub: 'пользователей',      trend: 'neutral',trendVal: 'норма',     color: 'blue',  icon: Activity,     href: '/security/center' },
+    { label: 'Подозрит. входов',  value: '3',           sub: 'требуют проверки',   trend: 'down',   trendVal: '−2',        color: 'red',   icon: AlertTriangle,href: '/security/center' },
+    { label: 'IP-блокировок',     value: '14',          sub: 'активных',           trend: 'neutral',trendVal: 'правила',   color: 'orange',icon: Shield,       href: '/security/center' },
+    { label: 'Audit за день',     value: '1 248',       sub: 'событий',            trend: 'up',     trendVal: '+184',      color: 'purple',icon: FileText,     href: '/security/audit' },
+  ],
+  Analyst: [
+    { label: 'Готовых отчётов',   value: '86',          sub: 'за месяц',           trend: 'up',     trendVal: '+18',       color: 'blue',  icon: FileText,     href: '/reports' },
+    { label: 'Выгрузок',          value: '142',         sub: 'CSV/XLS',            trend: 'up',     trendVal: '+24',       color: 'green', icon: Download,     href: '/reports' },
+    { label: 'Дашборды',          value: '12',          sub: 'обновляются',        trend: 'neutral',trendVal: 'realtime',  color: 'purple',icon: BarChart3,    href: '/analytics' },
+    { label: 'Точек данных',      value: '4.2M',        sub: 'обработано',         trend: 'up',     trendVal: '+340K',     color: 'orange',icon: PieChart,     href: '/analytics' },
+  ],
+  PolandFinance: [
+    { label: 'Поступило сегодня', value: '€12 480',     sub: 'PLN+EUR счёт',       trend: 'up',     trendVal: '+18%',      color: 'blue',  icon: DollarSign,   href: '/foreign-delivery/orders' },
+    { label: 'Маржа Польши',      value: '€2 184',      sub: 'после расходов',     trend: 'up',     trendVal: '+8%',       color: 'green', icon: TrendingUp,   href: '/foreign-delivery/monthly-settlement' },
+    { label: 'Долг → TM',         value: '12 840 TMT',  sub: 'требует расчёта',    trend: 'down',   trendVal: 'стандарт',  color: 'red',   icon: ArrowUpRight, href: '/foreign-delivery/intercompany-debt' },
+    { label: 'Открытых заказов',  value: '6',           sub: 'foreign_paid_local', trend: 'neutral',trendVal: 'идут',      color: 'orange',icon: Package,      href: '/foreign-delivery/orders' },
+  ],
+  TurkmenistanOperator: [
+    { label: 'Заказов в работе',   value: '6',          sub: 'на исполнении',       trend: 'up',     trendVal: '+1',        color: 'blue',  icon: Package,      href: '/foreign-delivery/local-fulfillment' },
+    { label: 'У продавцов',        value: '5',          sub: 'активных',            trend: 'neutral',trendVal: 'стабильно', color: 'green', icon: Store,        href: '/foreign-delivery/local-sellers' },
+    { label: 'Доставлено сегодня', value: '4',          sub: 'заказов',             trend: 'up',     trendVal: '+2',        color: 'purple',icon: Truck,        href: '/foreign-delivery/orders' },
+    { label: 'Документов',         value: '12',         sub: 'на загрузке',         trend: 'neutral',trendVal: 'в работе',  color: 'orange',icon: FileText,     href: '/foreign-delivery/documents' },
+  ],
+  SupplierAccountant: [
+    { label: 'Открытых invoices',  value: '3',          sub: 'CN/TR/DE',            trend: 'down',   trendVal: '−1',        color: 'orange',icon: AlertCircle,  href: '/foreign-delivery/supplier-payables' },
+    { label: 'Просрочено',         value: '1',          sub: 'инвойс',              trend: 'down',   trendVal: '−2',        color: 'red',   icon: AlertTriangle,href: '/foreign-delivery/supplier-payables' },
+    { label: 'Поставщиков',        value: '5',          sub: 'активных',            trend: 'neutral',trendVal: 'стабильно', color: 'blue',  icon: Globe,        href: '/foreign-delivery/suppliers' },
+    { label: 'К оплате',           value: '24 800 CNY', sub: 'по всем валютам',     trend: 'neutral',trendVal: 'плановое',  color: 'purple',icon: DollarSign,   href: '/foreign-delivery/supplier-payables' },
+  ],
+  Customer: [
+    { label: 'Покупатель',         value: 'Клиент',     sub: 'preview-режим',       trend: 'neutral',trendVal: 'mobile app',color: 'blue',  icon: Users,        href: '/' },
+    { label: 'Информация',         value: 'Mock',       sub: 'кабинет в моб. прил.',trend: 'neutral',trendVal: 'preview',   color: 'gray',  icon: Eye,          href: '/' },
+  ],
+  Seller: [
+    { label: 'Мои товары',         value: '183',        sub: 'в каталоге',          trend: 'up',     trendVal: '+3',        color: 'blue',  icon: Package,      href: '/products' },
+    { label: 'Заказы сегодня',     value: '47',         sub: 'по моим товарам',     trend: 'up',     trendVal: '+12%',      color: 'green', icon: Package,      href: '/orders' },
+    { label: 'Кабинет продавца',   value: 'Seller Portal', sub: 'полный — там',     trend: 'neutral',trendVal: 'preview',   color: 'gray',  icon: Globe,        href: '/' },
+  ],
 };
 
 // ─── Role-specific quick actions ──────────────────────────────────────────────
@@ -195,6 +307,117 @@ const ROLE_ACTIONS: Record<string, QuickAction[]> = {
     { label: 'Финансовый отчёт', desc: 'Доходы и выплаты', href: '/finance', icon: DollarSign, color: 'green' },
     { label: 'Заказы через мои ПВЗ', desc: 'Операции за период', href: '/orders', icon: Package, color: 'orange' },
     { label: 'Аналитика', desc: 'Производительность', href: '/analytics', icon: BarChart3, color: 'purple' },
+  ],
+  // ── New roles (batch 13) ──────────────────────────────────────────────────
+  Accountant: [
+    { label: 'Сверки', desc: 'Подтверждать платежи', href: '/accounting/reconciliations', icon: CheckCircle2, color: 'orange', primary: true },
+    { label: 'Налоги', desc: 'Декларации и платёжки', href: '/accounting/taxes', icon: FileText, color: 'red' },
+    { label: 'Отчёты', desc: 'Книги, обороты, экспорт', href: '/accounting/reports', icon: BarChart3, color: 'blue' },
+    { label: 'Выплаты', desc: 'Подготовка к выплатам', href: '/finance/payouts', icon: DollarSign, color: 'green' },
+    { label: 'Возвраты', desc: 'Реестр возвратов', href: '/finance/refunds', icon: RotateCcw, color: 'purple' },
+    { label: 'Экспорт', desc: 'CSV/XLS/1C', href: '/accounting/exports', icon: Download, color: 'gray' },
+  ],
+  ChiefAccountant: [
+    { label: 'Утвердить выплаты', desc: 'Крупные операции', href: '/finance/payouts', icon: ShieldCheck, color: 'red', primary: true },
+    { label: 'Закрыть месяц', desc: 'Foreign-delivery monthly', href: '/foreign-delivery/monthly-settlement', icon: CheckCircle2, color: 'green' },
+    { label: 'Налоги', desc: 'Налоговый архив', href: '/accounting/taxes', icon: FileText, color: 'orange' },
+    { label: 'Сверки', desc: 'Подписать акты', href: '/accounting/reconciliations', icon: CheckSquare, color: 'blue' },
+    { label: 'Audit', desc: 'Финансовых операций', href: '/security/audit', icon: Shield, color: 'purple' },
+    { label: 'Архив отчётов', desc: 'Все периоды', href: '/accounting/exports', icon: Download, color: 'gray' },
+  ],
+  Lawyer: [
+    { label: 'Открытые споры', desc: '6 в работе, 2 в суде', href: '/legal/disputes', icon: AlertTriangle, color: 'red', primary: true },
+    { label: 'Договоры', desc: '142 активных', href: '/legal/contracts', icon: FileText, color: 'green' },
+    { label: 'Претензии', desc: '11 на рассмотрении', href: '/legal/claims', icon: AlertCircle, color: 'orange' },
+    { label: 'Жалобы', desc: 'Из поддержки', href: '/legal/complaints', icon: MessageSquare, color: 'blue' },
+    { label: 'Документы', desc: 'Запрос / проверка', href: '/legal/documents', icon: Package, color: 'purple' },
+    { label: 'Юр. отчёты', desc: 'Реестры и сводки', href: '/legal/reports', icon: BarChart3, color: 'gray' },
+  ],
+  ComplianceManager: [
+    { label: 'Проверка документов', desc: 'Очередь модерации', href: '/compliance', icon: ShieldCheck, color: 'blue', primary: true },
+    { label: 'Продавцы', desc: 'Профили и риски', href: '/merchants', icon: Store, color: 'green' },
+    { label: 'Audit log', desc: 'Все события системы', href: '/security/audit', icon: FileText, color: 'purple' },
+  ],
+  SupportAgent: [
+    { label: 'Тикеты', desc: 'Моя очередь', href: '/support/tickets', icon: Inbox, color: 'blue', primary: true },
+    { label: 'Чат', desc: 'Активные диалоги', href: '/chat', icon: MessageSquare, color: 'green' },
+    { label: 'Жалобы', desc: 'Эскалация в legal', href: '/legal/complaints', icon: AlertTriangle, color: 'orange' },
+    { label: 'Заказы', desc: 'Просмотр для клиентов', href: '/orders', icon: Package, color: 'gray' },
+  ],
+  OperationsManager: [
+    { label: 'Заказы', desc: 'Все в работе', href: '/orders', icon: Package, color: 'blue', primary: true },
+    { label: 'Курьеры', desc: 'Назначить / маршруты', href: '/couriers', icon: Bike, color: 'green' },
+    { label: 'Логистика', desc: 'Дашборд SLA', href: '/logistics', icon: Route, color: 'purple' },
+    { label: 'Склады', desc: 'Загрузка', href: '/warehouses', icon: Warehouse, color: 'orange' },
+  ],
+  PVZManager: [
+    { label: 'Сканер', desc: 'Приём / выдача', href: '/pvz/scan', icon: Scan, color: 'blue', primary: true },
+    { label: 'Заказы ПВЗ', desc: 'Сегодняшние', href: '/orders', icon: Package, color: 'green' },
+    { label: 'Возвраты', desc: 'Оформление', href: '/orders', icon: RotateCcw, color: 'orange' },
+  ],
+  WarehouseManager: [
+    { label: 'Поставки', desc: 'Принять', href: '/warehouses', icon: Truck, color: 'blue', primary: true },
+    { label: 'Отгрузка', desc: 'По заказам', href: '/orders', icon: Package, color: 'green' },
+    { label: 'Остатки', desc: 'Низкий уровень', href: '/warehouses', icon: AlertTriangle, color: 'orange' },
+  ],
+  CourierManager: [
+    { label: 'Назначить заказ', desc: 'Курьерам', href: '/orders', icon: Send, color: 'blue', primary: true },
+    { label: 'Курьеры', desc: 'Все на смене', href: '/couriers', icon: Bike, color: 'green' },
+    { label: 'Маршруты', desc: 'Оптимизация', href: '/logistics', icon: Route, color: 'purple' },
+  ],
+  ProductManager: [
+    { label: 'Каталог', desc: 'Все товары', href: '/products', icon: Package, color: 'blue', primary: true },
+    { label: 'Категории', desc: 'Дерево категорий', href: '/products/categories', icon: Layers, color: 'green' },
+    { label: 'Медиа', desc: 'Фото и видео', href: '/products/media', icon: Eye, color: 'purple' },
+    { label: 'Наша фирма', desc: 'PVZ-brand', href: '/products/own', icon: ShieldCheck, color: 'orange' },
+  ],
+  ShowcaseManager: [
+    { label: 'Витрина', desc: 'Первые ряды', href: '/products/showcase', icon: Star, color: 'blue', primary: true },
+    { label: 'Популярные', desc: 'Закрепить / убрать', href: '/products/popular', icon: TrendingUp, color: 'green' },
+    { label: 'Рекомендации', desc: 'По аудиториям', href: '/products/recommended', icon: Star, color: 'purple' },
+    { label: 'Кампании', desc: 'Push + продвижение', href: '/products/campaigns', icon: Zap, color: 'orange' },
+  ],
+  MarketingManager: [
+    { label: 'Акции', desc: 'Создать / редактировать', href: '/products/promotions', icon: Zap, color: 'blue', primary: true },
+    { label: 'Скидки', desc: 'Глобальные', href: '/products/discounts', icon: Hash, color: 'green' },
+    { label: 'Маркетинг отчёты', desc: 'CTR / конверсия', href: '/reports/marketing', icon: BarChart3, color: 'purple' },
+  ],
+  SecurityOfficer: [
+    { label: 'Центр безопасности', desc: 'Сессии · IP · токены', href: '/security/center', icon: Shield, color: 'blue', primary: true },
+    { label: 'Audit log', desc: 'Все события', href: '/security/audit', icon: FileText, color: 'purple' },
+    { label: 'RBAC', desc: 'Роли и права', href: '/security/rbac', icon: ShieldCheck, color: 'red' },
+  ],
+  Analyst: [
+    { label: 'Аналитика', desc: 'Дашборды', href: '/analytics', icon: BarChart3, color: 'blue', primary: true },
+    { label: 'Отчёты', desc: 'Все категории', href: '/reports', icon: FileText, color: 'green' },
+    { label: 'Заказы', desc: 'Read-only', href: '/orders', icon: Package, color: 'purple' },
+  ],
+  PolandFinance: [
+    { label: 'Зарубежные заказы', desc: 'Foreign paid local delivery', href: '/foreign-delivery/orders', icon: Globe, color: 'blue', primary: true },
+    { label: 'Settlement Cards', desc: 'По каждому заказу', href: '/foreign-delivery/settlement-cards', icon: FileText, color: 'green' },
+    { label: 'Месячный отчёт', desc: 'Маржа Польши', href: '/foreign-delivery/monthly-settlement', icon: BarChart3, color: 'purple' },
+    { label: 'Долги между компаниями', desc: 'Польша ↔ TM', href: '/foreign-delivery/intercompany-debt', icon: ArrowUpRight, color: 'orange' },
+    { label: 'Экспорт', desc: 'Для бухгалтера', href: '/foreign-delivery/accounting-export', icon: Download, color: 'gray' },
+  ],
+  TurkmenistanOperator: [
+    { label: 'Локальное исполнение', desc: 'Workflow заказов', href: '/foreign-delivery/local-fulfillment', icon: Truck, color: 'blue', primary: true },
+    { label: 'Местные продавцы', desc: 'Магазины / склады', href: '/foreign-delivery/local-sellers', icon: Store, color: 'green' },
+    { label: 'Расчёты с продавцами', desc: 'Выплаты', href: '/foreign-delivery/seller-settlements', icon: DollarSign, color: 'orange' },
+    { label: 'Документы', desc: 'Загрузить / проверить', href: '/foreign-delivery/documents', icon: FileText, color: 'purple' },
+  ],
+  SupplierAccountant: [
+    { label: 'Поставщики', desc: 'CN / TR / DE / TM', href: '/foreign-delivery/suppliers', icon: Globe, color: 'blue', primary: true },
+    { label: 'Задолженность', desc: 'Invoice — статусы', href: '/foreign-delivery/supplier-payables', icon: AlertCircle, color: 'red' },
+    { label: 'Документы', desc: 'Invoice + проверка', href: '/foreign-delivery/documents', icon: FileText, color: 'orange' },
+    { label: 'Экспорт', desc: 'Для бухгалтера', href: '/foreign-delivery/accounting-export', icon: Download, color: 'green' },
+  ],
+  Customer: [
+    { label: 'Mobile App', desc: 'Кабинет покупателя — в моб. прил.', href: '/', icon: Globe, color: 'gray', primary: true },
+  ],
+  Seller: [
+    { label: 'Seller Portal', desc: 'Полный кабинет продавца', href: '/', icon: Globe, color: 'blue', primary: true },
+    { label: 'Мои товары', desc: 'Каталог', href: '/products', icon: Package, color: 'green' },
+    { label: 'Заказы', desc: 'По моим товарам', href: '/orders', icon: Package, color: 'purple' },
   ],
 };
 

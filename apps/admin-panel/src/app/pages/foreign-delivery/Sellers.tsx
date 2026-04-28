@@ -4,9 +4,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import ReactDOM from 'react-dom';
 import {
   Store, Search, Plus, Lock, Star, FileText, Download, HandCoins,
-  Phone, MapPin, ArrowRight, Pencil, CheckCircle2,
+  Phone, MapPin, ArrowRight, Pencil, CheckCircle2, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Locked } from '../../components/rbac/PermissionLock';
@@ -36,6 +37,36 @@ export function LocalSellers() {
   const [sellers, setSellers] = useState<LocalSeller[]>(LOCAL_SELLERS);
   const [search, setSearch]   = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | SellerType>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [draft, setDraft] = useState<Partial<LocalSeller>>({
+    name: '', type: 'shop', contactName: '', phone: '', address: '',
+    status: 'pending_verification', contract: 'pending',
+  });
+
+  function createSeller() {
+    if (!canManage) return;
+    if (!draft.name?.trim()) { toast.error('Введите название'); return; }
+    if (!draft.contactName?.trim()) { toast.error('Введите контактное лицо'); return; }
+    const id = `s-${Date.now()}`;
+    const newSeller: LocalSeller = {
+      sellerId:    id,
+      name:        draft.name!.trim(),
+      type:        draft.type ?? 'shop',
+      contactName: draft.contactName!.trim(),
+      phone:       draft.phone?.trim() ?? '',
+      address:     draft.address?.trim() ?? '',
+      status:      draft.status ?? 'pending_verification',
+      contract:    draft.contract ?? 'pending',
+      rating: 0, qualityScore: 0, ordersCount: 0,
+      totalDue: 0, totalPaid: 0, outstanding: 0,
+      documents: [], createdAt: new Date().toLocaleDateString('ru-RU'),
+    };
+    setSellers(prev => [newSeller, ...prev]);
+    LOCAL_SELLERS.unshift(newSeller);
+    setCreateOpen(false);
+    setDraft({ name: '', type: 'shop', contactName: '', phone: '', address: '', status: 'pending_verification', contract: 'pending' });
+    toast.success(`Создан продавец: ${newSeller.name}`);
+  }
 
   const filtered = useMemo(() => sellers.filter(s => {
     const q = search.toLowerCase();
@@ -87,7 +118,8 @@ export function LocalSellers() {
             <Download className="w-4 h-4" />Экспорт
           </button>
           <Locked perm="foreign_delivery.local_sellers.manage">
-            <button disabled={!canManage} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold">
+            <button onClick={() => setCreateOpen(true)} disabled={!canManage}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold">
               <Plus className="w-4 h-4" />Добавить продавца
             </button>
           </Locked>
@@ -164,6 +196,65 @@ export function LocalSellers() {
           </div>
         )}
       </div>
+
+      {/* Create modal */}
+      {createOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setCreateOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Новый продавец</p>
+              <button onClick={() => setCreateOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Название *</label>
+                <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} autoFocus
+                  placeholder="Магазин «Гулистан»"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Тип</label>
+                <select value={draft.type} onChange={e => setDraft(d => ({ ...d, type: e.target.value as SellerType }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white">
+                  {Object.entries(SELLER_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Договор</label>
+                <select value={draft.contract} onChange={e => setDraft(d => ({ ...d, contract: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white">
+                  <option value="pending">Ожидает</option>
+                  <option value="has">Есть</option>
+                  <option value="missing">Нет</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Контакт *</label>
+                <input value={draft.contactName} onChange={e => setDraft(d => ({ ...d, contactName: e.target.value }))}
+                  placeholder="Огулджемал М."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Телефон</label>
+                <input value={draft.phone} onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))}
+                  placeholder="+993 12 444-001"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Адрес</label>
+                <input value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))}
+                  placeholder="Ашхабад, ул. Магтымгулы 14"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex gap-3">
+              <button onClick={() => setCreateOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={createSeller} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Создать</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

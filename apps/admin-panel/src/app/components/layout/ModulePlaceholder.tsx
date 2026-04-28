@@ -1,38 +1,52 @@
 /**
- * ModulePlaceholder — minimal but real-looking page used by sidebar entries
- * that don't have a dedicated screen yet (Accounting subsections, Legal,
- * Reports children, Finance commissions/taxes, etc).
+ * ModulePlaceholder — reusable real-looking page used by sidebar entries
+ * that don't have a dedicated screen yet (Accounting, Legal, Reports, etc).
  *
- * Renders:
- *  - Header with icon + title + permission badges
- *  - 4 KPI cards (provided by caller)
- *  - Search bar
- *  - Sample table rows (caller passes column definitions + mock rows)
- *  - Action footer with PermissionLock-aware buttons
- *
- * The point: even gated pages look like real working screens, not "404 stub".
+ * Now interactive:
+ *  - KPI cards accept `kpiHref` (Link) or `kpiOnClick` (handler) and
+ *    become real navigation / filter buttons.
+ *  - Each row gets `onClick` when caller passes `onRowClick` — opens
+ *    its detail drawer.
+ *  - Header actions: caller may override the default Export / Add
+ *    handlers via `onExport` / `onCreate` (CSV download is built-in).
+ *  - Search box is wired to `searchValue` / `onSearchChange` props,
+ *    falls back to internal state when uncontrolled.
  */
-import { Search, Download, Plus, FileText, Lock } from 'lucide-react';
-import { ReactNode } from 'react';
+import { Search, Download, Plus, FileText, Lock, ChevronRight } from 'lucide-react';
+import { ReactNode, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Locked } from '../rbac/PermissionLock';
+import { exportToCsv } from '../../utils/downloads';
 
-interface KPI {
+export interface KPI {
   label: string;
   value: string | number;
   hint?: string;
-  color?: 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'gray';
+  color?: 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'gray' | 'amber' | 'rose';
+  /** When set, KPI renders as `<Link to={...}>` */
+  href?:    string;
+  /** When set, KPI renders as `<button onClick={...}>` */
+  onClick?: () => void;
+  /** Visual highlight when selected (e.g. when filter is active). */
+  active?:  boolean;
 }
 
-interface Column {
+export interface Column {
   key:    string;
   label:  string;
   align?: 'left' | 'right' | 'center';
   className?: string;
 }
 
+export interface PlaceholderRow {
+  /** Optional original record id, used as React key + drawer payload. */
+  id?: string;
+  [key: string]: any;
+}
+
 interface Props {
-  /** Permission base, e.g. 'accounting' or 'legal.contracts'. Used for action gating. */
+  /** Permission base, e.g. 'accounting' or 'legal.contracts'. */
   permKey: string;
   icon:    any;
   title:   string;
@@ -41,13 +55,26 @@ interface Props {
   section?: string;
   kpis?:   KPI[];
   columns?: Column[];
-  rows?:    Record<string, any>[];
+  rows?:    PlaceholderRow[];
   /** Empty-state message when no rows are provided. */
   emptyText?: string;
   /** Optional extra slot above the table. */
   toolbarExtra?: ReactNode;
   /** Optional explanatory note. */
   note?: ReactNode;
+  /** Search input wiring (uncontrolled if both omitted). */
+  searchValue?: string;
+  onSearchChange?: (q: string) => void;
+  /** Per-row click handler (opens drawer). */
+  onRowClick?: (row: PlaceholderRow) => void;
+  /** Custom Export handler. Defaults to CSV download of `rows`. */
+  onExport?: () => void;
+  /** Custom Add handler. When omitted, the button is disabled. */
+  onCreate?: () => void;
+  /** Optional extra header buttons (e.g. "Audit", "Filter"). */
+  headerExtra?: ReactNode;
+  /** Hide the default Add button (e.g. for read-only sections). */
+  hideCreate?: boolean;
 }
 
 const KPI_COLOR: Record<NonNullable<KPI['color']>, string> = {
@@ -57,16 +84,24 @@ const KPI_COLOR: Record<NonNullable<KPI['color']>, string> = {
   red:    'bg-red-50 border-red-200 text-red-700',
   purple: 'bg-purple-50 border-purple-200 text-purple-700',
   gray:   'bg-white border-gray-200 text-gray-800',
+  amber:  'bg-amber-50 border-amber-200 text-amber-700',
+  rose:   'bg-rose-50 border-rose-200 text-rose-700',
 };
 
 export function ModulePlaceholder({
   permKey, icon: Icon, title, subtitle, section,
   kpis = [], columns = [], rows = [], emptyText, toolbarExtra, note,
+  searchValue, onSearchChange, onRowClick,
+  onExport, onCreate, headerExtra, hideCreate,
 }: Props) {
   const { hasPermission } = useAuth();
   const canView   = hasPermission(`${permKey}.view`);
   const canExport = hasPermission(`${permKey}.export`);
   const canCreate = hasPermission(`${permKey}.create`);
+
+  const [internalSearch, setInternalSearch] = useState('');
+  const search = searchValue ?? internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
 
   if (!canView) {
     return (
@@ -76,6 +111,39 @@ export function ModulePlaceholder({
         <p className="text-sm text-gray-500 mt-1">У вашей роли нет права <span className="font-mono text-gray-700">{permKey}.view</span></p>
       </div>
     );
+  }
+
+  // Default CSV export — builds from rows + columns.
+  function defaultExport() {
+    if (rows.length === 0 || columns.length === 0) {
+      onExport?.();
+      return;
+    }
+    exportToCsv(rows as any[], columns.map(c => ({ key: c.key, label: c.label })),
+      permKey.replace(/\./g, '-'));
+  }
+
+  const exportFn = onExport ?? defaultExport;
+
+  function renderKpi(k: KPI, i: number) {
+    const cls = KPI_COLOR[k.color ?? 'gray'];
+    const inner = (
+      <>
+        <p className="text-xs text-gray-500 mb-1">{k.label}</p>
+        <p className="text-xl font-bold">{k.value}</p>
+        {k.hint && <p className="text-[10px] text-gray-500 mt-0.5">{k.hint}</p>}
+      </>
+    );
+    const ringCls = k.active ? 'ring-2 ring-current/40 ring-offset-1' : '';
+    const activeCls = 'transition-all hover:shadow-md cursor-pointer active:scale-[0.97]';
+
+    if (k.href) {
+      return <Link key={i} to={k.href} className={`p-3 rounded-xl border ${cls} ${activeCls} ${ringCls} block`}>{inner}</Link>;
+    }
+    if (k.onClick) {
+      return <button key={i} onClick={k.onClick} className={`p-3 rounded-xl border ${cls} ${activeCls} ${ringCls} text-left`}>{inner}</button>;
+    }
+    return <div key={i} className={`p-3 rounded-xl border ${cls}`}>{inner}</div>;
   }
 
   return (
@@ -93,22 +161,21 @@ export function ModulePlaceholder({
           {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-2">
+          {headerExtra}
           <Locked perm={`${permKey}.export`}>
-            <button
-              onClick={() => alert('Экспорт CSV (демо)')}
-              disabled={!canExport}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm">
+            <button onClick={exportFn} disabled={!canExport}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
               <Download className="w-4 h-4" />Экспорт
             </button>
           </Locked>
-          <Locked perm={`${permKey}.create`}>
-            <button
-              onClick={() => alert('Создать (демо)')}
-              disabled={!canCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold">
-              <Plus className="w-4 h-4" />Добавить
-            </button>
-          </Locked>
+          {!hideCreate && (
+            <Locked perm={`${permKey}.create`}>
+              <button onClick={onCreate} disabled={!canCreate || !onCreate}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold">
+                <Plus className="w-4 h-4" />Добавить
+              </button>
+            </Locked>
+          )}
         </div>
       </div>
 
@@ -119,16 +186,7 @@ export function ModulePlaceholder({
           : kpis.length === 3 ? 'md:grid-cols-3'
           : 'md:grid-cols-2'
         } gap-3`}>
-          {kpis.map((k, i) => {
-            const cls = KPI_COLOR[k.color ?? 'gray'];
-            return (
-              <div key={i} className={`p-3 rounded-xl border ${cls}`}>
-                <p className="text-xs text-gray-500 mb-1">{k.label}</p>
-                <p className="text-xl font-bold">{k.value}</p>
-                {k.hint && <p className="text-[10px] text-gray-500 mt-0.5">{k.hint}</p>}
-              </div>
-            );
-          })}
+          {kpis.map(renderKpi)}
         </div>
       )}
 
@@ -142,7 +200,7 @@ export function ModulePlaceholder({
       <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input placeholder="Поиск..."
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..."
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         {toolbarExtra}
@@ -166,18 +224,29 @@ export function ModulePlaceholder({
                       {c.label}
                     </th>
                   ))}
+                  {onRowClick && <th className="px-3 py-3 w-10" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {rows.map((row, i) => (
-                  <tr key={i} className="hover:bg-gray-50/40 transition-colors">
-                    {columns.map(c => (
-                      <td key={c.key} className={`px-3 py-3 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'} ${c.className ?? ''}`}>
-                        {row[c.key] ?? <span className="text-gray-300">—</span>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {rows.map((row, i) => {
+                  const isClickable = !!onRowClick;
+                  return (
+                    <tr key={row.id ?? i}
+                      onClick={isClickable ? () => onRowClick!(row) : undefined}
+                      className={`transition-colors ${isClickable ? 'cursor-pointer hover:bg-blue-50/40' : 'hover:bg-gray-50/40'}`}>
+                      {columns.map(c => (
+                        <td key={c.key} className={`px-3 py-3 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'} ${c.className ?? ''}`}>
+                          {row[c.key] ?? <span className="text-gray-300">—</span>}
+                        </td>
+                      ))}
+                      {isClickable && (
+                        <td className="px-3 py-3 text-center text-gray-300">
+                          <ChevronRight className="w-4 h-4 inline" />
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

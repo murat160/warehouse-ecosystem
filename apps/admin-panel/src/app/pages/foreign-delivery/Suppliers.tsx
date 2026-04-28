@@ -5,9 +5,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import ReactDOM from 'react-dom';
 import {
   Boxes, Search, Plus, Lock, Download, Upload, FileText, Receipt,
-  CheckCircle2, XCircle, AlertTriangle, ArrowRight, Globe,
+  CheckCircle2, XCircle, AlertTriangle, ArrowRight, Globe, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Locked } from '../../components/rbac/PermissionLock';
@@ -16,7 +17,7 @@ import {
   SUPPLIERS, SUPPLIER_INVOICES, SUPPLIER_KIND_LABELS,
   PAYABLE_STATUS_LABELS, DOC_STATUS_LABELS,
   fmtMoney,
-  type Supplier, type SupplierInvoice, type PayableStatus,
+  type Supplier, type SupplierInvoice, type PayableStatus, type SupplierKind,
 } from '../../data/foreign-delivery';
 
 // ─── Suppliers ───────────────────────────────────────────────────────────────
@@ -28,16 +29,49 @@ export function Suppliers() {
   }
   const canManage = hasPermission('foreign_delivery.suppliers.manage');
 
+  const [suppliers, setSuppliers] = useState<Supplier[]>(SUPPLIERS);
   const [search, setSearch] = useState('');
   const [countryFilter, setCountryFilter] = useState<string>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [draft, setDraft] = useState<Partial<Supplier>>({
+    name: '', country: 'Туркменистан', kind: 'local_supplier',
+    contact: '', phone: '', email: '', address: '',
+    currency: 'TMT', bankDetails: '', taxId: '', status: 'pending',
+  });
 
-  const countries = useMemo(() => Array.from(new Set(SUPPLIERS.map(s => s.country))), []);
-  const filtered = useMemo(() => SUPPLIERS.filter(s => {
+  function createSupplier() {
+    if (!canManage) return;
+    if (!draft.name?.trim()) { toast.error('Введите название'); return; }
+    if (!draft.country?.trim()) { toast.error('Введите страну'); return; }
+    const newSup: Supplier = {
+      supplierId:  `sup-${Date.now()}`,
+      name:        draft.name!.trim(),
+      country:     draft.country!.trim(),
+      kind:        draft.kind ?? 'local_supplier',
+      contact:     draft.contact?.trim() ?? '',
+      phone:       draft.phone?.trim() ?? '',
+      email:       draft.email?.trim() ?? '',
+      address:     draft.address?.trim() ?? '',
+      currency:    draft.currency ?? 'TMT',
+      bankDetails: draft.bankDetails ?? '',
+      taxId:       draft.taxId ?? '',
+      status:      draft.status ?? 'pending',
+      ordersCount: 0, outstanding: 0, documents: [],
+    };
+    setSuppliers(prev => [newSup, ...prev]);
+    SUPPLIERS.unshift(newSup);
+    setCreateOpen(false);
+    setDraft({ name: '', country: 'Туркменистан', kind: 'local_supplier', contact: '', phone: '', email: '', address: '', currency: 'TMT', bankDetails: '', taxId: '', status: 'pending' });
+    toast.success(`Создан поставщик: ${newSup.name}`);
+  }
+
+  const countries = useMemo(() => Array.from(new Set(suppliers.map(s => s.country))), [suppliers]);
+  const filtered = useMemo(() => suppliers.filter(s => {
     const q = search.toLowerCase();
     const ms = !q || s.name.toLowerCase().includes(q) || s.contact.toLowerCase().includes(q) || s.country.toLowerCase().includes(q);
     const mc = countryFilter === 'all' || s.country === countryFilter;
     return ms && mc;
-  }), [search, countryFilter]);
+  }), [suppliers, search, countryFilter]);
 
   function exportCsv() {
     exportToCsv(filtered as any[], [
@@ -66,7 +100,7 @@ export function Suppliers() {
           <div className="flex items-center gap-2">
             <Boxes className="w-6 h-6 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-900">Поставщики</h1>
-            <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-[10px] font-mono">{SUPPLIERS.length}</span>
+            <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-[10px] font-mono">{suppliers.length}</span>
           </div>
           <p className="text-sm text-gray-500 mt-0.5">Турция, Китай, Германия, Туркменистан и любые другие. Расширяемая модель.</p>
         </div>
@@ -75,7 +109,8 @@ export function Suppliers() {
             <Download className="w-4 h-4" />Экспорт
           </button>
           <Locked perm="foreign_delivery.suppliers.manage">
-            <button disabled={!canManage} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold">
+            <button onClick={() => setCreateOpen(true)} disabled={!canManage}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold">
               <Plus className="w-4 h-4" />Добавить поставщика
             </button>
           </Locked>
@@ -145,6 +180,86 @@ export function Suppliers() {
           </tbody>
         </table>
       </div>
+
+      {/* Create modal */}
+      {createOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setCreateOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <p className="font-bold text-gray-900">Новый поставщик</p>
+              <button onClick={() => setCreateOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Название *</label>
+                <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} autoFocus
+                  placeholder="Yiwu Trading Co."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Страна *</label>
+                <input value={draft.country} onChange={e => setDraft(d => ({ ...d, country: e.target.value }))}
+                  placeholder="Китай"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Тип</label>
+                <select value={draft.kind} onChange={e => setDraft(d => ({ ...d, kind: e.target.value as SupplierKind }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white">
+                  {Object.entries(SUPPLIER_KIND_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Валюта</label>
+                <input value={draft.currency} onChange={e => setDraft(d => ({ ...d, currency: e.target.value.toUpperCase() }))}
+                  placeholder="CNY"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Контакт</label>
+                <input value={draft.contact} onChange={e => setDraft(d => ({ ...d, contact: e.target.value }))}
+                  placeholder="Mr Wang"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Телефон</label>
+                <input value={draft.phone} onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))}
+                  placeholder="+86 579 8550 0001"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Email</label>
+                <input value={draft.email} onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+                  placeholder="orders@yiwu-trading.cn"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Адрес</label>
+                <input value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))}
+                  placeholder="Yiwu, Zhejiang"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Tax ID</label>
+                <input value={draft.taxId} onChange={e => setDraft(d => ({ ...d, taxId: e.target.value }))}
+                  placeholder="CN91330782…"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Банк (mock)</label>
+                <input value={draft.bankDetails} onChange={e => setDraft(d => ({ ...d, bankDetails: e.target.value }))}
+                  placeholder="ICBC · 6228 4810 …"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex gap-3">
+              <button onClick={() => setCreateOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">Отмена</button>
+              <button onClick={createSupplier} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Создать</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
