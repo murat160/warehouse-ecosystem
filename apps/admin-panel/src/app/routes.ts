@@ -71,6 +71,19 @@ import {
 // Promotions extensions
 import { BoostPage } from "./pages/products/BoostPage";
 import { CampaignsPage } from "./pages/products/CampaignsPage";
+// Foreign Paid Local Delivery
+import { ForeignDeliveryDashboard } from "./pages/foreign-delivery/ForeignDeliveryDashboard";
+import { ForeignOrdersList } from "./pages/foreign-delivery/ForeignOrdersList";
+import { SettlementCardsList } from "./pages/foreign-delivery/SettlementCardsList";
+import { DailyRegistry, WeeklyRegistry } from "./pages/foreign-delivery/Registries";
+import { MonthlySettlement } from "./pages/foreign-delivery/MonthlySettlement";
+import { LocalFulfillment } from "./pages/foreign-delivery/LocalFulfillment";
+import { LocalSellers, SellerSettlements } from "./pages/foreign-delivery/Sellers";
+import { Suppliers, SupplierPayables } from "./pages/foreign-delivery/Suppliers";
+import { IntercompanyDebt, Setoff } from "./pages/foreign-delivery/IntercompanySetoff";
+import {
+  ForeignDocuments, AccountingExport, ForeignSettingsPage,
+} from "./pages/foreign-delivery/DocsExportSettings";
 
 export const router = createBrowserRouter([
   {
@@ -133,6 +146,23 @@ export const router = createBrowserRouter([
       { path: "legal/complaints", Component: LegalComplaints },
       { path: "legal/documents",  Component: LegalDocuments  },
       { path: "legal/reports",    Component: LegalReports    },
+      // Foreign Paid Local Delivery
+      { path: "foreign-delivery",                       Component: ForeignDeliveryDashboard },
+      { path: "foreign-delivery/orders",                Component: ForeignOrdersList        },
+      { path: "foreign-delivery/settlement-cards",      Component: SettlementCardsList      },
+      { path: "foreign-delivery/daily-registry",        Component: DailyRegistry            },
+      { path: "foreign-delivery/weekly-registry",       Component: WeeklyRegistry           },
+      { path: "foreign-delivery/monthly-settlement",    Component: MonthlySettlement        },
+      { path: "foreign-delivery/local-fulfillment",     Component: LocalFulfillment         },
+      { path: "foreign-delivery/local-sellers",         Component: LocalSellers             },
+      { path: "foreign-delivery/seller-settlements",    Component: SellerSettlements        },
+      { path: "foreign-delivery/suppliers",             Component: Suppliers                },
+      { path: "foreign-delivery/supplier-payables",     Component: SupplierPayables         },
+      { path: "foreign-delivery/intercompany-debt",     Component: IntercompanyDebt         },
+      { path: "foreign-delivery/setoff",                Component: Setoff                   },
+      { path: "foreign-delivery/documents",             Component: ForeignDocuments         },
+      { path: "foreign-delivery/accounting-export",     Component: AccountingExport         },
+      { path: "foreign-delivery/settings",              Component: ForeignSettingsPage      },
       // Reports
       { path: "reports",            Component: ReportsDashboard  },
       { path: "reports/orders",     Component: ReportsOrders     },

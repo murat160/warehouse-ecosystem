@@ -14,6 +14,8 @@ export type Role =
   | 'CourierManager' | 'SupportAgent' | 'Accountant' | 'ChiefAccountant'
   | 'Lawyer' | 'ComplianceManager' | 'SellerManager' | 'ProductManager'
   | 'ShowcaseManager' | 'MarketingManager' | 'SecurityOfficer' | 'Analyst'
+  // Foreign delivery roles
+  | 'PolandFinance' | 'TurkmenistanOperator' | 'SupplierAccountant'
   // Legacy
   | 'RegionalManager' | 'PVZOperator' | 'Warehouse' | 'Courier' | 'Finance'
   | 'Support' | 'QA' | 'Partner' | 'Merchant'
