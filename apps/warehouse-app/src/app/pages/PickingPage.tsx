@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Compass } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -9,7 +10,9 @@ import { ScanInput } from '../components/ScanInput';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { ZoneBadge } from '../components/ZoneBadge';
-import type { OrderItem } from '../domain/types';
+import { PickRoute } from '../components/PickRoute';
+import { LocationGuide } from '../components/LocationGuide';
+import type { OrderItem, Bin, Sku } from '../domain/types';
 
 export function PickingPage() {
   const { orderId } = useParams();
@@ -69,7 +72,9 @@ export function PickingPage() {
       />
 
       <div className="px-5 -mt-5">
-        <div className="bg-white rounded-2xl p-3 shadow-sm mb-3 flex items-center gap-2">
+        <PickRoute items={order.items} bins={bins} skus={skus} />
+
+        <div className="bg-white rounded-2xl p-3 shadow-sm mb-3 mt-3 flex items-center gap-2">
           <ZoneBadge zone={order.zone} size="md" />
           {order.status === 'received_by_warehouse' && (
             <button
@@ -108,9 +113,10 @@ export function PickingPage() {
   );
 }
 
-function ItemRow({ orderId, item, sku, bin, orderCode, urgent }: { orderId: string; item: OrderItem; sku: any; bin: any; orderCode: string; urgent?: boolean }) {
+function ItemRow({ orderId, item, sku, bin, orderCode, urgent }: { orderId: string; item: OrderItem; sku: Sku; bin: Bin | undefined; orderCode: string; urgent?: boolean }) {
   const [showActions, setShowActions] = useState<null | 'comment' | 'damaged' | 'missing'>(null);
   const [text, setText] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const handleScanBin = (code: string) => {
     const r = store.pickScanBin(orderId, item.id, code);
@@ -140,6 +146,15 @@ function ItemRow({ orderId, item, sku, bin, orderCode, urgent }: { orderId: stri
       <ItemCard item={item} sku={sku} bin={bin} orderCode={orderCode} size="lg" urgent={urgent} right={
         item.status === 'found' ? null : (
           <div className="space-y-2">
+            {bin && (
+              <button
+                onClick={() => setGuideOpen(true)}
+                className="w-full h-10 rounded-xl bg-[#0EA5E9] text-white active-press inline-flex items-center justify-center gap-1 text-[12px]"
+                style={{ fontWeight: 800 }}
+              >
+                <Compass className="w-4 h-4" /> Как найти
+              </button>
+            )}
             <ScanInput
               label={item.status === 'pending' ? `1. Ячейка: ${item.binId}` : item.status === 'scanned_bin' ? '2. Товар' : '3. Подтверждение'}
               placeholder={item.status === 'pending' ? item.binId : item.status === 'scanned_bin' ? sku.barcode : '—'}
@@ -192,6 +207,18 @@ function ItemRow({ orderId, item, sku, bin, orderCode, urgent }: { orderId: stri
           style={{ fontWeight: 500 }}
         />
       </Modal>
+
+      {bin && (
+        <LocationGuide
+          open={guideOpen}
+          bin={bin}
+          sku={sku}
+          expectedQty={item.qty}
+          orderCode={orderCode}
+          onClose={() => setGuideOpen(false)}
+          onNotFound={() => store.pickMarkMissing(orderId, item.id, 'Не найден через LocationGuide')}
+        />
+      )}
     </>
   );
 }

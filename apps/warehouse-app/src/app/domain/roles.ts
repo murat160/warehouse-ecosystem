@@ -34,7 +34,8 @@ export type Permission =
   | 'pick' | 'sort' | 'pack' | 'handoff'
   | 'receive' | 'inventory' | 'count' | 'move' | 'returns'
   | 'problems' | 'documents' | 'scanner'
-  | 'cancel_task' | 'reassign_task' | 'override_block';
+  | 'cancel_task' | 'reassign_task' | 'override_block'
+  | 'claims' | 'supplier_media' | 'supplier_disputes' | 'damage_report';
 
 const ALL: Permission[] = [
   'view_dashboard','view_tasks','view_audit','view_reports',
@@ -43,6 +44,7 @@ const ALL: Permission[] = [
   'receive','inventory','count','move','returns',
   'problems','documents','scanner',
   'cancel_task','reassign_task','override_block',
+  'claims','supplier_media','supplier_disputes','damage_report',
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -53,14 +55,15 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'pick','sort','pack','handoff','receive','inventory','count','move','returns',
     'problems','documents','scanner',
     'cancel_task','reassign_task','override_block',
+    'claims','supplier_media','supplier_disputes','damage_report',
   ],
-  warehouse_worker: ['view_dashboard','view_tasks','pick','scanner','problems','documents'],
-  picker: ['view_dashboard','view_tasks','pick','sort','scanner','problems'],
-  packer: ['view_dashboard','view_tasks','pack','sort','scanner','problems','documents'],
-  receiver: ['view_dashboard','view_tasks','receive','scanner','problems','documents','inventory'],
-  inventory_controller: ['view_dashboard','view_tasks','inventory','count','move','scanner','problems','documents','view_reports'],
-  returns_operator: ['view_dashboard','view_tasks','returns','scanner','problems','documents'],
-  dispatcher: ['view_dashboard','view_tasks','handoff','scanner','problems','documents'],
+  warehouse_worker: ['view_dashboard','view_tasks','pick','scanner','problems','documents','claims'],
+  picker: ['view_dashboard','view_tasks','pick','sort','scanner','problems','claims'],
+  packer: ['view_dashboard','view_tasks','pack','sort','scanner','problems','documents','claims'],
+  receiver: ['view_dashboard','view_tasks','receive','scanner','problems','documents','inventory','supplier_media','supplier_disputes','damage_report','claims'],
+  inventory_controller: ['view_dashboard','view_tasks','inventory','count','move','scanner','problems','documents','view_reports','claims'],
+  returns_operator: ['view_dashboard','view_tasks','returns','scanner','problems','documents','claims'],
+  dispatcher: ['view_dashboard','view_tasks','handoff','scanner','problems','documents','claims'],
 };
 
 export function can(role: Role | undefined, perm: Permission): boolean {

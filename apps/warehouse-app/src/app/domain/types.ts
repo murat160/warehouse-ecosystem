@@ -40,6 +40,7 @@ export interface Bin {
   warehouse: string;   // MSK-WH-01
   zone: ZoneCode;      // RED
   row: string;         // R-03
+  aisle: string;       // A-02
   rack: string;        // S-12
   shelf: string;       // P-04
   cell: string;        // A-12-04
@@ -173,6 +174,7 @@ export interface AsnItem {
 
 export interface Asn {
   id: string;
+  supplierId: string;
   supplierName: string;
   invoiceNumber: string;
   invoiceUrl?: string;
@@ -297,6 +299,149 @@ export interface Courier {
   phone: string;
   vehiclePlate: string;
 }
+
+// ───────── Suppliers ─────────
+export interface Supplier {
+  id: string;            // SUP-7711
+  name: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+}
+
+// ───────── Supplier media ─────────
+export type SupplierMediaStatus = 'received' | 'under_review' | 'approved' | 'rejected' | 'mismatch';
+
+export const SUPPLIER_MEDIA_STATUS_LABELS: Record<SupplierMediaStatus, string> = {
+  received:     'Получено',
+  under_review: 'На проверке',
+  approved:     'Одобрено',
+  rejected:     'Отклонено',
+  mismatch:     'Не совпадает',
+};
+
+export interface SupplierMedia {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  productName: string;
+  sku: string;
+  barcode?: string;
+  asnId?: string;
+  invoiceNumber?: string;
+  expectedQty: number;
+  photos: string[];
+  videos: string[];
+  description: string;
+  supplierComment?: string;
+  warehouseComment?: string;
+  uploadedAt: string;
+  status: SupplierMediaStatus;
+  reviewedBy?: string;
+}
+
+// ───────── Damage report ─────────
+export type DamageType =
+  | 'broken' | 'scratched' | 'wet' | 'opened_package' | 'missing_parts'
+  | 'expired' | 'wrong_item' | 'wrong_quantity' | 'other';
+
+export const DAMAGE_TYPE_LABELS: Record<DamageType, string> = {
+  broken:         'Сломан',
+  scratched:      'Поцарапан',
+  wet:            'Намок',
+  opened_package: 'Вскрыта упаковка',
+  missing_parts:  'Не хватает частей',
+  expired:        'Просрочен',
+  wrong_item:     'Не тот товар',
+  wrong_quantity: 'Не то количество',
+  other:          'Другое',
+};
+
+export type DamageReportStatus = 'draft' | 'sent_to_review' | 'approved' | 'rejected';
+
+export interface DamageReport {
+  id: string;                     // DMG-...
+  asnId?: string;
+  asnItemId?: string;
+  supplierId?: string;
+  supplierName?: string;
+  invoiceNumber?: string;
+  sku: string;
+  damageType: DamageType;
+  damagedQty: number;
+  description: string;
+  photos: string[];
+  videos: string[];
+  reportedBy: string;
+  createdAt: string;
+  status: DamageReportStatus;
+  reviewerId?: string;
+  reviewedAt?: string;
+}
+
+// ───────── Supplier dispute ─────────
+export type DisputeReason =
+  | 'damaged_goods' | 'missing_quantity' | 'wrong_product' | 'quality_issue'
+  | 'expired_goods' | 'price_mismatch' | 'document_missing';
+
+export const DISPUTE_REASON_LABELS: Record<DisputeReason, string> = {
+  damaged_goods:    'Повреждённый товар',
+  missing_quantity: 'Недостача',
+  wrong_product:    'Не тот товар',
+  quality_issue:    'Качество',
+  expired_goods:    'Просрочен',
+  price_mismatch:   'Расхождение цены',
+  document_missing: 'Нет документа',
+};
+
+export type DisputeStatus =
+  | 'draft' | 'sent_to_supplier' | 'supplier_response_waiting'
+  | 'accepted' | 'rejected' | 'resolved' | 'escalated';
+
+export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
+  draft:                     'Черновик',
+  sent_to_supplier:          'Отправлен поставщику',
+  supplier_response_waiting: 'Ждём ответ',
+  accepted:                  'Принят поставщиком',
+  rejected:                  'Отклонён',
+  resolved:                  'Решён',
+  escalated:                 'Эскалирован',
+};
+
+export interface SupplierDispute {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  invoiceNumber?: string;
+  asnId?: string;
+  sku: string;
+  reason: DisputeReason;
+  description: string;
+  damagedQty?: number;
+  claimedAmount?: number;
+  status: DisputeStatus;
+  responsibleEmployeeId?: string;
+  warehousePhotos: string[];
+  warehouseVideos: string[];
+  supplierMediaId?: string;       // ссылка на supplier media, если есть
+  damageReportId?: string;        // ссылка на damage report
+  supplierResponse?: string;
+  createdAt: string;
+  sentAt?: string;
+  resolvedAt?: string;
+}
+
+// ───────── Evidence sources (общая категория для viewer) ─────────
+export type EvidenceSource = 'customer' | 'supplier' | 'warehouse' | 'courier' | 'return' | 'receiving';
+
+export const EVIDENCE_SOURCE_LABELS: Record<EvidenceSource, string> = {
+  customer:  'Клиент',
+  supplier:  'Поставщик',
+  warehouse: 'Склад',
+  courier:   'Курьер',
+  return:    'Возврат',
+  receiving: 'Приёмка',
+};
 
 // ───────── Audit ─────────
 export interface AuditEntry {

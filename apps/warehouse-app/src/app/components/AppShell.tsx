@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Clock, ListTodo, ShoppingCart, Package, ScanLine,
   PackageCheck, Truck, ArrowDownToLine, Boxes, Grid3x3, ClipboardCheck,
   Undo2, AlertTriangle, FileText, BarChart3, LogOut, ListChecks,
-  Settings, Move,
+  Settings, Move, FileWarning, ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
@@ -29,6 +29,8 @@ const NAV: NavItem[] = [
   { to: '/movements',     label: 'Перемещения',        icon: Move,            perm: 'move' },
   { to: '/returns',       label: 'Возвраты',           icon: Undo2,           perm: 'returns' },
   { to: '/problems',      label: 'Проблемы',           icon: AlertTriangle,   perm: 'problems' },
+  { to: '/claims',        label: 'Жалобы и доказательства', icon: ShieldAlert, perm: 'claims' },
+  { to: '/supplier-disputes', label: 'Споры с поставщиками', icon: FileWarning, perm: 'supplier_disputes' },
   { to: '/scanner',       label: 'Сканер',             icon: ScanLine,        perm: 'scanner' },
   { to: '/documents',     label: 'Документы',          icon: FileText,        perm: 'documents' },
   { to: '/reports',       label: 'Отчёты',             icon: BarChart3,       perm: 'view_reports' },
@@ -43,8 +45,8 @@ const BOTTOM = [
   { to: '/problems',  label: 'Проблемы', icon: AlertTriangle },
 ];
 
-// Простой sidebar для обычного складчика — только 6 пунктов.
-const WORKER_PATHS = new Set(['/shift', '/tasks', '/picking', '/scanner', '/problems', '/documents']);
+// Простой sidebar для обычного складчика — задачи + сборка + сканер + проблемы + жалобы + документы.
+const WORKER_PATHS = new Set(['/shift', '/tasks', '/picking', '/scanner', '/problems', '/claims', '/documents']);
 
 export function AppShell() {
   const { currentWorker, problems } = useStore();

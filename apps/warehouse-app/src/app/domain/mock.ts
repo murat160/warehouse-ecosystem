@@ -1,6 +1,7 @@
 import type {
   Worker, Sku, Bin, WarehouseOrder, Task, InventoryRow, Movement,
   CountTask, Asn, ReturnRow, Problem, DocumentRow, Courier,
+  Supplier, SupplierMedia, DamageReport, SupplierDispute,
 } from './types';
 
 const now = () => new Date().toISOString();
@@ -30,15 +31,15 @@ export const MOCK_SKUS: Sku[] = [
 ];
 
 export const MOCK_BINS: Bin[] = [
-  { id: 'A-12-04', warehouse: 'MSK-WH-01', zone: 'RED',    row: 'R-03', rack: 'S-12', shelf: 'P-04', cell: 'A-12-04', qrCode: 'QR://BIN/A-12-04', capacity: 60, occupied: 18, status: 'active' },
-  { id: 'A-01-03', warehouse: 'MSK-WH-01', zone: 'YELLOW', row: 'R-01', rack: 'S-01', shelf: 'P-03', cell: 'A-01-03', qrCode: 'QR://BIN/A-01-03', capacity: 100, occupied: 78, status: 'active' },
-  { id: 'B-04-12', warehouse: 'MSK-WH-01', zone: 'YELLOW', row: 'R-04', rack: 'S-04', shelf: 'P-12', cell: 'B-04-12', qrCode: 'QR://BIN/B-04-12', capacity: 100, occupied: 45, status: 'active' },
-  { id: 'C-02-08', warehouse: 'MSK-WH-01', zone: 'BLUE',   row: 'R-02', rack: 'S-02', shelf: 'P-08', cell: 'C-02-08', qrCode: 'QR://BIN/C-02-08', capacity: 60, occupied: 60, status: 'active' },
-  { id: 'D-01-01', warehouse: 'MSK-WH-01', zone: 'GREEN',  row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'D-01-01', qrCode: 'QR://BIN/D-01-01', capacity: 50, occupied: 22, status: 'active' },
-  { id: 'E-03-02', warehouse: 'MSK-WH-01', zone: 'PURPLE', row: 'R-03', rack: 'S-03', shelf: 'P-02', cell: 'E-03-02', qrCode: 'QR://BIN/E-03-02', capacity: 40, occupied: 12, status: 'active' },
-  { id: 'F-01-01', warehouse: 'MSK-WH-01', zone: 'GRAY',   row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'F-01-01', qrCode: 'QR://BIN/F-01-01', capacity: 30, occupied: 5,  status: 'active' },
-  { id: 'G-01-01', warehouse: 'MSK-WH-01', zone: 'BLACK',  row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'G-01-01', qrCode: 'QR://BIN/G-01-01', capacity: 20, occupied: 2,  status: 'active' },
-  { id: 'H-01-01', warehouse: 'MSK-WH-01', zone: 'ORANGE', row: 'R-01', rack: 'S-01', shelf: 'P-01', cell: 'H-01-01', qrCode: 'QR://BIN/H-01-01', capacity: 25, occupied: 0,  status: 'maintenance', blockedReason: 'Плановый осмотр' },
+  { id: 'A-12-04', warehouse: 'MSK-WH-01', zone: 'RED',    row: 'R-03', aisle: 'A-02', rack: 'S-12', shelf: 'P-04', cell: 'A-12-04', qrCode: 'QR://BIN/A-12-04', capacity: 60,  occupied: 18, status: 'active' },
+  { id: 'A-01-03', warehouse: 'MSK-WH-01', zone: 'YELLOW', row: 'R-01', aisle: 'A-01', rack: 'S-01', shelf: 'P-03', cell: 'A-01-03', qrCode: 'QR://BIN/A-01-03', capacity: 100, occupied: 78, status: 'active' },
+  { id: 'B-04-12', warehouse: 'MSK-WH-01', zone: 'YELLOW', row: 'R-04', aisle: 'A-04', rack: 'S-04', shelf: 'P-12', cell: 'B-04-12', qrCode: 'QR://BIN/B-04-12', capacity: 100, occupied: 45, status: 'active' },
+  { id: 'C-02-08', warehouse: 'MSK-WH-01', zone: 'BLUE',   row: 'R-02', aisle: 'A-02', rack: 'S-02', shelf: 'P-08', cell: 'C-02-08', qrCode: 'QR://BIN/C-02-08', capacity: 60,  occupied: 60, status: 'active' },
+  { id: 'D-01-01', warehouse: 'MSK-WH-01', zone: 'GREEN',  row: 'R-01', aisle: 'A-01', rack: 'S-01', shelf: 'P-01', cell: 'D-01-01', qrCode: 'QR://BIN/D-01-01', capacity: 50,  occupied: 22, status: 'active' },
+  { id: 'E-03-02', warehouse: 'MSK-WH-01', zone: 'PURPLE', row: 'R-03', aisle: 'A-03', rack: 'S-03', shelf: 'P-02', cell: 'E-03-02', qrCode: 'QR://BIN/E-03-02', capacity: 40,  occupied: 12, status: 'active' },
+  { id: 'F-01-01', warehouse: 'MSK-WH-01', zone: 'GRAY',   row: 'R-01', aisle: 'A-01', rack: 'S-01', shelf: 'P-01', cell: 'F-01-01', qrCode: 'QR://BIN/F-01-01', capacity: 30,  occupied: 5,  status: 'active' },
+  { id: 'G-01-01', warehouse: 'MSK-WH-01', zone: 'BLACK',  row: 'R-01', aisle: 'A-01', rack: 'S-01', shelf: 'P-01', cell: 'G-01-01', qrCode: 'QR://BIN/G-01-01', capacity: 20,  occupied: 2,  status: 'active' },
+  { id: 'H-01-01', warehouse: 'MSK-WH-01', zone: 'ORANGE', row: 'R-01', aisle: 'A-01', rack: 'S-01', shelf: 'P-01', cell: 'H-01-01', qrCode: 'QR://BIN/H-01-01', capacity: 25,  occupied: 0,  status: 'maintenance', blockedReason: 'Плановый осмотр' },
 ];
 
 export const MOCK_ORDERS: WarehouseOrder[] = [
@@ -123,14 +124,75 @@ export const MOCK_COUNTS: CountTask[] = [
   },
 ];
 
+export const MOCK_SUPPLIERS: Supplier[] = [
+  { id: 'SUP-7711', name: 'ТОО SneakerHub',    contactPerson: 'Алмас Б.',   phone: '+7 700 111 2233', email: 'sneakers@hub.kz' },
+  { id: 'SUP-7720', name: 'KZ Apparel Co.',    contactPerson: 'Айгерим К.', phone: '+7 700 444 5566', email: 'orders@kzapparel.kz' },
+  { id: 'SUP-7730', name: 'Mobile Electronics', contactPerson: 'Тимур Н.',  phone: '+7 700 777 8899', email: 'b2b@mobel.kz' },
+];
+
 export const MOCK_ASNS: Asn[] = [
   {
-    id: 'a1', supplierName: 'ТОО SneakerHub', invoiceNumber: 'INV-7711',
+    id: 'a1', supplierId: 'SUP-7711', supplierName: 'ТОО SneakerHub', invoiceNumber: 'INV-7711',
     expectedAt: inMin(-30), status: 'arrived',
     items: [
       { id: 'ai1', sku: 'SHOE-00991', expectedQty: 20, receivedQty: 0, damagedQty: 0, binId: 'A-12-04' },
       { id: 'ai2', sku: 'JN-BLU-32',  expectedQty: 30, receivedQty: 0, damagedQty: 0, binId: 'B-04-12' },
     ],
+  },
+  {
+    id: 'a2', supplierId: 'SUP-7730', supplierName: 'Mobile Electronics', invoiceNumber: 'INV-7820',
+    expectedAt: inMin(-60), status: 'discrepancy',
+    items: [
+      { id: 'ai3', sku: 'PHN-IP15', expectedQty: 5, receivedQty: 4, damagedQty: 1, binId: 'C-02-08' },
+    ],
+  },
+];
+
+export const MOCK_SUPPLIER_MEDIA: SupplierMedia[] = [
+  {
+    id: 'SM-001', supplierId: 'SUP-7711', supplierName: 'ТОО SneakerHub',
+    productName: 'Nike Air Max Black', sku: 'SHOE-00991', barcode: '5901234567890',
+    asnId: 'a1', invoiceNumber: 'INV-7711', expectedQty: 20,
+    photos: ['mock://supplier/SHOE-00991/box-1.jpg', 'mock://supplier/SHOE-00991/box-2.jpg'],
+    videos: ['mock://supplier/SHOE-00991/unbox.mp4'],
+    description: 'Партия 20 пар, упакованы в индивидуальные коробки. Pre-shipment видео распаковки.',
+    supplierComment: 'Все пары запечатаны, состояние новое.',
+    uploadedAt: now(), status: 'under_review',
+  },
+  {
+    id: 'SM-002', supplierId: 'SUP-7730', supplierName: 'Mobile Electronics',
+    productName: 'iPhone 15 Pro 128', sku: 'PHN-IP15', barcode: '5901234567893',
+    asnId: 'a2', invoiceNumber: 'INV-7820', expectedQty: 5,
+    photos: ['mock://supplier/PHN-IP15/sealed-1.jpg'],
+    videos: [],
+    description: '5 шт., запечатаны фабричной плёнкой.',
+    uploadedAt: now(), status: 'mismatch',
+    warehouseComment: 'Одна коробка вскрыта при приёмке — расхождение.',
+  },
+];
+
+export const MOCK_DAMAGE_REPORTS: DamageReport[] = [
+  {
+    id: 'DMG-001', asnId: 'a2', asnItemId: 'ai3',
+    supplierId: 'SUP-7730', supplierName: 'Mobile Electronics', invoiceNumber: 'INV-7820',
+    sku: 'PHN-IP15', damageType: 'opened_package', damagedQty: 1,
+    description: 'Коробка вскрыта, плёнка нарушена.',
+    photos: ['mock://damage/DMG-001/photo-1.jpg'],
+    videos: [],
+    reportedBy: 'W-301', createdAt: now(), status: 'sent_to_review',
+  },
+];
+
+export const MOCK_SUPPLIER_DISPUTES: SupplierDispute[] = [
+  {
+    id: 'DSP-001', supplierId: 'SUP-7730', supplierName: 'Mobile Electronics',
+    invoiceNumber: 'INV-7820', asnId: 'a2', sku: 'PHN-IP15',
+    reason: 'damaged_goods', description: 'Одна единица пришла с вскрытой упаковкой.',
+    damagedQty: 1, claimedAmount: 850,
+    status: 'sent_to_supplier', responsibleEmployeeId: 'W-301',
+    warehousePhotos: ['mock://dispute/DSP-001/wh-1.jpg'], warehouseVideos: [],
+    supplierMediaId: 'SM-002', damageReportId: 'DMG-001',
+    createdAt: now(), sentAt: now(),
   },
 ];
 
@@ -165,6 +227,7 @@ export const MOCK_DOCUMENTS: DocumentRow[] = [
   { id: 'D-001', type: 'invoice',         number: 'INV-7711',          asnId: 'a1', status: 'approved', createdAt: now() },
   { id: 'D-002', type: 'shipping_label',  number: 'LBL-998877',        orderId: 'o5', status: 'approved', createdAt: now() },
   { id: 'D-003', type: 'inventory_report',number: 'RPT-2026-04-28-A',  status: 'pending', createdAt: now() },
+  { id: 'D-004', type: 'damage_photo',    number: 'DMG-PHOTO-001',     asnId: 'a2', status: 'pending', createdAt: now() },
 ];
 
 export const MOCK_COURIERS: Courier[] = [

@@ -3,6 +3,9 @@ import type {
   Worker, Sku, Bin, WarehouseOrder, Task, InventoryRow, Movement,
   CountTask, Asn, ReturnRow, Problem, DocumentRow, Courier,
   AuditEntry, ProblemType, ReturnStatus, ItemStatus, ShiftStatus,
+  Supplier, SupplierMedia, SupplierMediaStatus,
+  DamageReport, DamageType,
+  SupplierDispute, DisputeReason, DisputeStatus,
 } from '../domain/types';
 import type { OrderStatus } from '../domain/orderStatus';
 import { NEXT_STATUSES } from '../domain/orderStatus';
@@ -10,6 +13,7 @@ import {
   MOCK_WORKERS, MOCK_SKUS, MOCK_BINS, MOCK_ORDERS, MOCK_TASKS,
   MOCK_INVENTORY, MOCK_MOVEMENTS, MOCK_COUNTS, MOCK_ASNS,
   MOCK_RETURNS, MOCK_PROBLEMS, MOCK_DOCUMENTS, MOCK_COURIERS,
+  MOCK_SUPPLIERS, MOCK_SUPPLIER_MEDIA, MOCK_DAMAGE_REPORTS, MOCK_SUPPLIER_DISPUTES,
 } from '../domain/mock';
 import { MOCK_SORT_BINS, type SortBin } from '../domain/sortBins';
 
@@ -30,6 +34,21 @@ interface State {
   couriers: Courier[];
   sortBins: SortBin[];
   audit: AuditEntry[];
+  suppliers: Supplier[];
+  supplierMedia: SupplierMedia[];
+  damageReports: DamageReport[];
+  supplierDisputes: SupplierDispute[];
+  /** Журнал scanner-проверок: блокировки и нужные override-ы. */
+  scanBlocks: ScanBlock[];
+}
+
+export interface ScanBlock {
+  id: string;
+  reason: string;
+  context: string;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
 }
 
 let state: State = {
@@ -49,6 +68,11 @@ let state: State = {
   couriers:  MOCK_COURIERS,
   sortBins:  MOCK_SORT_BINS,
   audit:     [],
+  suppliers:        MOCK_SUPPLIERS,
+  supplierMedia:    MOCK_SUPPLIER_MEDIA,
+  damageReports:    MOCK_DAMAGE_REPORTS,
+  supplierDisputes: MOCK_SUPPLIER_DISPUTES,
+  scanBlocks:       [],
 };
 
 const listeners = new Set<() => void>();
@@ -659,6 +683,226 @@ export const store = {
   viewMedia(context: string) {
     audit('MEDIA_VIEW', context);
     emit();
+  },
+
+  // ── Supplier media ──────────────────────────────────
+  reviewSupplierMedia(id: string, decision: SupplierMediaStatus, comment: string) {
+    state = {
+      ...state,
+      supplierMedia: state.supplierMedia.map(m =>
+        m.id === id
+          ? { ...m, status: decision, warehouseComment: comment || m.warehouseComment, reviewedBy: state.currentWorker?.id }
+          : m),
+    };
+    const action = decision === 'approved' ? 'SUP_MEDIA_APPROVE'
+      : decision === 'rejected' ? 'SUP_MEDIA_REJECT'
+      : decision === 'mismatch' ? 'SUP_MEDIA_MISMATCH'
+      : 'SUP_MEDIA_REVIEW';
+    audit(action, `${id}: ${decision}${comment ? ' — ' + comment : ''}`);
+    emit();
+  },
+
+  // ── Damage report ───────────────────────────────────
+  createDamageReport(input: {
+    asnId?: string; asnItemId?: string; supplierId?: string; supplierName?: string;
+    invoiceNumber?: string; sku: string; damageType: DamageType; damagedQty: number;
+    description: string; photos: string[]; videos: string[];
+  }): string {
+    const id = `DMG-${Date.now()}`;
+    const r: DamageReport = {
+      id,
+      asnId: input.asnId, asnItemId: input.asnItemId,
+      supplierId: input.supplierId, supplierName: input.supplierName,
+      invoiceNumber: input.invoiceNumber, sku: input.sku,
+      damageType: input.damageType, damagedQty: input.damagedQty,
+      description: input.description, photos: input.photos, videos: input.videos,
+      reportedBy: state.currentWorker?.id ?? 'system',
+      createdAt: new Date().toISOString(),
+      status: 'sent_to_review',
+    };
+    state = {
+      ...state,
+      damageReports: [r, ...state.damageReports],
+      documents: [
+        {
+          id: `D-${Date.now()}`, type: 'damage_photo',
+          number: `DMG-PHOTO-${id.slice(-6)}`,
+          asnId: input.asnId, status: 'pending',
+          uploadedBy: state.currentWorker?.id,
+          createdAt: new Date().toISOString(),
+        },
+        ...state.documents,
+      ],
+    };
+    // Авто-проблема
+    this._pushProblem('damaged', `${input.sku}: ${input.description}`, { sku: input.sku, asnId: input.asnId });
+    // Если есть ASN-позиция — отметим повреждение
+    if (input.asnId && input.asnItemId) {
+      state = {
+        ...state,
+        asns: state.asns.map(a => a.id !== input.asnId ? a : {
+          ...a,
+          status: 'discrepancy' as const,
+          items: a.items.map(it => it.id === input.asnItemId
+            ? { ...it, damagedQty: it.damagedQty + input.damagedQty }
+            : it),
+        }),
+      };
+    }
+    audit('DAMAGE_REPORT', `${id}: ${input.damageType} ×${input.damagedQty} (${input.sku})`, { sku: input.sku, asnId: input.asnId });
+    emit();
+    return id;
+  },
+
+  // ── Supplier dispute ────────────────────────────────
+  createSupplierDispute(input: {
+    supplierId: string; supplierName: string; invoiceNumber?: string; asnId?: string;
+    sku: string; reason: DisputeReason; description: string;
+    damagedQty?: number; claimedAmount?: number;
+    supplierMediaId?: string; damageReportId?: string;
+  }): string {
+    const id = `DSP-${Date.now()}`;
+    const d: SupplierDispute = {
+      id,
+      supplierId: input.supplierId, supplierName: input.supplierName,
+      invoiceNumber: input.invoiceNumber, asnId: input.asnId, sku: input.sku,
+      reason: input.reason, description: input.description,
+      damagedQty: input.damagedQty, claimedAmount: input.claimedAmount,
+      status: 'draft',
+      responsibleEmployeeId: state.currentWorker?.id,
+      warehousePhotos: [], warehouseVideos: [],
+      supplierMediaId: input.supplierMediaId, damageReportId: input.damageReportId,
+      createdAt: new Date().toISOString(),
+    };
+    state = { ...state, supplierDisputes: [d, ...state.supplierDisputes] };
+    audit('DISPUTE_CREATE', `${id}: ${input.reason} (${input.sku}, ${input.supplierName})`, { sku: input.sku, asnId: input.asnId });
+    emit();
+    return id;
+  },
+
+  changeDisputeStatus(id: string, status: DisputeStatus) {
+    const stamps: Partial<SupplierDispute> = {};
+    if (status === 'sent_to_supplier') stamps.sentAt = new Date().toISOString();
+    if (status === 'resolved' || status === 'rejected' || status === 'accepted') stamps.resolvedAt = new Date().toISOString();
+    state = { ...state, supplierDisputes: state.supplierDisputes.map(d => d.id === id ? { ...d, status, ...stamps } : d) };
+    audit('DISPUTE_STATUS', `${id}: → ${status}`);
+    emit();
+  },
+
+  addDisputeResponse(id: string, response: string) {
+    state = {
+      ...state,
+      supplierDisputes: state.supplierDisputes.map(d =>
+        d.id === id
+          ? { ...d, supplierResponse: response, status: d.status === 'sent_to_supplier' ? 'supplier_response_waiting' : d.status }
+          : d),
+    };
+    audit('DISPUTE_RESPONSE', `${id}: ${response}`);
+    emit();
+  },
+
+  uploadDisputeMedia(id: string, kind: 'photo' | 'video', uri: string) {
+    state = {
+      ...state,
+      supplierDisputes: state.supplierDisputes.map(d => d.id !== id ? d
+        : kind === 'photo'
+          ? { ...d, warehousePhotos: [...d.warehousePhotos, uri] }
+          : { ...d, warehouseVideos: [...d.warehouseVideos, uri] }),
+    };
+    audit(kind === 'photo' ? 'DISPUTE_PHOTO_UPLOAD' : 'DISPUTE_VIDEO_UPLOAD', `${id}: ${kind} загружен`);
+    emit();
+  },
+
+  // ── Scanner validation ──────────────────────────────
+  /** Универсальная проверка скана. Возвращает ok + причину при mismatch. Пишет audit и при необходимости создаёт scan-block. */
+  scanValidate(input: {
+    type: 'BIN' | 'ITEM' | 'ORDER' | 'PACKAGE' | 'COURIER' | 'RETURN' | 'INVOICE' | 'ASN';
+    value: string;
+    expected?: string;
+    /** Контекст для сообщения и audit. */
+    context?: string;
+    /** Если true — при ошибке создаётся scan-block, который требует override Shift Manager / Admin. */
+    blockOnFail?: boolean;
+  }): { ok: boolean; reason?: string; blockId?: string } {
+    const { type, value, expected, context, blockOnFail } = input;
+    let ok = false;
+    let detail = '';
+
+    switch (type) {
+      case 'BIN': {
+        const b = state.bins.find(x => x.id === value || x.qrCode.endsWith(value));
+        ok = !!b && (!expected || b.id === expected);
+        detail = ok ? `BIN ${b!.id}` : `BIN ${value} не найден или ≠ ${expected ?? ''}`;
+        break;
+      }
+      case 'ITEM': {
+        const sku = state.skus.find(x => x.sku === value || x.barcode === value);
+        ok = !!sku && (!expected || sku.sku === expected);
+        detail = ok ? `ITEM ${sku!.sku}` : `ITEM ${value} не найден или ≠ ${expected ?? ''}`;
+        break;
+      }
+      case 'ORDER':
+      case 'PACKAGE': {
+        const o = state.orders.find(x => x.code === value || x.shippingLabel === value);
+        ok = !!o && (!expected || o.code === expected);
+        detail = ok ? `ORDER ${o!.code}` : `${type} ${value} не найден или ≠ ${expected ?? ''}`;
+        break;
+      }
+      case 'COURIER': {
+        const c = state.couriers.find(x => x.id === value);
+        ok = !!c;
+        detail = ok ? `COURIER ${c!.id}` : `COURIER ${value} не найден`;
+        break;
+      }
+      case 'RETURN': {
+        const r = state.returns.find(x => x.id === value);
+        ok = !!r;
+        detail = ok ? `RMA ${r!.id}` : `RMA ${value} не найден`;
+        break;
+      }
+      case 'INVOICE':
+      case 'ASN': {
+        const a = state.asns.find(x => x.invoiceNumber === value || x.id === value);
+        ok = !!a;
+        detail = ok ? `ASN ${a!.id} (${a!.invoiceNumber})` : `${type} ${value} не найден`;
+        break;
+      }
+    }
+
+    if (ok) {
+      audit(`SCAN_${type}_OK`, `${detail}${context ? ' · ' + context : ''}`);
+      emit();
+      return { ok: true };
+    }
+
+    audit(`SCAN_${type}_FAIL`, `${detail}${context ? ' · ' + context : ''}`);
+    let blockId: string | undefined;
+    if (blockOnFail) {
+      blockId = `BLOCK-${Date.now()}`;
+      const b: ScanBlock = {
+        id: blockId, reason: detail, context: context ?? '',
+        createdAt: new Date().toISOString(),
+      };
+      state = { ...state, scanBlocks: [b, ...state.scanBlocks] };
+      audit('SCAN_BLOCK', `${b.id}: ${detail}`);
+    }
+    emit();
+    return { ok: false, reason: detail, blockId };
+  },
+
+  /** Override блокировки сканирования — может только override_block-роль. */
+  overrideScanBlock(blockId: string, comment: string): { ok: boolean; reason?: string } {
+    if (!state.currentWorker) return { ok: false, reason: 'Не авторизован' };
+    state = {
+      ...state,
+      scanBlocks: state.scanBlocks.map(b =>
+        b.id === blockId
+          ? { ...b, resolvedAt: new Date().toISOString(), resolvedBy: state.currentWorker?.id }
+          : b),
+    };
+    audit('SCAN_BLOCK_OVERRIDE', `${blockId}: ${comment}`);
+    emit();
+    return { ok: true };
   },
 
   // ── Documents ──

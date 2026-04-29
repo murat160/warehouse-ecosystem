@@ -3,6 +3,7 @@ import {
   Clock, ListTodo, ShoppingCart, Package, ScanLine, PackageCheck,
   Truck, ArrowDownToLine, Boxes, Grid3x3, ClipboardCheck, Undo2,
   AlertTriangle, FileText, BarChart3, Move, Settings, ListChecks,
+  ShieldAlert, FileWarning,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -26,6 +27,8 @@ const QUICK: Quick[] = [
   { to: '/movements',     label: 'Перемещения',       icon: Move,            color: '#0EA5E9', perm: 'move' },
   { to: '/returns',       label: 'Возвраты',          icon: Undo2,           color: '#F43F5E', perm: 'returns' },
   { to: '/problems',      label: 'Проблемы',          icon: AlertTriangle,   color: '#EF4444', perm: 'problems' },
+  { to: '/claims',            label: 'Жалобы',            icon: ShieldAlert, color: '#7F1D1D', perm: 'claims' },
+  { to: '/supplier-disputes', label: 'Споры с поставщиками', icon: FileWarning, color: '#3730A3', perm: 'supplier_disputes' },
   { to: '/scanner',       label: 'Сканер',            icon: ScanLine,        color: '#7C3AED', perm: 'scanner' },
   { to: '/documents',     label: 'Документы',         icon: FileText,        color: '#6B7280', perm: 'documents' },
   { to: '/reports',       label: 'Отчёты',            icon: BarChart3,       color: '#A855F7', perm: 'view_reports' },
