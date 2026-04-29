@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Video, Send, Download, MessageSquare } from 'lucide-react';
+import { Camera, Video, Send, Download, MessageSquare, MessagesSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -7,6 +7,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
+import { SupplierChatModal } from '../components/SupplierChatModal';
 import { EvidenceViewer, type Evidence } from '../components/EvidenceViewer';
 import {
   DISPUTE_REASON_LABELS, DISPUTE_STATUS_LABELS,
@@ -37,6 +38,8 @@ export function SupplierDisputesPage() {
   const [resolveFor, setResolveFor] = useState<string | null>(null);
   const [responseFor, setResponseFor] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'ALL' | DisputeStatus>('ALL');
 
   const exportReport = (id: string) => {
     const d = supplierDisputes.find(x => x.id === id);
@@ -87,6 +90,16 @@ export function SupplierDisputesPage() {
       <PageHeader title="Споры с поставщиками" subtitle={`Всего: ${supplierDisputes.length}`} />
 
       <div className="px-5 -mt-5">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-3 md:grid-cols-4 gap-2 mb-3">
+          <FilterPill label="Все"        value={supplierDisputes.length}                                                  active={filter === 'ALL'}                       onClick={() => setFilter('ALL')} />
+          <FilterPill label="Черновики"  value={supplierDisputes.filter(x => x.status === 'draft').length}               active={filter === 'draft'}                     onClick={() => setFilter('draft')}                     color="#374151" />
+          <FilterPill label="Отправлены" value={supplierDisputes.filter(x => x.status === 'sent_to_supplier').length}    active={filter === 'sent_to_supplier'}          onClick={() => setFilter('sent_to_supplier')}          color="#3730A3" />
+          <FilterPill label="Ждём ответ" value={supplierDisputes.filter(x => x.status === 'supplier_response_waiting').length} active={filter === 'supplier_response_waiting'} onClick={() => setFilter('supplier_response_waiting')} color="#92400E" />
+          <FilterPill label="Решены"     value={supplierDisputes.filter(x => x.status === 'resolved').length}            active={filter === 'resolved'}                  onClick={() => setFilter('resolved')}                  color="#166534" />
+          <FilterPill label="Отклонены"  value={supplierDisputes.filter(x => x.status === 'rejected').length}            active={filter === 'rejected'}                  onClick={() => setFilter('rejected')}                  color="#991B1B" />
+          <FilterPill label="Эскалированы" value={supplierDisputes.filter(x => x.status === 'escalated').length}        active={filter === 'escalated'}                 onClick={() => setFilter('escalated')}                 color="#7F1D1D" />
+        </div>
+
         <button
           onClick={() => setCreateOpen(true)}
           className="w-full h-11 rounded-2xl bg-[#3730A3] text-white mb-3 active-press"
@@ -95,11 +108,12 @@ export function SupplierDisputesPage() {
           + Новый спор
         </button>
 
-        {supplierDisputes.length === 0 ? (
-          <EmptyState emoji="🤝" title="Споров нет" subtitle="Когда обнаруживается расхождение с поставкой — создайте спор отсюда." />
-        ) : (
+        {(() => {
+          const list = filter === 'ALL' ? supplierDisputes : supplierDisputes.filter(x => x.status === filter);
+          if (list.length === 0) return <EmptyState emoji="🤝" title="Споров нет" subtitle="Когда обнаруживается расхождение с поставкой — создайте спор отсюда." />;
+          return (
           <div className="space-y-2">
-            {supplierDisputes.map(d => {
+            {list.map(d => {
               const c = STATUS_COLORS[d.status];
               const sku = skus.find(s => s.sku === d.sku);
               const evidence: Evidence[] = [
@@ -175,6 +189,17 @@ export function SupplierDisputesPage() {
                     <button onClick={() => exportReport(d.id)} className="px-3 h-9 rounded-lg bg-[#374151] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}>
                       <Download className="w-3 h-3" /> Отчёт
                     </button>
+                    <button
+                      onClick={() => {
+                        const id = store.getOrCreateSupplierThread({
+                          supplierId: d.supplierId, supplierName: d.supplierName,
+                          linkedTo: { type: 'dispute', id: d.id },
+                          invoiceNumber: d.invoiceNumber, sku: d.sku,
+                        });
+                        setChatThreadId(id);
+                      }}
+                      className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                    ><MessagesSquare className="w-3 h-3" /> Чат с поставщиком</button>
                   </div>
 
                   {evidence.length > 0 && (
@@ -186,7 +211,8 @@ export function SupplierDisputesPage() {
               );
             })}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <Modal
@@ -223,7 +249,26 @@ export function SupplierDisputesPage() {
         onConfirm={resolveDispute}
         onCancel={() => setResolveFor(null)}
       />
+
+      <SupplierChatModal
+        open={!!chatThreadId}
+        threadId={chatThreadId}
+        onClose={() => setChatThreadId(null)}
+      />
     </div>
+  );
+}
+
+function FilterPill({ label, value, active, onClick, color = '#1F2430' }: { label: string; value: number; active: boolean; onClick: () => void; color?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-xl p-2 active-press"
+      style={{ backgroundColor: active ? color : '#F9FAFB' }}
+    >
+      <div className="text-[16px]" style={{ fontWeight: 900, color: active ? 'white' : color }}>{value}</div>
+      <div className="text-[9px]" style={{ fontWeight: 700, color: active ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>{label}</div>
+    </button>
   );
 }
 

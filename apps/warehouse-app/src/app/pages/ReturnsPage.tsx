@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Image as ImageIcon, Video, Eye, Send, FileWarning } from 'lucide-react';
+import { Camera, Image as ImageIcon, Video, Eye, Send, FileWarning, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -11,6 +11,7 @@ import { SkuThumb } from '../components/SkuThumb';
 import { OwnerCard } from '../components/OwnerCard';
 import { SendToSupplierModal } from '../components/SendToSupplierModal';
 import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
+import { SupplierChatModal } from '../components/SupplierChatModal';
 import type { ReturnRow, ReturnStatus, MediaRequest, EvidenceSendItem } from '../domain/types';
 
 const STATUS_LABELS: Record<ReturnStatus, string> = {
@@ -55,6 +56,8 @@ export function ReturnsPage() {
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
   const [sendFor, setSendFor] = useState<{ rmaId: string; items: EvidenceSendItem[]; supplierId?: string; sku?: string; invoice?: string } | null>(null);
   const [disputeFor, setDisputeFor] = useState<{ rmaId: string; supplierId: string; supplierName: string; sku: string; invoice?: string; asnId?: string } | null>(null);
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'ALL' | ReturnStatus>('ALL');
 
   const resolveSupplier = (r: ReturnRow) => {
     if (r.supplierId) return suppliers.find(s => s.id === r.supplierId);
@@ -104,10 +107,20 @@ export function ReturnsPage() {
     <div className="min-h-screen bg-[#F5F6F8] pb-24 md:pb-8">
       <PageHeader title="Возвраты" subtitle={`Активных: ${returns.length}`} />
 
-      <div className="px-5 -mt-5 space-y-2">
-        {returns.length === 0 ? (
-          <EmptyState emoji="↩️" title="Возвратов нет" subtitle="Возвраты от клиентов и поставщиков появятся здесь." />
-        ) : returns.map(r => {
+      <div className="px-5 -mt-5">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-4 gap-2 mb-3">
+          <FilterPill label="Все"        value={returns.length}                                                active={filter === 'ALL'}        onClick={() => setFilter('ALL')} />
+          <FilterPill label="Получены"   value={returns.filter(x => x.status === 'received').length}           active={filter === 'received'}   onClick={() => setFilter('received')}   color="#991B1B" />
+          <FilterPill label="Проверка"   value={returns.filter(x => x.status === 'inspection').length}         active={filter === 'inspection'} onClick={() => setFilter('inspection')} color="#92400E" />
+          <FilterPill label="Закрыты"    value={returns.filter(x => x.status === 'closed').length}             active={filter === 'closed'}     onClick={() => setFilter('closed')}     color="#374151" />
+        </div>
+      </div>
+
+      <div className="px-5 space-y-2">
+        {(() => {
+          const list = filter === 'ALL' ? returns : returns.filter(x => x.status === filter);
+          if (list.length === 0) return <EmptyState emoji="↩️" title="Возвратов нет" subtitle="Возвраты от клиентов и поставщиков появятся здесь." />;
+          return list.map(r => {
           const c = STATUS_COLORS[r.status];
           const mediaItems = buildMediaForReturn(r);
           const hasVideo = !!(r.videoFromCustomer || r.videoFromInspection);
@@ -274,6 +287,16 @@ export function ReturnsPage() {
                       className="px-3 h-9 rounded-lg bg-[#7F1D1D] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                     ><FileWarning className="w-3 h-3" /> Создать спор</button>
                   )}
+                  <button
+                    onClick={() => {
+                      const id = store.getOrCreateReturnThread({
+                        rmaId: r.id,
+                        supplierId: supplier?.id, supplierName: supplier?.name,
+                      });
+                      setChatThreadId(id);
+                    }}
+                    className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                  ><MessageSquare className="w-3 h-3" /> Чат по возврату</button>
                   <button onClick={() => openDecision(r, 'restock')}              className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В продажу</button>
                   <button onClick={() => openDecision(r, 'damaged')}              className="px-3 h-9 rounded-lg bg-[#F59E0B] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В брак</button>
                   <button onClick={() => openDecision(r, 'write_off')}            className="px-3 h-9 rounded-lg bg-[#EF4444] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>Списать</button>
@@ -282,7 +305,8 @@ export function ReturnsPage() {
               )}
             </div>
           );
-        })}
+        });
+        })()}
       </div>
 
       <Modal
@@ -373,7 +397,28 @@ export function ReturnsPage() {
           }}
         />
       )}
+
+      <SupplierChatModal
+        open={!!chatThreadId}
+        threadId={chatThreadId}
+        onClose={() => setChatThreadId(null)}
+      />
     </div>
+  );
+}
+
+function FilterPill({ label, value, active, onClick, color = '#1F2430' }: { label: string; value: number; active: boolean; onClick: () => void; color?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-xl p-2 active-press"
+      style={{
+        backgroundColor: active ? color : '#F9FAFB',
+      }}
+    >
+      <div className="text-[18px]" style={{ fontWeight: 900, color: active ? 'white' : color }}>{value}</div>
+      <div className="text-[10px]" style={{ fontWeight: 700, color: active ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>{label}</div>
+    </button>
   );
 }
 

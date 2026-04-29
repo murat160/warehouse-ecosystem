@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { Eye, MessageSquare, CheckCircle2, MessagesSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -7,6 +7,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
+import { SupplierChatModal } from '../components/SupplierChatModal';
 import {
   EVIDENCE_SEND_STATUS_LABELS, type EvidenceSendStatus,
 } from '../domain/types';
@@ -26,6 +27,7 @@ export function EvidenceLogPage() {
   const [responseText, setResponseText] = useState('');
   const [closeFor, setCloseFor] = useState<string | null>(null);
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
 
   const list = evidenceSends.filter(e => filter === 'ALL' || e.status === filter);
 
@@ -116,6 +118,16 @@ export function EvidenceLogPage() {
                         className="px-3 h-9 rounded-lg bg-[#374151] text-white text-[12px] active-press" style={{ fontWeight: 700 }}
                       >Закрыть</button>
                     )}
+                    <button
+                      onClick={() => {
+                        const id = store.getOrCreateSupplierThread({
+                          supplierId: e.supplierId, supplierName: e.supplierName,
+                          linkedTo: e.linkedTo, invoiceNumber: e.invoiceNumber, sku: e.sku,
+                        });
+                        setChatThreadId(id);
+                      }}
+                      className="px-3 h-9 rounded-lg bg-[#3730A3] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                    ><MessagesSquare className="w-3 h-3" /> Чат</button>
                   </div>
                 </div>
               );
@@ -153,6 +165,12 @@ export function EvidenceLogPage() {
         items={media?.items ?? []}
         initialIndex={media?.index ?? 0}
         onClose={() => setMedia(null)}
+      />
+
+      <SupplierChatModal
+        open={!!chatThreadId}
+        threadId={chatThreadId}
+        onClose={() => setChatThreadId(null)}
       />
     </div>
   );

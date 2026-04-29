@@ -499,6 +499,99 @@ export interface EvidenceSend {
   sku?: string;
 }
 
+// ───────── Partial receive (детальная приёмка) ─────────
+export type PartialReceiveReason =
+  | 'damaged' | 'missing_quantity' | 'wrong_item' | 'wrong_barcode'
+  | 'package_opened' | 'expired' | 'other';
+
+export const PARTIAL_RECEIVE_REASON_LABELS: Record<PartialReceiveReason, string> = {
+  damaged:          'Повреждение',
+  missing_quantity: 'Недостача',
+  wrong_item:       'Не тот товар',
+  wrong_barcode:    'Не тот штрихкод',
+  package_opened:   'Упаковка вскрыта',
+  expired:          'Просрочен',
+  other:            'Другое',
+};
+
+export interface PartialReceiveLine {
+  asnItemId: string;
+  sku: string;
+  expectedQty: number;
+  receivedQty: number;
+  damagedQty: number;
+  missingQty: number;
+  reason: PartialReceiveReason;
+  comment?: string;
+  photos: string[];
+  videos: string[];
+}
+
+// ───────── Supplier chat ─────────
+export type ChatMessageStatus = 'sent' | 'delivered' | 'viewed' | 'response_received';
+
+export const CHAT_MESSAGE_STATUS_LABELS: Record<ChatMessageStatus, string> = {
+  sent:              'Отправлено',
+  delivered:         'Доставлено',
+  viewed:            'Прочитано',
+  response_received: 'Получен ответ',
+};
+
+export type ChatAuthor = 'warehouse' | 'supplier' | 'admin' | 'returns_operator' | 'support';
+
+export interface ChatAttachment {
+  kind: 'image' | 'video';
+  src: string;
+  title?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  author: ChatAuthor;
+  authorName: string;
+  text: string;
+  attachments: ChatAttachment[];
+  sentAt: string;
+  status: ChatMessageStatus;
+}
+
+export type ChatThreadKind = 'supplier' | 'return';
+
+export interface ChatThread {
+  id: string;                                    // CT-…
+  kind: ChatThreadKind;
+  /** Для supplier-чата — supplierId; для return-чата всё равно может быть. */
+  supplierId?: string;
+  supplierName?: string;
+  /** Для return-чата (общение по возврату). */
+  rmaId?: string;
+  /** Привязка к источнику. */
+  linkedTo?: EvidenceLinkedTarget;
+  invoiceNumber?: string;
+  sku?: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  /** Для return-чата: с кем складчик ведёт диалог (поставщик / admin / support). */
+  participants?: ChatAuthor[];
+}
+
+export const SUPPLIER_QUICK_TEMPLATES: string[] = [
+  'Товар пришёл повреждённым, приложили фото/видео.',
+  'Количество не совпадает с invoice.',
+  'Просим подтвердить замену/компенсацию.',
+  'Просим объяснение по расхождению.',
+  'Возврат связан с вашим товаром, нужна проверка.',
+];
+
+export const RETURN_QUICK_TEMPLATES: string[] = [
+  'Получили возврат, начинаем проверку.',
+  'Прошу прислать дополнительное фото.',
+  'Прошу прислать видео распаковки.',
+  'Возврат принят в продажу.',
+  'Возврат отправлен поставщику.',
+];
+
 // ───────── Evidence sources (общая категория для viewer) ─────────
 export type EvidenceSource = 'customer' | 'supplier' | 'warehouse' | 'courier' | 'return' | 'receiving';
 

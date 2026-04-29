@@ -11,7 +11,8 @@ import { DamageReportModal } from '../components/DamageReportModal';
 import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
 import { SendToSupplierModal } from '../components/SendToSupplierModal';
 import { OwnerCard } from '../components/OwnerCard';
-import { ConfirmModal } from '../components/ConfirmModal';
+import { PartialReceiveModal } from '../components/PartialReceiveModal';
+import { SupplierChatModal } from '../components/SupplierChatModal';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
 import { LocationBadge } from '../components/LocationBadge';
 import {
@@ -46,6 +47,8 @@ export function InboundPage() {
   const [partialFor, setPartialFor] = useState<string | null>(null);
   const [blockFor, setBlockFor] = useState<string | null>(null);
   const [blockReason, setBlockReason] = useState('');
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'ALL' | 'discrepancy' | 'arrived' | 'received'>('ALL');
 
   const submitReview = () => {
     if (!reviewSm) return;
@@ -66,10 +69,24 @@ export function InboundPage() {
     <div className="min-h-screen bg-[#F5F6F8] pb-24 md:pb-8">
       <PageHeader title="Приёмка" subtitle={`Поставок: ${asns.length}`} />
 
-      <div className="px-5 -mt-5 space-y-2">
-        {asns.length === 0 ? (
-          <EmptyState emoji="📥" title="Поставок нет" />
-        ) : asns.map(a => {
+      <div className="px-5 -mt-5">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-4 gap-2 mb-3">
+          <KpiPill label="Все"           value={asns.length}                                              active={filter === 'ALL'}          onClick={() => setFilter('ALL')} />
+          <KpiPill label="Прибыли"       value={asns.filter(a => a.status === 'arrived').length}         active={filter === 'arrived'}      onClick={() => setFilter('arrived')}      color="#0369A1" />
+          <KpiPill label="Расхождения"   value={asns.filter(a => a.status === 'discrepancy').length}     active={filter === 'discrepancy'}  onClick={() => setFilter('discrepancy')}  color="#9A3412" />
+          <KpiPill label="Принято"       value={asns.filter(a => a.status === 'received' || a.status === 'closed').length} active={filter === 'received'} onClick={() => setFilter('received')} color="#166534" />
+        </div>
+      </div>
+
+      <div className="px-5 space-y-2">
+        {(() => {
+          const list = asns.filter(a => filter === 'ALL'
+            ? true
+            : filter === 'received'
+              ? (a.status === 'received' || a.status === 'closed')
+              : a.status === filter);
+          if (list.length === 0) return <EmptyState emoji="📥" title="Поставок нет" />;
+          return list.map(a => {
           const isOpen = openId === a.id;
           return (
             <div key={a.id} className="bg-white rounded-2xl p-4 shadow-sm">
@@ -130,6 +147,17 @@ export function InboundPage() {
                   })}
                   className="px-3 h-9 rounded-lg bg-[#3730A3] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                 ><FileWarning className="w-3 h-3" /> Спор с поставщиком</button>
+                <button
+                  onClick={() => {
+                    const id = store.getOrCreateSupplierThread({
+                      supplierId: a.supplierId, supplierName: a.supplierName,
+                      linkedTo: { type: 'asn', id: a.id },
+                      invoiceNumber: a.invoiceNumber, sku: a.items[0]?.sku,
+                    });
+                    setChatThreadId(id);
+                  }}
+                  className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                ><MessageSquare className="w-3 h-3" /> Написать поставщику</button>
               </div>
 
               {isOpen && (
@@ -301,7 +329,8 @@ export function InboundPage() {
               )}
             </div>
           );
-        })}
+        });
+        })()}
       </div>
 
       {damage && (
@@ -333,19 +362,31 @@ export function InboundPage() {
         />
       )}
 
-      <ConfirmModal
-        open={!!partialFor}
-        title="Принять только годное?"
-        message="Из этой поставки в available stock попадёт только то, что без брака. Битое уйдёт в damaged stock и в discrepancy_act."
-        confirmLabel="Принять частично"
-        onConfirm={() => {
-          if (!partialFor) return;
-          const r = store.partialReceiveAsn(partialFor);
-          if (r.ok) toast.success('Частичная приёмка зафиксирована');
-          else      toast.error(r.reason ?? 'Ошибка');
-          setPartialFor(null);
-        }}
-        onCancel={() => setPartialFor(null)}
+      {partialFor && (() => {
+        const a = asns.find(x => x.id === partialFor);
+        if (!a) return null;
+        return (
+          <PartialReceiveModal
+            open={!!partialFor}
+            asn={a}
+            onClose={() => setPartialFor(null)}
+            onCreateDispute={(d) => setDispute({
+              asnId: a.id, supplierId: a.supplierId, supplierName: a.supplierName,
+              invoiceNumber: a.invoiceNumber, sku: d.sku, supplierMediaId: d.supplierMediaId,
+            })}
+            onSendEvidence={(d) => setSendFor({
+              asnId: a.id, asnItemId: a.items[0]?.id ?? '',
+              supplierId: a.supplierId, sku: d.sku, invoice: a.invoiceNumber,
+              items: d.items,
+            })}
+          />
+        );
+      })()}
+
+      <SupplierChatModal
+        open={!!chatThreadId}
+        threadId={chatThreadId}
+        onClose={() => setChatThreadId(null)}
       />
 
       <Modal
@@ -451,5 +492,21 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
         style={{ fontWeight: 700 }}
       />
     </div>
+  );
+}
+
+function KpiPill({ label, value, active, onClick, color = '#1F2430' }: { label: string; value: number; active: boolean; onClick: () => void; color?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-xl p-2 active-press"
+      style={{
+        backgroundColor: active ? color : '#F9FAFB',
+        color: active ? 'white' : '#1F2430',
+      }}
+    >
+      <div className="text-[18px]" style={{ fontWeight: 900, color: active ? 'white' : color }}>{value}</div>
+      <div className="text-[10px]" style={{ fontWeight: 700, color: active ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>{label}</div>
+    </button>
   );
 }

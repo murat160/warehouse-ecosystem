@@ -2,6 +2,7 @@ import type {
   Worker, Sku, Bin, WarehouseOrder, Task, InventoryRow, Movement,
   CountTask, Asn, ReturnRow, Problem, DocumentRow, Courier,
   Supplier, SupplierMedia, DamageReport, SupplierDispute, EvidenceSend,
+  ChatThread,
 } from './types';
 
 const now = () => new Date().toISOString();
@@ -247,6 +248,25 @@ export const MOCK_EVIDENCE_SENDS: EvidenceSend[] = [
     sentAt: now(),
     invoiceNumber: 'INV-7820', sku: 'PHN-IP15',
     linkedTo: { type: 'asn', id: 'a2', asnItemId: 'ai3' },
+  },
+];
+
+export const MOCK_CHAT_THREADS: ChatThread[] = [
+  {
+    id: 'CT-0001', kind: 'supplier',
+    supplierId: 'SUP-7730', supplierName: 'Mobile Electronics',
+    invoiceNumber: 'INV-7820', sku: 'PHN-IP15',
+    linkedTo: { type: 'asn', id: 'a2', asnItemId: 'ai3' },
+    createdAt: now(),
+    messages: [
+      {
+        id: 'CM-1', threadId: 'CT-0001',
+        author: 'warehouse', authorName: 'Кузнецов А.',
+        text: 'По поставке INV-7820: одна коробка вскрыта. Прилагаем фото.',
+        attachments: [{ kind: 'image', src: 'mock://damage/DMG-001/photo-1.jpg', title: 'Фото повреждения' }],
+        sentAt: now(), status: 'sent',
+      },
+    ],
   },
 ];
 

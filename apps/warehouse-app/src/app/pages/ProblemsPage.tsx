@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, AlertTriangle, Camera, Video, Eye, Send } from 'lucide-react';
+import { Plus, AlertTriangle, Camera, Video, Eye, Send, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -9,6 +9,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
 import { OwnerCard } from '../components/OwnerCard';
 import { SendToSupplierModal } from '../components/SendToSupplierModal';
+import { SupplierChatModal } from '../components/SupplierChatModal';
 import { PROBLEM_TYPE_LABELS, type ProblemType, type ProblemStatus, type EvidenceSendItem } from '../domain/types';
 import { can, ROLE_LABELS } from '../domain/roles';
 
@@ -37,6 +38,8 @@ export function ProblemsPage() {
 
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
   const [sendFor, setSendFor] = useState<null | { problemId: string; supplierId?: string; sku?: string; items: EvidenceSendItem[] }>(null);
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'ALL' | ProblemStatus>('ALL');
 
   const create = () => {
     if (!desc.trim()) { toast.error('Опишите проблему'); return; }
@@ -61,6 +64,13 @@ export function ProblemsPage() {
       <PageHeader title="Проблемы" subtitle={`Активных: ${problems.filter(p => p.status !== 'resolved').length}`} />
 
       <div className="px-5 -mt-5">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-4 gap-2 mb-3">
+          <FilterPill label="Все"        value={problems.length}                                           active={filter === 'ALL'}            onClick={() => setFilter('ALL')} />
+          <FilterPill label="Открыты"    value={problems.filter(p => p.status === 'open').length}          active={filter === 'open'}           onClick={() => setFilter('open')}           color="#7F1D1D" />
+          <FilterPill label="Изучаются"  value={problems.filter(p => p.status === 'investigating').length} active={filter === 'investigating'}  onClick={() => setFilter('investigating')}  color="#92400E" />
+          <FilterPill label="Решены"     value={problems.filter(p => p.status === 'resolved').length}      active={filter === 'resolved'}       onClick={() => setFilter('resolved')}       color="#166534" />
+        </div>
+
         <button
           onClick={() => setShowCreate(true)}
           className="w-full h-11 rounded-2xl bg-[#EF4444] text-white flex items-center justify-center gap-2 active-press mb-3"
@@ -69,11 +79,12 @@ export function ProblemsPage() {
           <Plus className="w-4 h-4" /> Создать проблему
         </button>
 
-        {problems.length === 0 ? (
-          <EmptyState emoji="🚧" title="Проблем нет" subtitle="Если что-то пошло не так — создайте проблему здесь." />
-        ) : (
+        {(() => {
+          const list = filter === 'ALL' ? problems : problems.filter(p => p.status === filter);
+          if (list.length === 0) return <EmptyState emoji="🚧" title="Проблем нет" subtitle="Если что-то пошло не так — создайте проблему здесь." />;
+          return (
           <div className="space-y-2">
-            {problems.map(p => {
+            {list.map(p => {
               const c = STATUS_COLORS[p.status];
               const reporter = workers.find(w => w.id === p.reportedBy);
               const assignee = p.assignedTo ? workers.find(w => w.id === p.assignedTo) : null;
@@ -151,6 +162,18 @@ export function ProblemsPage() {
                             className="px-3 h-9 rounded-lg bg-[#0369A1] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                           ><Send className="w-3 h-3" /> Отправить поставщику</button>
                         )}
+                        {supplier && (
+                          <button
+                            onClick={() => {
+                              const id = store.getOrCreateSupplierThread({
+                                supplierId: supplier.id, supplierName: supplier.name,
+                                linkedTo: { type: 'problem', id: p.id }, sku: p.sku,
+                              });
+                              setChatThreadId(id);
+                            }}
+                            className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                          ><MessageSquare className="w-3 h-3" /> Чат</button>
+                        )}
                         {canReassign && !p.assignedTo && (
                           <select
                             defaultValue=""
@@ -179,7 +202,8 @@ export function ProblemsPage() {
               );
             })}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <Modal
@@ -258,7 +282,26 @@ export function ProblemsPage() {
           defaultComment={`Проблема ${sendFor.problemId}: прошу пояснения по товару ${sendFor.sku ?? ''}.`}
         />
       )}
+
+      <SupplierChatModal
+        open={!!chatThreadId}
+        threadId={chatThreadId}
+        onClose={() => setChatThreadId(null)}
+      />
     </div>
+  );
+}
+
+function FilterPill({ label, value, active, onClick, color = '#1F2430' }: { label: string; value: number; active: boolean; onClick: () => void; color?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-xl p-2 active-press"
+      style={{ backgroundColor: active ? color : '#F9FAFB' }}
+    >
+      <div className="text-[18px]" style={{ fontWeight: 900, color: active ? 'white' : color }}>{value}</div>
+      <div className="text-[10px]" style={{ fontWeight: 700, color: active ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>{label}</div>
+    </button>
   );
 }
 

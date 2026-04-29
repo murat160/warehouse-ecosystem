@@ -7,6 +7,8 @@ import type {
   DamageReport, DamageType,
   SupplierDispute, DisputeReason, DisputeStatus,
   EvidenceSend, EvidenceSendItem, EvidenceLinkedTarget,
+  ChatThread, ChatMessage, ChatAuthor, ChatAttachment, ChatThreadKind,
+  PartialReceiveLine,
 } from '../domain/types';
 import type { OrderStatus } from '../domain/orderStatus';
 import { NEXT_STATUSES } from '../domain/orderStatus';
@@ -15,7 +17,7 @@ import {
   MOCK_INVENTORY, MOCK_MOVEMENTS, MOCK_COUNTS, MOCK_ASNS,
   MOCK_RETURNS, MOCK_PROBLEMS, MOCK_DOCUMENTS, MOCK_COURIERS,
   MOCK_SUPPLIERS, MOCK_SUPPLIER_MEDIA, MOCK_DAMAGE_REPORTS, MOCK_SUPPLIER_DISPUTES,
-  MOCK_EVIDENCE_SENDS,
+  MOCK_EVIDENCE_SENDS, MOCK_CHAT_THREADS,
 } from '../domain/mock';
 import { MOCK_SORT_BINS, type SortBin } from '../domain/sortBins';
 
@@ -41,6 +43,7 @@ interface State {
   damageReports: DamageReport[];
   supplierDisputes: SupplierDispute[];
   evidenceSends: EvidenceSend[];
+  chatThreads: ChatThread[];
   /** Журнал scanner-проверок: блокировки и нужные override-ы. */
   scanBlocks: ScanBlock[];
 }
@@ -76,6 +79,7 @@ let state: State = {
   damageReports:    MOCK_DAMAGE_REPORTS,
   supplierDisputes: MOCK_SUPPLIER_DISPUTES,
   evidenceSends:    MOCK_EVIDENCE_SENDS,
+  chatThreads:      MOCK_CHAT_THREADS,
   scanBlocks:       [],
 };
 
@@ -89,6 +93,16 @@ export function useStore(): State {
 }
 
 // ───────── helpers ─────────
+const PARTIAL_REASON_FALLBACK: Record<PartialReceiveLine['reason'], string> = {
+  damaged:          'Повреждение при приёмке',
+  missing_quantity: 'Расхождение по количеству',
+  wrong_item:       'Не тот товар',
+  wrong_barcode:    'Не тот штрихкод',
+  package_opened:   'Упаковка вскрыта',
+  expired:          'Просрочен',
+  other:            'Другое расхождение',
+};
+
 function audit(action: string, detail: string, extra: Partial<AuditEntry> = {}) {
   const w = state.currentWorker;
   if (!w) return;
@@ -993,6 +1007,86 @@ export const store = {
     return { ok: true };
   },
 
+  /**
+   * Полная детализированная частичная приёмка по всем позициям ASN:
+   *   - good idёт в available stock (asn.items[i].receivedQty)
+   *   - damaged идёт в damaged stock + создаётся damage report (по line)
+   *   - missing фиксируется в discrepancy_act
+   *   - медиа прикрепляются к asn-items, аудит на каждый шаг
+   */
+  partialReceiveAsnDetailed(asnId: string, lines: PartialReceiveLine[]): { ok: boolean; reason?: string; damageReportIds: string[] } {
+    const a = state.asns.find(x => x.id === asnId);
+    if (!a) return { ok: false, reason: 'Поставка не найдена', damageReportIds: [] };
+
+    const damageReportIds: string[] = [];
+    let damagedTotal = 0, missingTotal = 0, receivedTotal = 0;
+
+    state = {
+      ...state,
+      asns: state.asns.map(x => x.id !== asnId ? x : {
+        ...x,
+        status: 'discrepancy',
+        items: x.items.map(it => {
+          const line = lines.find(l => l.asnItemId === it.id);
+          if (!line) return it;
+          receivedTotal += line.receivedQty;
+          damagedTotal  += line.damagedQty;
+          missingTotal  += line.missingQty;
+          return {
+            ...it,
+            receivedQty: line.receivedQty,
+            damagedQty:  line.damagedQty,
+            photos: [...(it.photos ?? []), ...line.photos],
+          };
+        }),
+      }),
+    };
+
+    // Создаём по damage report на каждую damaged-позицию
+    for (const line of lines) {
+      if (line.damagedQty > 0) {
+        const id = `DMG-${Date.now()}-${line.asnItemId}`;
+        damageReportIds.push(id);
+        const dr: DamageReport = {
+          id,
+          asnId, asnItemId: line.asnItemId,
+          supplierId: a.supplierId, supplierName: a.supplierName,
+          invoiceNumber: a.invoiceNumber, sku: line.sku,
+          damageType: line.reason === 'expired' ? 'expired'
+                    : line.reason === 'package_opened' ? 'opened_package'
+                    : line.reason === 'wrong_item' ? 'wrong_item'
+                    : line.reason === 'wrong_barcode' ? 'wrong_item'
+                    : 'broken',
+          damagedQty: line.damagedQty,
+          description: line.comment ?? PARTIAL_REASON_FALLBACK[line.reason],
+          photos: line.photos, videos: line.videos,
+          reportedBy: state.currentWorker?.id ?? 'system',
+          createdAt: new Date().toISOString(),
+          status: 'sent_to_review',
+        };
+        state = { ...state, damageReports: [dr, ...state.damageReports] };
+        audit('DAMAGE_REPORT', `${id}: ${line.reason} ×${line.damagedQty} (${line.sku})`, { sku: line.sku, asnId });
+      }
+    }
+
+    state = {
+      ...state,
+      documents: [
+        {
+          id: `D-${Date.now()}`, type: 'discrepancy_act',
+          number: `ACT-PARTIAL-${asnId}`, asnId, status: 'pending',
+          uploadedBy: state.currentWorker?.id,
+          createdAt: new Date().toISOString(),
+        },
+        ...state.documents,
+      ],
+    };
+
+    audit('RECEIVE_PARTIAL_DETAILED', `${a.invoiceNumber}: принято ${receivedTotal}, брак ${damagedTotal}, недостача ${missingTotal}`, { asnId });
+    emit();
+    return { ok: true, damageReportIds };
+  },
+
   blockAsnBatch(asnId: string, reason: string) {
     state = {
       ...state,
@@ -1011,6 +1105,114 @@ export const store = {
       return;
     }
     audit('MEDIA_REQUEST_EXTRA', `${target.type}/${target.id}: запрошено доп. ${mediaType}`);
+    emit();
+  },
+
+  // ── Chat threads ────────────────────────────────────
+  getOrCreateSupplierThread(input: {
+    supplierId: string; supplierName: string;
+    linkedTo?: EvidenceLinkedTarget;
+    invoiceNumber?: string; sku?: string;
+  }): string {
+    const found = state.chatThreads.find(t =>
+      t.kind === 'supplier' && t.supplierId === input.supplierId &&
+      JSON.stringify(t.linkedTo) === JSON.stringify(input.linkedTo)
+    );
+    if (found) return found.id;
+    const id = `CT-${Date.now()}`;
+    const t: ChatThread = {
+      id, kind: 'supplier',
+      supplierId: input.supplierId, supplierName: input.supplierName,
+      linkedTo: input.linkedTo,
+      invoiceNumber: input.invoiceNumber, sku: input.sku,
+      messages: [],
+      createdAt: new Date().toISOString(),
+      participants: ['warehouse', 'supplier'],
+    };
+    state = { ...state, chatThreads: [t, ...state.chatThreads] };
+    audit('CHAT_OPEN', `Открыт чат с ${input.supplierName}${input.invoiceNumber ? ' · ' + input.invoiceNumber : ''}`);
+    emit();
+    return id;
+  },
+
+  getOrCreateReturnThread(input: {
+    rmaId: string;
+    supplierId?: string; supplierName?: string;
+  }): string {
+    const found = state.chatThreads.find(t => t.kind === 'return' && t.rmaId === input.rmaId);
+    if (found) return found.id;
+    const id = `CT-${Date.now()}`;
+    const t: ChatThread = {
+      id, kind: 'return',
+      rmaId: input.rmaId,
+      supplierId: input.supplierId, supplierName: input.supplierName,
+      linkedTo: { type: 'return', id: input.rmaId },
+      messages: [],
+      createdAt: new Date().toISOString(),
+      participants: ['warehouse', 'admin', 'returns_operator', 'supplier', 'support'],
+    };
+    state = { ...state, chatThreads: [t, ...state.chatThreads] };
+    audit('CHAT_OPEN', `Открыт чат по возврату ${input.rmaId}`);
+    emit();
+    return id;
+  },
+
+  sendChatMessage(threadId: string, text: string, attachments: ChatAttachment[] = []): { ok: boolean; reason?: string } {
+    if (!text.trim() && attachments.length === 0) return { ok: false, reason: 'Пустое сообщение' };
+    const w = state.currentWorker;
+    const m: ChatMessage = {
+      id: `CM-${Date.now()}`,
+      threadId,
+      author: 'warehouse',
+      authorName: w?.name ?? 'Склад',
+      text: text.trim(),
+      attachments,
+      sentAt: new Date().toISOString(),
+      status: 'sent',
+    };
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t =>
+        t.id === threadId ? { ...t, messages: [...t.messages, m] } : t),
+    };
+    audit('CHAT_SEND', `${threadId}: ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`);
+    emit();
+    return { ok: true };
+  },
+
+  markChatMessageStatus(threadId: string, messageId: string, status: ChatMessage['status']) {
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t => t.id !== threadId ? t : {
+        ...t,
+        messages: t.messages.map(m => m.id === messageId ? { ...m, status } : m),
+      }),
+    };
+    audit('CHAT_STATUS', `${threadId}/${messageId}: ${status}`);
+    emit();
+  },
+
+  receiveChatResponse(threadId: string, author: ChatAuthor, authorName: string, text: string) {
+    const m: ChatMessage = {
+      id: `CM-${Date.now()}`,
+      threadId, author, authorName,
+      text, attachments: [],
+      sentAt: new Date().toISOString(),
+      status: 'response_received',
+    };
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t => t.id !== threadId ? t : {
+        ...t,
+        messages: [
+          // Помечаем последнее наше сообщение как "response_received"
+          ...t.messages.map(x => x.author === 'warehouse' && x === t.messages[t.messages.length - 1]
+            ? { ...x, status: 'response_received' as const } : x),
+          m,
+        ],
+      }),
+    };
+    audit('CHAT_RESPONSE', `${threadId}: получен ответ (${authorName})`);
     emit();
   },
 
