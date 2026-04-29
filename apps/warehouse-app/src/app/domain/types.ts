@@ -25,8 +25,10 @@ export interface Sku {
   category: string;       // Кроссовки
   sellerArticle?: string; // артикул продавца
   photo: string;          // emoji или URL
+  photos?: string[];      // дополнительные фото товара
   weightKg: number;
   fragile?: boolean;
+  temperatureControlled?: boolean; // требует холодного хранения
   defaultZone: ZoneCode;
 }
 
@@ -191,6 +193,8 @@ export interface ReturnItem {
   condition?: 'new' | 'used' | 'damaged';
 }
 
+export type MediaRequest = 'photo_requested' | 'video_requested' | 'media_uploaded';
+
 export interface ReturnRow {
   id: string;
   orderId: string;
@@ -202,6 +206,16 @@ export interface ReturnRow {
   receivedAt: string;
   closedAt?: string;
   inspectorId?: string;
+  /** Фото товара до возврата / после возврата / повреждения. */
+  photosBefore?: string[];
+  photosAfter?: string[];
+  photosDamage?: string[];
+  /** Видео клиента и проверки склада. */
+  videoFromCustomer?: string;
+  videoFromInspection?: string;
+  comment?: string;
+  /** Запросы у клиента: photo_requested / video_requested / media_uploaded. */
+  mediaRequest?: MediaRequest;
 }
 
 // ───────── Problems ─────────
@@ -238,6 +252,7 @@ export interface Problem {
   binId?: string;
   sku?: string;
   photos?: string[];
+  videos?: string[];
   comments: string[];
   createdAt: string;
   resolvedAt?: string;

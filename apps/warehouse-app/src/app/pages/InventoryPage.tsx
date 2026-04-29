@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { ZoneBadge } from '../components/ZoneBadge';
+import { SkuThumb } from '../components/SkuThumb';
 import { ZONE_CODES, type ZoneCode } from '../domain/zones';
 
 export function InventoryPage() {
@@ -67,7 +68,7 @@ export function InventoryPage() {
               return (
                 <div key={i.sku} className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="text-[34px] w-14 h-14 rounded-xl bg-[#F3F4F6] flex items-center justify-center">{sku.photo}</div>
+                    <SkuThumb sku={sku} size={56} binId={firstBin?.id} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[14px] text-[#1F2430] truncate" style={{ fontWeight: 800 }}>{sku.name}</div>
                       <div className="text-[11px] text-[#6B7280] font-mono truncate" style={{ fontWeight: 600 }}>

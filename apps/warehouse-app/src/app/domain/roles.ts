@@ -5,6 +5,7 @@
 export const ROLES = [
   'warehouse_admin',
   'shift_manager',
+  'warehouse_worker',
   'picker',
   'packer',
   'receiver',
@@ -18,6 +19,7 @@ export type Role = (typeof ROLES)[number];
 export const ROLE_LABELS: Record<Role, string> = {
   warehouse_admin:      'Warehouse Admin',
   shift_manager:        'Shift Manager',
+  warehouse_worker:     'Складчик',
   picker:               'Сборщик',
   packer:               'Упаковщик',
   receiver:             'Приёмщик',
@@ -52,6 +54,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'problems','documents','scanner',
     'cancel_task','reassign_task','override_block',
   ],
+  warehouse_worker: ['view_dashboard','view_tasks','pick','scanner','problems','documents'],
   picker: ['view_dashboard','view_tasks','pick','sort','scanner','problems'],
   packer: ['view_dashboard','view_tasks','pack','sort','scanner','problems','documents'],
   receiver: ['view_dashboard','view_tasks','receive','scanner','problems','documents','inventory'],

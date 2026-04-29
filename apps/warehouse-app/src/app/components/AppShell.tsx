@@ -43,11 +43,17 @@ const BOTTOM = [
   { to: '/problems',  label: 'Проблемы', icon: AlertTriangle },
 ];
 
+// Простой sidebar для обычного складчика — только 6 пунктов.
+const WORKER_PATHS = new Set(['/shift', '/tasks', '/picking', '/scanner', '/problems', '/documents']);
+
 export function AppShell() {
   const { currentWorker, problems } = useStore();
   const nav = useNavigate();
   const role = currentWorker?.role;
-  const items = NAV.filter(n => can(role, n.perm));
+  const isSimpleWorker = role === 'warehouse_worker';
+  const items = isSimpleWorker
+    ? NAV.filter(n => WORKER_PATHS.has(n.to))
+    : NAV.filter(n => can(role, n.perm));
   const openProblems = problems.filter(p => p.status !== 'resolved').length;
 
   const onLogout = () => {

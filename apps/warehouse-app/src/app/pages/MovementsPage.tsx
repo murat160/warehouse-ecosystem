@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
+import { SkuThumb } from '../components/SkuThumb';
 
 export function MovementsPage() {
   const { movements, skus, bins, workers } = useStore();
@@ -54,8 +55,11 @@ export function MovementsPage() {
                 const w = workers.find(x => x.id === m.workerId);
                 return (
                   <div key={m.id} className="bg-[#F9FAFB] rounded-xl p-3">
-                    <div className="text-[13px] text-[#1F2430]" style={{ fontWeight: 800 }}>
-                      {s?.photo ?? '📦'} {s?.name ?? m.sku} ×{m.qty}
+                    <div className="flex items-center gap-2 mb-1">
+                      {s ? <SkuThumb sku={s} size={32} binId={m.toBinId} /> : <span className="text-[20px]">📦</span>}
+                      <div className="text-[13px] text-[#1F2430]" style={{ fontWeight: 800 }}>
+                        {s?.name ?? m.sku} ×{m.qty}
+                      </div>
                     </div>
                     <div className="text-[11px] text-[#6B7280] font-mono" style={{ fontWeight: 600 }}>
                       {m.fromBinId} → {m.toBinId}

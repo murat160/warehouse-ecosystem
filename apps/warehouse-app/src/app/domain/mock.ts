@@ -15,6 +15,7 @@ export const MOCK_WORKERS: Worker[] = [
   { id: 'W-301', name: 'Кузнецов А.', role: 'receiver',             shiftStatus: 'on_shift', shiftStart: '07:00', shiftEnd: '16:00', productivity: 92, errorRate: 0.5, tasksToday: 14 },
   { id: 'W-401', name: 'Орлова М.',   role: 'inventory_controller', shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 95, errorRate: 0.2, tasksToday: 6  },
   { id: 'W-501', name: 'Беляев К.',   role: 'returns_operator',     shiftStatus: 'off',                                            productivity: 87, errorRate: 0.7, tasksToday: 0  },
+  { id: 'W-700', name: 'Айдар М.',    role: 'warehouse_worker',     shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 90, errorRate: 0.4, tasksToday: 12 },
 ];
 
 export const MOCK_SKUS: Sku[] = [
@@ -23,7 +24,7 @@ export const MOCK_SKUS: Sku[] = [
   { sku: 'JN-BLU-32',  barcode: '5901234567892', name: 'Джинсы синие 32',    category: 'Одежда',     sellerArticle: 'JN-32-BLU',    photo: '👖', weightKg: 0.6, defaultZone: 'YELLOW' },
   { sku: 'PHN-IP15',   barcode: '5901234567893', name: 'iPhone 15 Pro 128',  category: 'Электроника', sellerArticle: 'AP-IP15-128',  photo: '📱', weightKg: 0.4, fragile: true, defaultZone: 'BLUE' },
   { sku: 'BAG-LV-01',  barcode: '5901234567894', name: 'Сумка Louis V.',     category: 'Аксессуары', sellerArticle: 'LV-BAG-01',    photo: '👜', weightKg: 0.7, defaultZone: 'PURPLE' },
-  { sku: 'GRC-MILK',   barcode: '5901234567895', name: 'Молоко 1л',          category: 'Продукты',   sellerArticle: 'MLK-1L',       photo: '🥛', weightKg: 1.0, defaultZone: 'GREEN' },
+  { sku: 'GRC-MILK',   barcode: '5901234567895', name: 'Молоко 1л',          category: 'Продукты',   sellerArticle: 'MLK-1L',       photo: '🥛', weightKg: 1.0, temperatureControlled: true, defaultZone: 'GREEN' },
   { sku: 'JK-GRY-L',   barcode: '5901234567896', name: 'Куртка серая L',     category: 'Одежда',     sellerArticle: 'JK-L-GRY',     photo: '🧥', weightKg: 1.2, defaultZone: 'YELLOW' },
   { sku: 'GIFT-FLW-1', barcode: '5901234567897', name: 'Букет роз',          category: 'Цветы',      sellerArticle: 'FLW-RZ-1',     photo: '💐', weightKg: 0.5, fragile: true, defaultZone: 'PURPLE' },
 ];
@@ -138,11 +139,17 @@ export const MOCK_RETURNS: ReturnRow[] = [
     id: 'RMA-001', orderId: 'ORD-2026-004490', customerName: 'Аяна С.', reason: 'Не подошёл размер',
     status: 'received', receivedAt: now(),
     items: [{ sku: 'SHOE-00991', qty: 1, condition: 'new' }],
+    photosBefore: ['mock://rma/001/before-1.jpg'],
+    comment: 'Клиент сообщил, что размер мал.',
   },
   {
     id: 'RMA-002', orderId: 'ORD-2026-004491', customerName: 'Денис К.', reason: 'Брак',
     status: 'inspection', receivedAt: now(),
     items: [{ sku: 'PHN-IP15', qty: 1, condition: 'damaged' }],
+    photosBefore: ['mock://rma/002/before-1.jpg'],
+    photosDamage: ['mock://rma/002/damage-1.jpg', 'mock://rma/002/damage-2.jpg'],
+    videoFromCustomer: 'mock://rma/002/customer.mp4',
+    comment: 'Экран с трещиной — клиент прислал видео распаковки.',
   },
 ];
 

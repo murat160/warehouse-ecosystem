@@ -84,6 +84,7 @@ function PackingDetail({ orderId, skus, bins, orders, nav }: any) {
                 bin={bins.find((b: any) => b.id === it.binId)}
                 orderCode={order.code}
                 size="sm"
+                urgent={order.priority === 'urgent'}
                 right={
                   <button
                     onClick={() => setScanned(s => s.includes(it.sku) ? s.filter(x => x !== it.sku) : [...s, it.sku])}

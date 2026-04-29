@@ -5,6 +5,7 @@ import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { ScanInput } from '../components/ScanInput';
+import { SkuThumb } from '../components/SkuThumb';
 
 const STATUS_LABELS = {
   expected: 'Ожидается', arrived: 'Прибыл', receiving: 'Приёмка',
@@ -65,7 +66,9 @@ export function InboundPage() {
                   return (
                     <div key={it.id} className="bg-[#F9FAFB] rounded-xl p-3">
                       <div className="flex items-start gap-2">
-                        <div className="text-[28px]">{sku?.photo ?? '📦'}</div>
+                        {sku
+                          ? <SkuThumb sku={sku} size={44} binId={it.binId} />
+                          : <div className="text-[28px]">📦</div>}
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] text-[#1F2430] truncate" style={{ fontWeight: 800 }}>{sku?.name ?? it.sku}</div>
                           <div className="text-[11px] text-[#6B7280] font-mono" style={{ fontWeight: 600 }}>

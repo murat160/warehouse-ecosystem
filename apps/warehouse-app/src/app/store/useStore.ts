@@ -546,7 +546,7 @@ export const store = {
   decideReturn(rmaId: string, decision: ReturnStatus, comment: string) {
     state = {
       ...state,
-      returns: state.returns.map(r => r.id === rmaId ? { ...r, status: decision, decision, closedAt: decision === 'closed' ? new Date().toISOString() : r.closedAt, inspectorId: state.currentWorker?.id } : r),
+      returns: state.returns.map(r => r.id === rmaId ? { ...r, status: decision, decision, closedAt: decision === 'closed' ? new Date().toISOString() : r.closedAt, inspectorId: state.currentWorker?.id, comment: comment || r.comment } : r),
     };
     state = {
       ...state,
@@ -557,7 +557,45 @@ export const store = {
         createdAt: new Date().toISOString(),
       }, ...state.documents],
     };
-    audit('RETURN_DECIDE', `${rmaId}: ${decision} — ${comment}`, { rmaId });
+    const action = decision === 'restock' ? 'RETURN_RESTOCK'
+      : decision === 'write_off' ? 'RETURN_WRITE_OFF'
+      : decision === 'damaged'   ? 'RETURN_DAMAGED'
+      : decision === 'returned_to_supplier' ? 'RETURN_TO_SUPPLIER'
+      : 'RETURN_DECIDE';
+    audit(action, `${rmaId}: ${decision} — ${comment}`, { rmaId });
+    emit();
+  },
+
+  requestReturnPhoto(rmaId: string) {
+    state = {
+      ...state,
+      returns: state.returns.map(r => r.id === rmaId ? { ...r, mediaRequest: 'photo_requested' } : r),
+    };
+    audit('RETURN_REQUEST_PHOTO', `Запрошено фото у клиента: ${rmaId}`, { rmaId });
+    emit();
+  },
+
+  requestReturnVideo(rmaId: string) {
+    state = {
+      ...state,
+      returns: state.returns.map(r => r.id === rmaId ? { ...r, mediaRequest: 'video_requested' } : r),
+    };
+    audit('RETURN_REQUEST_VIDEO', `Запрошено видео у клиента: ${rmaId}`, { rmaId });
+    emit();
+  },
+
+  uploadReturnMedia(rmaId: string, kind: 'photo_before' | 'photo_after' | 'photo_damage' | 'video_inspection', uri: string) {
+    state = {
+      ...state,
+      returns: state.returns.map(r => {
+        if (r.id !== rmaId) return r;
+        if (kind === 'photo_before') return { ...r, photosBefore: [...(r.photosBefore ?? []), uri], mediaRequest: 'media_uploaded' };
+        if (kind === 'photo_after')  return { ...r, photosAfter:  [...(r.photosAfter  ?? []), uri], mediaRequest: 'media_uploaded' };
+        if (kind === 'photo_damage') return { ...r, photosDamage: [...(r.photosDamage ?? []), uri], mediaRequest: 'media_uploaded' };
+        return { ...r, videoFromInspection: uri, mediaRequest: 'media_uploaded' };
+      }),
+    };
+    audit('RETURN_MEDIA_UPLOAD', `${rmaId}: загружено ${kind}`, { rmaId });
     emit();
   },
 
@@ -604,6 +642,22 @@ export const store = {
   resolveProblem(problemId: string, comment: string) {
     state = { ...state, problems: state.problems.map(p => p.id === problemId ? { ...p, status: 'resolved', resolvedAt: new Date().toISOString(), comments: [...p.comments, comment] } : p) };
     audit('PROBLEM_RESOLVE', `Проблема ${problemId} решена: ${comment}`);
+    emit();
+  },
+
+  uploadProblemMedia(problemId: string, kind: 'photo' | 'video', uri: string) {
+    state = {
+      ...state,
+      problems: state.problems.map(p => p.id !== problemId ? p
+        : kind === 'photo' ? { ...p, photos: [...(p.photos ?? []), uri] }
+        :                    { ...p, videos: [...(p.videos ?? []), uri] }),
+    };
+    audit(kind === 'photo' ? 'PROBLEM_PHOTO_UPLOAD' : 'PROBLEM_VIDEO_UPLOAD', `Проблема ${problemId}: ${kind}`);
+    emit();
+  },
+
+  viewMedia(context: string) {
+    audit('MEDIA_VIEW', context);
     emit();
   },
 

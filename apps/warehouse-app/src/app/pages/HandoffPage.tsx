@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { ScanInput } from '../components/ScanInput';
 import { StatusBadge } from '../components/StatusBadge';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export function HandoffPage() {
   const { orders, couriers } = useStore();
@@ -15,17 +16,28 @@ export function HandoffPage() {
   const [courierId, setCourierId] = useState('');
   const [orderCode, setOrderCode] = useState('');
   const [proof, setProof] = useState(false);
+  const [askConfirm, setAskConfirm] = useState(false);
 
   const courier = couriers.find(c => c.id === courierId);
   const order = orders.find(o => o.code === orderCode || o.id === orderCode);
 
-  const confirm = () => {
+  const tryHandoff = () => {
     if (!courier) { toast.error('Сканируйте курьера'); return; }
     if (!order)   { toast.error('Сканируйте заказ');   return; }
     if (order.status !== 'ready_for_pickup') { toast.error('Заказ не готов к выдаче'); return; }
+    setAskConfirm(true);
+  };
+
+  const doHandoff = () => {
+    if (!courier || !order) return;
     const r = store.handoffToCourier(order.id, courier.id, proof ? `mock://proof/${order.code}.jpg` : undefined);
-    if (r.ok) { toast.success(`${order.code} → ${courier.name}`); setCourierId(''); setOrderCode(''); setProof(false); }
-    else toast.error(r.reason ?? 'Ошибка');
+    if (r.ok) {
+      toast.success(`${order.code} → ${courier.name}`);
+      setCourierId(''); setOrderCode(''); setProof(false);
+    } else {
+      toast.error(r.reason ?? 'Ошибка');
+    }
+    setAskConfirm(false);
   };
 
   return (
@@ -82,7 +94,7 @@ export function HandoffPage() {
             {proof ? '✓ Фото-подтверждение' : 'Сделать фото / подпись'}
           </button>
 
-          <button onClick={confirm} className="w-full h-12 rounded-xl bg-[#7C3AED] text-white active-press" style={{ fontWeight: 800 }}>
+          <button onClick={tryHandoff} className="w-full h-12 rounded-xl bg-[#7C3AED] text-white active-press" style={{ fontWeight: 800 }}>
             Передать курьеру
           </button>
         </div>
@@ -107,6 +119,15 @@ export function HandoffPage() {
             </button>
           ))}
         </div>
+
+        <ConfirmModal
+          open={askConfirm}
+          title="Передать курьеру?"
+          message={`Заказ ${order?.code ?? ''} будет помечен как переданный курьеру ${courier?.name ?? ''} (${courier?.vehiclePlate ?? '—'}). Действие зафиксируется в audit и его увидит Admin Panel.`}
+          confirmLabel="Передать"
+          onConfirm={doHandoff}
+          onCancel={() => setAskConfirm(false)}
+        />
 
         {handed.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm">

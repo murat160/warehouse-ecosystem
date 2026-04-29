@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, Image as ImageIcon, Video, Eye, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
-import type { ReturnStatus } from '../domain/types';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
+import { SkuThumb } from '../components/SkuThumb';
+import type { ReturnRow, ReturnStatus, MediaRequest } from '../domain/types';
 
 const STATUS_LABELS: Record<ReturnStatus, string> = {
   received:             'Получен',
@@ -27,21 +30,61 @@ const STATUS_COLORS: Record<ReturnStatus, { bg: string; fg: string }> = {
   closed:               { bg: '#F3F4F6', fg: '#374151' },
 };
 
+const MEDIA_REQ_LABELS: Record<MediaRequest, string> = {
+  photo_requested: 'Запрошено фото',
+  video_requested: 'Запрошено видео',
+  media_uploaded:  'Медиа загружено',
+};
+const MEDIA_REQ_COLORS: Record<MediaRequest, { bg: string; fg: string }> = {
+  photo_requested: { bg: '#FEF3C7', fg: '#92400E' },
+  video_requested: { bg: '#FEF3C7', fg: '#92400E' },
+  media_uploaded:  { bg: '#DCFCE7', fg: '#166534' },
+};
+
 const DECISIONS: ReturnStatus[] = ['restock', 'damaged', 'write_off', 'returned_to_supplier', 'closed'];
+
+interface DecisionDraft { id: string; decision: ReturnStatus; comment: string; }
 
 export function ReturnsPage() {
   const { returns, skus } = useStore();
-  const [decideId, setDecideId] = useState<string | null>(null);
-  const [decision, setDecision] = useState<ReturnStatus>('restock');
-  const [comment, setComment] = useState('');
-  const [photoTaken, setPhoto] = useState(false);
+  const [decideDraft, setDecideDraft] = useState<DecisionDraft | null>(null);
+  const [confirmDraft, setConfirmDraft] = useState<DecisionDraft | null>(null);
+  const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
 
-  const submit = () => {
-    if (!decideId) return;
-    if (!comment.trim()) { toast.error('Опишите решение'); return; }
-    store.decideReturn(decideId, decision, comment);
-    toast.success(`Решение: ${STATUS_LABELS[decision]}`);
-    setDecideId(null); setComment(''); setPhoto(false); setDecision('restock');
+  const buildMediaForReturn = (r: ReturnRow): MediaItem[] => {
+    const items: MediaItem[] = [];
+    const meta = { orderId: r.orderId };
+    (r.photosBefore ?? []).forEach((src, i) => items.push({ kind: 'image', src, title: `Фото ДО · ${i + 1}`, ...meta }));
+    (r.photosAfter  ?? []).forEach((src, i) => items.push({ kind: 'image', src, title: `Фото ПОСЛЕ · ${i + 1}`, ...meta }));
+    (r.photosDamage ?? []).forEach((src, i) => items.push({ kind: 'image', src, title: `Фото повреждения · ${i + 1}`, comment: r.comment, ...meta }));
+    if (r.videoFromCustomer)   items.push({ kind: 'video', src: r.videoFromCustomer,   title: 'Видео клиента',  ...meta });
+    if (r.videoFromInspection) items.push({ kind: 'video', src: r.videoFromInspection, title: 'Видео склада',   ...meta });
+    return items;
+  };
+
+  const openDecision = (r: ReturnRow, d: ReturnStatus) => {
+    setDecideDraft({ id: r.id, decision: d, comment: '' });
+  };
+
+  const submitDecision = () => {
+    if (!decideDraft) return;
+    if (!decideDraft.comment.trim()) { toast.error('Опишите решение'); return; }
+    if (decideDraft.decision === 'write_off') {
+      // двойное подтверждение для опасной операции
+      setConfirmDraft(decideDraft);
+      return;
+    }
+    store.decideReturn(decideDraft.id, decideDraft.decision, decideDraft.comment);
+    toast.success(`Решение: ${STATUS_LABELS[decideDraft.decision]}`);
+    setDecideDraft(null);
+  };
+
+  const confirmWriteOff = () => {
+    if (!confirmDraft) return;
+    store.decideReturn(confirmDraft.id, confirmDraft.decision, confirmDraft.comment);
+    toast.success('Товар списан');
+    setConfirmDraft(null);
+    setDecideDraft(null);
   };
 
   return (
@@ -50,9 +93,13 @@ export function ReturnsPage() {
 
       <div className="px-5 -mt-5 space-y-2">
         {returns.length === 0 ? (
-          <EmptyState emoji="↩️" title="Возвратов нет" />
+          <EmptyState emoji="↩️" title="Возвратов нет" subtitle="Возвраты от клиентов и поставщиков появятся здесь." />
         ) : returns.map(r => {
           const c = STATUS_COLORS[r.status];
+          const mediaItems = buildMediaForReturn(r);
+          const hasVideo = !!(r.videoFromCustomer || r.videoFromInspection);
+          const totalPhotos = (r.photosBefore?.length ?? 0) + (r.photosAfter?.length ?? 0) + (r.photosDamage?.length ?? 0);
+
           return (
             <div key={r.id} className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -62,19 +109,38 @@ export function ReturnsPage() {
                     Заказ {r.orderId} · {r.customerName}
                   </div>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: c.bg, color: c.fg, fontWeight: 800 }}>
-                  {STATUS_LABELS[r.status]}
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {r.mediaRequest && (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{ ...MEDIA_REQ_COLORS[r.mediaRequest], fontWeight: 800 }}
+                    >
+                      {MEDIA_REQ_LABELS[r.mediaRequest]}
+                    </span>
+                  )}
+                  {hasVideo && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#EDE9FE] text-[#4C1D95] inline-flex items-center gap-1" style={{ fontWeight: 800 }}>
+                      <Video className="w-3 h-3" /> Есть видео
+                    </span>
+                  )}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: c.bg, color: c.fg, fontWeight: 800 }}>
+                    {STATUS_LABELS[r.status]}
+                  </span>
+                </div>
               </div>
+
               <div className="text-[12px] text-[#374151] mb-2" style={{ fontWeight: 600 }}>
                 Причина: {r.reason}
               </div>
+
               <div className="space-y-1 mb-3">
                 {r.items.map((it, i) => {
                   const sku = skus.find(s => s.sku === it.sku);
                   return (
                     <div key={i} className="text-[12px] text-[#1F2430] flex items-center gap-2" style={{ fontWeight: 600 }}>
-                      <span className="text-[20px]">{sku?.photo ?? '📦'}</span>
+                      {sku
+                        ? <SkuThumb sku={sku} size={32} orderId={r.orderId} />
+                        : <span className="text-[20px]">📦</span>}
                       <span className="flex-1 truncate">{sku?.name ?? it.sku}</span>
                       <span className="text-[#6B7280]">×{it.qty}</span>
                       {it.condition && (
@@ -93,13 +159,70 @@ export function ReturnsPage() {
                   );
                 })}
               </div>
+
+              {r.comment && (
+                <div className="text-[11px] text-[#6B7280] bg-[#F9FAFB] rounded-md px-2 py-1.5 mb-3" style={{ fontWeight: 500 }}>
+                  💬 {r.comment}
+                </div>
+              )}
+
+              {mediaItems.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-[11px] text-[#6B7280] mb-1.5" style={{ fontWeight: 700 }}>
+                    {totalPhotos} фото · {hasVideo ? '+ видео' : 'без видео'}
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                    {mediaItems.map((m, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setMedia({ items: mediaItems, index: i })}
+                        className="w-16 h-16 rounded-lg bg-[#F3F4F6] flex items-center justify-center flex-shrink-0 active-press relative overflow-hidden"
+                      >
+                        {m.kind === 'video' ? (
+                          <Video className="w-6 h-6 text-[#1F2430]" />
+                        ) : m.kind === 'image' ? (
+                          <ImageIcon className="w-6 h-6 text-[#1F2430]" />
+                        ) : (
+                          <span className="text-[28px]">{m.src}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {r.status !== 'closed' && (
-                <button
-                  onClick={() => setDecideId(r.id)}
-                  className="w-full h-9 rounded-lg bg-[#1F2430] text-white text-[12px] active-press" style={{ fontWeight: 700 }}
-                >
-                  Принять решение
-                </button>
+                <div className="flex gap-1.5 flex-wrap">
+                  {mediaItems.length > 0 && (
+                    <button
+                      onClick={() => setMedia({ items: mediaItems, index: 0 })}
+                      className="px-3 h-9 rounded-lg bg-[#1F2430] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                    >
+                      <Eye className="w-3 h-3" /> Смотреть доказательства
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { store.requestReturnPhoto(r.id); toast('Запрос фото отправлен клиенту'); }}
+                    disabled={r.mediaRequest === 'photo_requested'}
+                    className="px-3 h-9 rounded-lg text-white text-[12px] active-press inline-flex items-center gap-1 disabled:opacity-50"
+                    style={{ backgroundColor: r.mediaRequest === 'photo_requested' ? '#9CA3AF' : '#0EA5E9', fontWeight: 700 }}
+                  >
+                    <Send className="w-3 h-3" /> {r.mediaRequest === 'photo_requested' ? 'Фото запрошено' : 'Запросить фото'}
+                  </button>
+                  <button
+                    onClick={() => { store.requestReturnVideo(r.id); toast('Запрос видео отправлен клиенту'); }}
+                    disabled={r.mediaRequest === 'video_requested'}
+                    className="px-3 h-9 rounded-lg text-white text-[12px] active-press inline-flex items-center gap-1 disabled:opacity-50"
+                    style={{ backgroundColor: r.mediaRequest === 'video_requested' ? '#9CA3AF' : '#7C3AED', fontWeight: 700 }}
+                  >
+                    <Video className="w-3 h-3" /> {r.mediaRequest === 'video_requested' ? 'Видео запрошено' : 'Запросить видео'}
+                  </button>
+                  <UploadInspectionMedia rmaId={r.id} />
+                  <button onClick={() => openDecision(r, 'restock')}              className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В продажу</button>
+                  <button onClick={() => openDecision(r, 'damaged')}              className="px-3 h-9 rounded-lg bg-[#F59E0B] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В брак</button>
+                  <button onClick={() => openDecision(r, 'write_off')}            className="px-3 h-9 rounded-lg bg-[#EF4444] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>Списать</button>
+                  <button onClick={() => openDecision(r, 'returned_to_supplier')} className="px-3 h-9 rounded-lg bg-[#3730A3] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>Поставщику</button>
+                </div>
               )}
             </div>
           );
@@ -107,58 +230,86 @@ export function ReturnsPage() {
       </div>
 
       <Modal
-        open={!!decideId}
-        title={`Решение по ${decideId}`}
-        onClose={() => { setDecideId(null); setComment(''); setPhoto(false); }}
+        open={!!decideDraft}
+        title={decideDraft ? `${STATUS_LABELS[decideDraft.decision]} · ${decideDraft.id}` : ''}
+        onClose={() => setDecideDraft(null)}
         footer={
-          <button onClick={submit} className="w-full h-11 rounded-xl bg-[#1F2430] text-white active-press" style={{ fontWeight: 800 }}>
+          <button
+            onClick={submitDecision}
+            className="w-full h-11 rounded-xl text-white active-press"
+            style={{ backgroundColor: decideDraft?.decision === 'write_off' ? '#EF4444' : '#1F2430', fontWeight: 800 }}
+          >
             Подтвердить
           </button>
         }
       >
         <div className="text-[12px] text-[#6B7280] mb-1" style={{ fontWeight: 700 }}>Решение</div>
-        <div className="space-y-1 mb-3">
+        <div className="grid grid-cols-2 gap-1.5 mb-3">
           {DECISIONS.map(d => {
-            const c = STATUS_COLORS[d];
+            const cc = STATUS_COLORS[d];
+            const active = decideDraft?.decision === d;
             return (
               <button
                 key={d}
-                onClick={() => setDecision(d)}
-                className="w-full text-left p-2 rounded-xl"
+                onClick={() => setDecideDraft(s => s ? { ...s, decision: d } : s)}
+                className="text-left px-2 py-2 rounded-xl text-[12px]"
                 style={{
-                  backgroundColor: decision === d ? c.bg : '#F9FAFB',
-                  border: decision === d ? `2px solid ${c.fg}` : '2px solid transparent',
+                  backgroundColor: active ? cc.bg : '#F9FAFB',
+                  border: active ? `2px solid ${cc.fg}` : '2px solid transparent',
+                  color: active ? cc.fg : '#1F2430',
                   fontWeight: 700,
-                  color: decision === d ? c.fg : '#1F2430',
                 }}
               >
-                <span className="text-[13px]">{STATUS_LABELS[d]}</span>
+                {STATUS_LABELS[d]}
               </button>
             );
           })}
         </div>
-        <button
-          onClick={() => setPhoto(true)}
-          className="w-full mb-3 px-4 py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 active-press"
-          style={{
-            borderColor: photoTaken ? '#00D27A' : '#D1D5DB',
-            backgroundColor: photoTaken ? '#D1FAE5' : 'transparent',
-            color: photoTaken ? '#065F46' : '#6B7280',
-            fontWeight: 700,
-          }}
-        >
-          <Camera className="w-4 h-4" />
-          {photoTaken ? '✓ Фото товара' : 'Сделать фото товара'}
-        </button>
+        <div className="text-[12px] text-[#6B7280] mb-1" style={{ fontWeight: 700 }}>Комментарий инспектора</div>
         <textarea
-          value={comment}
-          onChange={e => setComment(e.target.value)}
+          value={decideDraft?.comment ?? ''}
+          onChange={(e) => setDecideDraft(s => s ? { ...s, comment: e.target.value } : s)}
           rows={3}
-          placeholder="Комментарий"
+          placeholder="Что осмотрели, что обнаружили…"
           className="w-full px-3 py-2 rounded-xl border-2 border-[#E5E7EB] focus:border-[#1F2430] focus:outline-none text-[14px] resize-none"
           style={{ fontWeight: 500 }}
         />
       </Modal>
+
+      <ConfirmModal
+        open={!!confirmDraft}
+        title="Списать товар?"
+        message={`Списание ${confirmDraft?.id ?? ''} необратимо. Товар уйдёт в учёт списания и больше не будет доступен в остатках.`}
+        confirmLabel="Списать"
+        danger
+        onConfirm={confirmWriteOff}
+        onCancel={() => setConfirmDraft(null)}
+      />
+
+      <MediaPreviewModal
+        open={!!media}
+        items={media?.items ?? []}
+        initialIndex={media?.index ?? 0}
+        onClose={() => setMedia(null)}
+      />
     </div>
+  );
+}
+
+function UploadInspectionMedia({ rmaId }: { rmaId: string }) {
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const uri = URL.createObjectURL(file);
+    const isVideo = file.type.startsWith('video/');
+    store.uploadReturnMedia(rmaId, isVideo ? 'video_inspection' : 'photo_damage', uri);
+    toast.success(isVideo ? 'Видео склада загружено' : 'Фото повреждения загружено');
+    e.target.value = '';
+  };
+  return (
+    <label className="px-3 h-9 rounded-lg bg-[#374151] text-white text-[12px] active-press inline-flex items-center gap-1 cursor-pointer" style={{ fontWeight: 700 }}>
+      <Camera className="w-3 h-3" /> Загрузить медиа
+      <input type="file" accept="image/*,video/mp4,video/webm" onChange={onChange} className="hidden" />
+    </label>
   );
 }

@@ -99,6 +99,7 @@ export function PickingPage() {
               sku={skus.find(s => s.sku === it.sku)!}
               bin={bins.find(b => b.id === it.binId)}
               orderCode={order.code}
+              urgent={order.priority === 'urgent'}
             />
           ))}
         </div>
@@ -107,7 +108,7 @@ export function PickingPage() {
   );
 }
 
-function ItemRow({ orderId, item, sku, bin, orderCode }: { orderId: string; item: OrderItem; sku: any; bin: any; orderCode: string }) {
+function ItemRow({ orderId, item, sku, bin, orderCode, urgent }: { orderId: string; item: OrderItem; sku: any; bin: any; orderCode: string; urgent?: boolean }) {
   const [showActions, setShowActions] = useState<null | 'comment' | 'damaged' | 'missing'>(null);
   const [text, setText] = useState('');
 
@@ -136,7 +137,7 @@ function ItemRow({ orderId, item, sku, bin, orderCode }: { orderId: string; item
 
   return (
     <>
-      <ItemCard item={item} sku={sku} bin={bin} orderCode={orderCode} size="lg" right={
+      <ItemCard item={item} sku={sku} bin={bin} orderCode={orderCode} size="lg" urgent={urgent} right={
         item.status === 'found' ? null : (
           <div className="space-y-2">
             <ScanInput
