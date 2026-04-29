@@ -12,6 +12,7 @@ import { OwnerCard } from '../components/OwnerCard';
 import { SendToSupplierModal } from '../components/SendToSupplierModal';
 import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
 import { SupplierChatModal } from '../components/SupplierChatModal';
+import { InternalChatButton } from '../components/InternalChatButton';
 import type { ReturnRow, ReturnStatus, MediaRequest, EvidenceSendItem } from '../domain/types';
 
 const STATUS_LABELS: Record<ReturnStatus, string> = {
@@ -297,6 +298,7 @@ export function ReturnsPage() {
                     }}
                     className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                   ><MessageSquare className="w-3 h-3" /> Чат по возврату</button>
+                  <InternalChatButton kind="dispute" refId={r.id} title={`Возврат ${r.id} · внутр.`} priority="normal" />
                   <button onClick={() => openDecision(r, 'restock')}              className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В продажу</button>
                   <button onClick={() => openDecision(r, 'damaged')}              className="px-3 h-9 rounded-lg bg-[#F59E0B] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В брак</button>
                   <button onClick={() => openDecision(r, 'write_off')}            className="px-3 h-9 rounded-lg bg-[#EF4444] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>Списать</button>

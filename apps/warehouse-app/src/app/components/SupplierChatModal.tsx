@@ -6,8 +6,17 @@ import { MediaPreviewModal, type MediaItem } from './MediaPreviewModal';
 import { useStore, store } from '../store/useStore';
 import {
   CHAT_MESSAGE_STATUS_LABELS, SUPPLIER_QUICK_TEMPLATES, RETURN_QUICK_TEMPLATES,
+  CHAT_THREAD_KIND_LABELS,
   type ChatAttachment, type ChatThread, type ChatMessageStatus, type ChatAuthor,
 } from '../domain/types';
+
+const INTERNAL_QUICK_TEMPLATES: string[] = [
+  'Принял задачу.',
+  'Передаю на следующий этап.',
+  'Нужна помощь, прошу подойти.',
+  'Готово.',
+  'Нужно уточнить детали.',
+];
 
 const STATUS_COLORS: Record<ChatMessageStatus, { bg: string; fg: string }> = {
   sent:              { bg: '#F3F4F6', fg: '#374151' },
@@ -53,7 +62,20 @@ export function SupplierChatModal({ open, threadId, onClose }: SupplierChatModal
 
   if (!thread) return null;
 
-  const templates = thread.kind === 'return' ? RETURN_QUICK_TEMPLATES : SUPPLIER_QUICK_TEMPLATES;
+  const templates =
+    thread.kind === 'return'   ? RETURN_QUICK_TEMPLATES :
+    thread.kind === 'supplier' ? SUPPLIER_QUICK_TEMPLATES :
+                                  INTERNAL_QUICK_TEMPLATES;
+  const headerTitle =
+    thread.kind === 'return'   ? `Чат по возврату · ${thread.rmaId ?? ''}` :
+    thread.kind === 'supplier' ? `Чат с поставщиком · ${thread.supplierName ?? ''}` :
+    thread.kind === 'task'     ? `Чат по задаче · ${thread.taskId ?? ''}` :
+    thread.kind === 'order'    ? `Чат по заказу · ${thread.orderId ?? ''}` :
+    thread.kind === 'problem'  ? `Чат по проблеме · ${thread.problemId ?? ''}` :
+    thread.kind === 'dispute'  ? `Чат по спору · ${thread.disputeId ?? ''}` :
+    thread.kind === 'shift'    ? `Чат смены · ${thread.title ?? ''}` :
+    thread.kind === 'admin'    ? 'Чат с администратором' :
+    `Чат · ${CHAT_THREAD_KIND_LABELS[thread.kind]}`;
 
   const onAttach = (e: React.ChangeEvent<HTMLInputElement>, kind: 'image' | 'video') => {
     const files = e.target.files;
@@ -84,9 +106,7 @@ export function SupplierChatModal({ open, threadId, onClose }: SupplierChatModal
     <>
       <Modal
         open={open} onClose={onClose} size="lg"
-        title={thread.kind === 'return'
-          ? `Чат по возврату · ${thread.rmaId ?? ''}`
-          : `Чат с поставщиком · ${thread.supplierName ?? ''}`}
+        title={headerTitle}
         footer={
           <div className="space-y-2">
             <div className="flex gap-1.5 overflow-x-auto pb-1">

@@ -4,7 +4,10 @@ import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
+import { InternalChatButton } from '../components/InternalChatButton';
+import { MockCallModal } from '../components/MockCallModal';
 import { can } from '../domain/roles';
+import { Phone } from 'lucide-react';
 import type { TaskStatus, TaskType } from '../domain/types';
 
 const TYPE_LABELS: Record<TaskType, string> = {
@@ -30,6 +33,7 @@ export function TasksPage() {
   const { tasks, currentWorker } = useStore();
   const nav = useNavigate();
   const [filter, setFilter] = useState<'all' | 'mine' | 'unassigned'>('mine');
+  const [callFor, setCallFor] = useState<string | null>(null);
   const canCancel = can(currentWorker?.role, 'cancel_task');
 
   const list = tasks.filter(t => {
@@ -97,10 +101,19 @@ export function TasksPage() {
                   className="px-3 h-9 rounded-lg bg-[#EF4444] text-white text-[12px] active-press" style={{ fontWeight: 700 }}
                 >Отменить</button>
               )}
+              <InternalChatButton kind="task" refId={t.id} title={`Задача ${t.id}`} priority={t.priority === 'urgent' ? 'urgent' : 'normal'} />
+              {t.assignedTo && t.assignedTo !== currentWorker?.id && (
+                <button
+                  onClick={() => setCallFor(t.assignedTo!)}
+                  className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                ><Phone className="w-3 h-3" /> Позвонить</button>
+              )}
             </div>
           </div>
         ))}
       </div>
+
+      <MockCallModal open={!!callFor} workerId={callFor} onClose={() => setCallFor(null)} />
     </div>
   );
 }

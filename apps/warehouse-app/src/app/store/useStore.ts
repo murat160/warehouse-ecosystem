@@ -8,6 +8,7 @@ import type {
   SupplierDispute, DisputeReason, DisputeStatus,
   EvidenceSend, EvidenceSendItem, EvidenceLinkedTarget,
   ChatThread, ChatMessage, ChatAuthor, ChatAttachment, ChatThreadKind,
+  ChatThreadStatus, ChatThreadPriority,
   PartialReceiveLine,
 } from '../domain/types';
 import type { OrderStatus } from '../domain/orderStatus';
@@ -1120,6 +1121,7 @@ export const store = {
     );
     if (found) return found.id;
     const id = `CT-${Date.now()}`;
+    const w = state.currentWorker;
     const t: ChatThread = {
       id, kind: 'supplier',
       supplierId: input.supplierId, supplierName: input.supplierName,
@@ -1127,7 +1129,10 @@ export const store = {
       invoiceNumber: input.invoiceNumber, sku: input.sku,
       messages: [],
       createdAt: new Date().toISOString(),
+      participantIds: w ? [w.id, 'supplier'] : ['supplier'],
       participants: ['warehouse', 'supplier'],
+      priority: 'normal', status: 'open',
+      readBy: w ? [w.id] : [],
     };
     state = { ...state, chatThreads: [t, ...state.chatThreads] };
     audit('CHAT_OPEN', `Открыт чат с ${input.supplierName}${input.invoiceNumber ? ' · ' + input.invoiceNumber : ''}`);
@@ -1142,6 +1147,7 @@ export const store = {
     const found = state.chatThreads.find(t => t.kind === 'return' && t.rmaId === input.rmaId);
     if (found) return found.id;
     const id = `CT-${Date.now()}`;
+    const w = state.currentWorker;
     const t: ChatThread = {
       id, kind: 'return',
       rmaId: input.rmaId,
@@ -1149,7 +1155,10 @@ export const store = {
       linkedTo: { type: 'return', id: input.rmaId },
       messages: [],
       createdAt: new Date().toISOString(),
+      participantIds: w ? [w.id, 'supplier', 'admin', 'support'] : ['supplier', 'admin', 'support'],
       participants: ['warehouse', 'admin', 'returns_operator', 'supplier', 'support'],
+      priority: 'normal', status: 'open',
+      readBy: w ? [w.id] : [],
     };
     state = { ...state, chatThreads: [t, ...state.chatThreads] };
     audit('CHAT_OPEN', `Открыт чат по возврату ${input.rmaId}`);
@@ -1157,9 +1166,109 @@ export const store = {
     return id;
   },
 
+  /**
+   * Универсальный internal-thread. Идемпотентно по (kind, refId) или (kind, title).
+   * kind='direct' требует counterpartyId.
+   */
+  getOrCreateInternalThread(input: {
+    kind: 'direct' | 'task' | 'order' | 'problem' | 'dispute' | 'shift' | 'admin';
+    refId?: string;
+    counterpartyId?: string;       // для kind='direct'
+    title?: string;
+    participantIds?: string[];
+    priority?: ChatThreadPriority;
+  }): string {
+    const w = state.currentWorker;
+    // Найти existing
+    const matches = (t: ChatThread) => {
+      if (t.kind !== input.kind) return false;
+      if (input.kind === 'task'    && t.taskId    === input.refId) return true;
+      if (input.kind === 'order'   && t.orderId   === input.refId) return true;
+      if (input.kind === 'problem' && t.problemId === input.refId) return true;
+      if (input.kind === 'dispute' && t.disputeId === input.refId) return true;
+      if (input.kind === 'shift'   && t.title     === (input.title ?? '')) return true;
+      if (input.kind === 'admin'   && t.participantIds.includes(input.counterpartyId ?? 'admin')) return true;
+      if (input.kind === 'direct') {
+        return !!(w && input.counterpartyId
+          && t.participantIds.includes(w.id)
+          && t.participantIds.includes(input.counterpartyId));
+      }
+      return false;
+    };
+    const found = state.chatThreads.find(matches);
+    if (found) return found.id;
+
+    const id = `CT-${Date.now()}`;
+    const participants = new Set(input.participantIds ?? []);
+    if (w) participants.add(w.id);
+    if (input.counterpartyId) participants.add(input.counterpartyId);
+
+    const t: ChatThread = {
+      id, kind: input.kind,
+      title: input.title,
+      taskId:    input.kind === 'task'    ? input.refId : undefined,
+      orderId:   input.kind === 'order'   ? input.refId : undefined,
+      problemId: input.kind === 'problem' ? input.refId : undefined,
+      disputeId: input.kind === 'dispute' ? input.refId : undefined,
+      messages: [],
+      createdAt: new Date().toISOString(),
+      participantIds: Array.from(participants),
+      participants: ['warehouse', 'admin'],
+      priority: input.priority ?? 'normal',
+      status: 'open',
+      readBy: w ? [w.id] : [],
+    };
+    state = { ...state, chatThreads: [t, ...state.chatThreads] };
+    audit('INTERNAL_CHAT_OPEN', `${input.kind}: ${input.title ?? input.refId ?? input.counterpartyId ?? ''}`);
+    emit();
+    return id;
+  },
+
+  changeThreadStatus(threadId: string, status: ChatThreadStatus) {
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t => t.id === threadId ? { ...t, status } : t),
+    };
+    audit('CHAT_STATUS_CHANGE', `${threadId}: → ${status}`);
+    emit();
+  },
+
+  changeThreadPriority(threadId: string, priority: ChatThreadPriority) {
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t => t.id === threadId ? { ...t, priority } : t),
+    };
+    audit('CHAT_PRIORITY_CHANGE', `${threadId}: → ${priority}`);
+    emit();
+  },
+
+  assignChatThread(threadId: string, workerId: string) {
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t => t.id === threadId
+        ? { ...t, assignedTo: workerId, participantIds: t.participantIds.includes(workerId) ? t.participantIds : [...t.participantIds, workerId] }
+        : t),
+    };
+    audit('CHAT_ASSIGN', `${threadId}: → ${workerId}`);
+    emit();
+  },
+
+  markThreadRead(threadId: string) {
+    const w = state.currentWorker;
+    if (!w) return;
+    state = {
+      ...state,
+      chatThreads: state.chatThreads.map(t => t.id === threadId
+        ? { ...t, readBy: t.readBy.includes(w.id) ? t.readBy : [...t.readBy, w.id] }
+        : t),
+    };
+    emit();
+  },
+
   sendChatMessage(threadId: string, text: string, attachments: ChatAttachment[] = []): { ok: boolean; reason?: string } {
     if (!text.trim() && attachments.length === 0) return { ok: false, reason: 'Пустое сообщение' };
     const w = state.currentWorker;
+    const now = new Date().toISOString();
     const m: ChatMessage = {
       id: `CM-${Date.now()}`,
       threadId,
@@ -1167,13 +1276,22 @@ export const store = {
       authorName: w?.name ?? 'Склад',
       text: text.trim(),
       attachments,
-      sentAt: new Date().toISOString(),
+      sentAt: now,
       status: 'sent',
     };
     state = {
       ...state,
       chatThreads: state.chatThreads.map(t =>
-        t.id === threadId ? { ...t, messages: [...t.messages, m] } : t),
+        t.id === threadId
+          ? {
+              ...t,
+              messages: [...t.messages, m],
+              lastMessageAt: now,
+              // Сбрасываем readBy: прочитал только отправитель, остальным теперь unread
+              readBy: w ? [w.id] : [],
+              status: t.status === 'closed' ? 'open' : 'waiting_response',
+            }
+          : t),
     };
     audit('CHAT_SEND', `${threadId}: ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`);
     emit();

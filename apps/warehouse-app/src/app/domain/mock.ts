@@ -258,6 +258,8 @@ export const MOCK_CHAT_THREADS: ChatThread[] = [
     invoiceNumber: 'INV-7820', sku: 'PHN-IP15',
     linkedTo: { type: 'asn', id: 'a2', asnItemId: 'ai3' },
     createdAt: now(),
+    participantIds: ['W-301', 'supplier'], priority: 'urgent', status: 'waiting_response',
+    readBy: ['W-301'],
     messages: [
       {
         id: 'CM-1', threadId: 'CT-0001',
@@ -267,6 +269,52 @@ export const MOCK_CHAT_THREADS: ChatThread[] = [
         sentAt: now(), status: 'sent',
       },
     ],
+    lastMessageAt: now(),
+  },
+  {
+    id: 'CT-0010', kind: 'shift',
+    title: 'Смена 2026-04-29',
+    createdAt: now(),
+    participantIds: ['W-100', 'W-101', 'W-204', 'W-205', 'W-206', 'W-301', 'W-401', 'W-700'],
+    priority: 'normal', status: 'open',
+    readBy: ['W-101'],
+    messages: [
+      {
+        id: 'CM-S1', threadId: 'CT-0010',
+        author: 'warehouse', authorName: 'Захарова Е.',
+        text: 'Сегодня приоритет — срочные заказы из RED-зоны. Пожалуйста, проверяйте SLA.',
+        attachments: [], sentAt: now(), status: 'delivered',
+      },
+    ],
+    lastMessageAt: now(),
+  },
+  {
+    id: 'CT-0011', kind: 'task',
+    title: 'Задача T-001 · сборка o2',
+    taskId: 'T-001', orderId: 'o2',
+    createdAt: now(),
+    participantIds: ['W-101', 'W-204'],
+    priority: 'urgent', status: 'open',
+    readBy: ['W-204'],
+    messages: [
+      {
+        id: 'CM-T1', threadId: 'CT-0011',
+        author: 'warehouse', authorName: 'Иванов И.',
+        text: 'Начал сборку, iPhone в C-02-08, ячейка проверена.',
+        attachments: [], sentAt: now(), status: 'sent',
+      },
+    ],
+    lastMessageAt: now(),
+  },
+  {
+    id: 'CT-0012', kind: 'admin',
+    title: 'Чат с админом',
+    createdAt: now(),
+    participantIds: ['W-100', 'W-700'],
+    priority: 'normal', status: 'open',
+    readBy: ['W-100', 'W-700'],
+    messages: [],
+    lastMessageAt: now(),
   },
 ];
 

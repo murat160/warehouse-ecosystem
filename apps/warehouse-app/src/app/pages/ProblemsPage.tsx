@@ -10,6 +10,9 @@ import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewMod
 import { OwnerCard } from '../components/OwnerCard';
 import { SendToSupplierModal } from '../components/SendToSupplierModal';
 import { SupplierChatModal } from '../components/SupplierChatModal';
+import { InternalChatButton } from '../components/InternalChatButton';
+import { MockCallModal } from '../components/MockCallModal';
+import { Phone } from 'lucide-react';
 import { PROBLEM_TYPE_LABELS, type ProblemType, type ProblemStatus, type EvidenceSendItem } from '../domain/types';
 import { can, ROLE_LABELS } from '../domain/roles';
 
@@ -40,6 +43,7 @@ export function ProblemsPage() {
   const [sendFor, setSendFor] = useState<null | { problemId: string; supplierId?: string; sku?: string; items: EvidenceSendItem[] }>(null);
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ALL' | ProblemStatus>('ALL');
+  const [callFor, setCallFor] = useState<string | null>(null);
 
   const create = () => {
     if (!desc.trim()) { toast.error('Опишите проблему'); return; }
@@ -197,6 +201,13 @@ export function ProblemsPage() {
                         >Закрыть</button>
                       </>
                     )}
+                    <InternalChatButton kind="problem" refId={p.id} title={`Проблема ${p.id}`} priority={p.status === 'escalated' ? 'critical' : 'urgent'} />
+                    {p.assignedTo && (
+                      <button
+                        onClick={() => setCallFor(p.assignedTo!)}
+                        className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                      ><Phone className="w-3 h-3" /> Позвонить</button>
+                    )}
                   </div>
                 </div>
               );
@@ -288,6 +299,8 @@ export function ProblemsPage() {
         threadId={chatThreadId}
         onClose={() => setChatThreadId(null)}
       />
+
+      <MockCallModal open={!!callFor} workerId={callFor} onClose={() => setCallFor(null)} />
     </div>
   );
 }

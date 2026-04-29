@@ -8,6 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ZoneBadge } from '../components/ZoneBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
+import { InternalChatButton } from '../components/InternalChatButton';
 import { ACTIVE_STATUSES } from '../domain/orderStatus';
 import type { Priority, ProblemType } from '../domain/types';
 import { PROBLEM_TYPE_LABELS } from '../domain/types';
@@ -94,6 +95,7 @@ export function OrdersPage() {
                 >
                   <AlertTriangle className="w-3 h-3" /> Проблема
                 </button>
+                <InternalChatButton kind="order" refId={o.id} title={`Заказ ${o.code}`} priority={o.priority === 'urgent' ? 'urgent' : 'normal'} />
               </div>
             </div>
           );

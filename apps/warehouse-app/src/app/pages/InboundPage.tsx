@@ -13,6 +13,7 @@ import { SendToSupplierModal } from '../components/SendToSupplierModal';
 import { OwnerCard } from '../components/OwnerCard';
 import { PartialReceiveModal } from '../components/PartialReceiveModal';
 import { SupplierChatModal } from '../components/SupplierChatModal';
+import { InternalChatButton } from '../components/InternalChatButton';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
 import { LocationBadge } from '../components/LocationBadge';
 import {
@@ -158,6 +159,7 @@ export function InboundPage() {
                   }}
                   className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                 ><MessageSquare className="w-3 h-3" /> Написать поставщику</button>
+                <InternalChatButton kind="task" refId={a.id} title={`Приёмка ${a.invoiceNumber}`} />
               </div>
 
               {isOpen && (

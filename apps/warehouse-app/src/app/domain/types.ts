@@ -540,7 +540,7 @@ export const CHAT_MESSAGE_STATUS_LABELS: Record<ChatMessageStatus, string> = {
 export type ChatAuthor = 'warehouse' | 'supplier' | 'admin' | 'returns_operator' | 'support';
 
 export interface ChatAttachment {
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'document';
   src: string;
   title?: string;
 }
@@ -556,24 +556,70 @@ export interface ChatMessage {
   status: ChatMessageStatus;
 }
 
-export type ChatThreadKind = 'supplier' | 'return';
+export type ChatThreadKind =
+  | 'supplier' | 'return'
+  | 'direct' | 'task' | 'order' | 'problem' | 'dispute' | 'shift' | 'admin';
+
+export type ChatThreadStatus = 'open' | 'waiting_response' | 'resolved' | 'closed';
+export type ChatThreadPriority = 'normal' | 'urgent' | 'critical';
+
+export const CHAT_THREAD_KIND_LABELS: Record<ChatThreadKind, string> = {
+  supplier: 'С поставщиком',
+  return:   'По возврату',
+  direct:   'Личный',
+  task:     'По задаче',
+  order:    'По заказу',
+  problem:  'По проблеме',
+  dispute:  'По спору',
+  shift:    'Смены',
+  admin:    'С администратором',
+};
+
+export const CHAT_THREAD_STATUS_LABELS: Record<ChatThreadStatus, string> = {
+  open:             'Открыт',
+  waiting_response: 'Ждём ответ',
+  resolved:         'Решён',
+  closed:           'Закрыт',
+};
+
+export const CHAT_THREAD_PRIORITY_LABELS: Record<ChatThreadPriority, string> = {
+  normal:   'Обычный',
+  urgent:   'Срочный',
+  critical: 'Критичный',
+};
 
 export interface ChatThread {
   id: string;                                    // CT-…
   kind: ChatThreadKind;
-  /** Для supplier-чата — supplierId; для return-чата всё равно может быть. */
+  /** Заголовок треда (для internal-чата). */
+  title?: string;
+  /** Для supplier-чата — supplierId; для return-чата может быть. */
   supplierId?: string;
   supplierName?: string;
-  /** Для return-чата (общение по возврату). */
+  /** Для return-чата. */
   rmaId?: string;
-  /** Привязка к источнику. */
+  /** Универсальные ссылки. */
+  orderId?: string;
+  problemId?: string;
+  disputeId?: string;
+  taskId?: string;
+  asnId?: string;
+  /** Привязка к источнику для evidence. */
   linkedTo?: EvidenceLinkedTarget;
   invoiceNumber?: string;
   sku?: string;
   messages: ChatMessage[];
   createdAt: string;
+  /** Кто состоит в треде (worker id-ы; для supplier-чата кладём ['supplier']). */
+  participantIds: string[];
   /** Для return-чата: с кем складчик ведёт диалог (поставщик / admin / support). */
   participants?: ChatAuthor[];
+  assignedTo?: string;
+  priority: ChatThreadPriority;
+  status: ChatThreadStatus;
+  /** ID-ы прочитавших последнее сообщение (для unread-count). */
+  readBy: string[];
+  lastMessageAt?: string;
 }
 
 export const SUPPLIER_QUICK_TEMPLATES: string[] = [

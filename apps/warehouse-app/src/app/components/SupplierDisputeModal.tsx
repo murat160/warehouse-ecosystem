@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Camera, Video, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal } from './Modal';
 import { store } from '../store/useStore';
@@ -7,6 +8,8 @@ import { DISPUTE_REASON_LABELS, type DisputeReason } from '../domain/types';
 export interface SupplierDisputeModalProps {
   open: boolean;
   onClose: () => void;
+  /** Колбэк после успешного создания спора. */
+  onCreated?: (disputeId: string) => void;
   defaults: {
     supplierId: string;
     supplierName: string;
@@ -20,18 +23,37 @@ export interface SupplierDisputeModalProps {
   };
 }
 
-export function SupplierDisputeModal({ open, onClose, defaults }: SupplierDisputeModalProps) {
+export function SupplierDisputeModal({ open, onClose, onCreated, defaults }: SupplierDisputeModalProps) {
   const [reason, setReason] = useState<DisputeReason>(defaults.initialReason ?? 'damaged_goods');
   const [desc, setDesc] = useState('');
   const [qty, setQty] = useState(defaults.initialDamagedQty ? String(defaults.initialDamagedQty) : '');
   const [amount, setAmount] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [videos, setVideos] = useState<string[]>([]);
+  const [forceWithoutEvidence, setForceWithoutEvidence] = useState(false);
 
   const reset = () => {
     setReason(defaults.initialReason ?? 'damaged_goods'); setDesc(''); setQty(''); setAmount('');
+    setPhotos([]); setVideos([]); setForceWithoutEvidence(false);
   };
+
+  const onAddFile = (e: React.ChangeEvent<HTMLInputElement>, kind: 'photo' | 'video') => {
+    const files = e.target.files;
+    if (!files) return;
+    const arr = Array.from(files).map(f => URL.createObjectURL(f));
+    if (kind === 'photo') setPhotos(p => [...p, ...arr]);
+    else                  setVideos(p => [...p, ...arr]);
+    e.target.value = '';
+  };
+
+  const hasEvidence = photos.length + videos.length > 0;
 
   const submit = () => {
     if (!desc.trim()) { toast.error('Опишите ситуацию'); return; }
+    if (!hasEvidence && !forceWithoutEvidence) {
+      toast.error('Нет доказательств. Загрузите фото/видео или нажмите «Создать как черновик».');
+      return;
+    }
     const id = store.createSupplierDispute({
       supplierId: defaults.supplierId, supplierName: defaults.supplierName,
       invoiceNumber: defaults.invoiceNumber, asnId: defaults.asnId, sku: defaults.sku,
@@ -40,7 +62,23 @@ export function SupplierDisputeModal({ open, onClose, defaults }: SupplierDisput
       claimedAmount: amount ? parseFloat(amount) : undefined,
       supplierMediaId: defaults.supplierMediaId, damageReportId: defaults.damageReportId,
     });
-    toast.success(`Спор ${id} создан (черновик)`);
+    photos.forEach(src => store.uploadDisputeMedia(id, 'photo', src));
+    videos.forEach(src => store.uploadDisputeMedia(id, 'video', src));
+    if (hasEvidence) {
+      store.changeDisputeStatus(id, 'sent_to_supplier');
+      toast.success(`Спор ${id} создан · отправлен поставщику`);
+    } else {
+      toast(`Спор ${id} создан как черновик (без доказательств)`);
+    }
+    // Авто-создаём internal + supplier чаты
+    store.getOrCreateInternalThread({
+      kind: 'dispute', refId: id, title: `Спор ${id} · ${defaults.supplierName}`, priority: 'urgent',
+    });
+    store.getOrCreateSupplierThread({
+      supplierId: defaults.supplierId, supplierName: defaults.supplierName,
+      linkedTo: { type: 'dispute', id }, invoiceNumber: defaults.invoiceNumber, sku: defaults.sku,
+    });
+    onCreated?.(id);
     reset(); onClose();
   };
 
@@ -89,9 +127,34 @@ export function SupplierDisputeModal({ open, onClose, defaults }: SupplierDisput
         value={desc}
         onChange={e => setDesc(e.target.value)}
         placeholder="Подробности для поставщика…"
-        className="w-full px-3 py-2 rounded-xl border-2 border-[#E5E7EB] focus:border-[#3730A3] focus:outline-none text-[14px] resize-none"
+        className="w-full px-3 py-2 rounded-xl border-2 border-[#E5E7EB] focus:border-[#3730A3] focus:outline-none text-[14px] resize-none mb-3"
         style={{ fontWeight: 500 }}
       />
+
+      <div className="text-[11px] text-[#6B7280] mb-1" style={{ fontWeight: 700 }}>Доказательства склада</div>
+      <div className="flex gap-2 mb-2">
+        <label className="flex-1 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center justify-center gap-1 cursor-pointer" style={{ fontWeight: 700 }}>
+          <Camera className="w-3 h-3" /> + Фото ({photos.length})
+          <input type="file" accept="image/*" multiple onChange={(e) => onAddFile(e, 'photo')} className="hidden" />
+        </label>
+        <label className="flex-1 h-9 rounded-lg bg-[#7C3AED] text-white text-[12px] active-press inline-flex items-center justify-center gap-1 cursor-pointer" style={{ fontWeight: 700 }}>
+          <Video className="w-3 h-3" /> + Видео ({videos.length})
+          <input type="file" accept="video/mp4,video/webm" multiple onChange={(e) => onAddFile(e, 'video')} className="hidden" />
+        </label>
+      </div>
+
+      {!hasEvidence && (
+        <div className="bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-md p-2 text-[11px] text-[#92400E] mb-2" style={{ fontWeight: 600 }}>
+          <div className="inline-flex items-center gap-1 mb-1" style={{ fontWeight: 800 }}>
+            <AlertTriangle className="w-3 h-3" /> Спор без доказательств
+          </div>
+          Если нет фото/видео — поставщику будет сложно ответить. Желательно приложить хотя бы одно фото.
+          <label className="inline-flex items-center gap-1 mt-1.5">
+            <input type="checkbox" checked={forceWithoutEvidence} onChange={(e) => setForceWithoutEvidence(e.target.checked)} className="accent-[#F59E0B]" />
+            <span>Создать как черновик без доказательств</span>
+          </label>
+        </div>
+      )}
     </Modal>
   );
 }

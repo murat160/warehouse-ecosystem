@@ -8,6 +8,8 @@ import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
 import { SupplierChatModal } from '../components/SupplierChatModal';
+import { DisputeDetailDrawer } from '../components/DisputeDetailDrawer';
+import { InternalChatButton } from '../components/InternalChatButton';
 import { EvidenceViewer, type Evidence } from '../components/EvidenceViewer';
 import {
   DISPUTE_REASON_LABELS, DISPUTE_STATUS_LABELS,
@@ -40,6 +42,7 @@ export function SupplierDisputesPage() {
   const [responseText, setResponseText] = useState('');
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ALL' | DisputeStatus>('ALL');
+  const [detailFor, setDetailFor] = useState<string | null>(null);
 
   const exportReport = (id: string) => {
     const d = supplierDisputes.find(x => x.id === id);
@@ -200,6 +203,11 @@ export function SupplierDisputesPage() {
                       }}
                       className="px-3 h-9 rounded-lg bg-[#0EA5E9] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                     ><MessagesSquare className="w-3 h-3" /> Чат с поставщиком</button>
+                    <InternalChatButton kind="dispute" refId={d.id} title={`Спор ${d.id}`} priority="urgent" />
+                    <button
+                      onClick={() => setDetailFor(d.id)}
+                      className="px-3 h-9 rounded-lg bg-[#1F2430] text-white text-[12px] active-press" style={{ fontWeight: 700 }}
+                    >Открыть детали</button>
                   </div>
 
                   {evidence.length > 0 && (
@@ -254,6 +262,12 @@ export function SupplierDisputesPage() {
         open={!!chatThreadId}
         threadId={chatThreadId}
         onClose={() => setChatThreadId(null)}
+      />
+
+      <DisputeDetailDrawer
+        open={!!detailFor}
+        disputeId={detailFor}
+        onClose={() => setDetailFor(null)}
       />
     </div>
   );
