@@ -30,6 +30,11 @@ export interface Sku {
   fragile?: boolean;
   temperatureControlled?: boolean; // требует холодного хранения
   defaultZone: ZoneCode;
+  /** Поставщик/владелец товара по умолчанию (resolved через mock и проявляется в карточках). */
+  supplierId?: string;
+  /** Селлер/мерчант, продающий товар (если отличается от supplier). */
+  sellerId?: string;
+  sellerName?: string;
 }
 
 // ───────── Bins ─────────
@@ -218,6 +223,12 @@ export interface ReturnRow {
   comment?: string;
   /** Запросы у клиента: photo_requested / video_requested / media_uploaded. */
   mediaRequest?: MediaRequest;
+  /** Связь с поставщиком/селлером и поставкой. */
+  supplierId?: string;
+  sellerName?: string;
+  invoiceNumber?: string;
+  asnId?: string;
+  linkedDisputeId?: string;
 }
 
 // ───────── Problems ─────────
@@ -301,12 +312,23 @@ export interface Courier {
 }
 
 // ───────── Suppliers ─────────
+export type SupplierContractStatus = 'active' | 'on_hold' | 'expired';
+
+export const SUPPLIER_CONTRACT_LABELS: Record<SupplierContractStatus, string> = {
+  active:  'Договор активен',
+  on_hold: 'Договор на паузе',
+  expired: 'Договор истёк',
+};
+
 export interface Supplier {
   id: string;            // SUP-7711
   name: string;
   contactPerson?: string;
   phone?: string;
   email?: string;
+  contractStatus?: SupplierContractStatus;
+  /** Канал для отправки доказательств. */
+  notifyChannel?: 'email' | 'phone' | 'portal';
 }
 
 // ───────── Supplier media ─────────
@@ -429,6 +451,52 @@ export interface SupplierDispute {
   createdAt: string;
   sentAt?: string;
   resolvedAt?: string;
+}
+
+// ───────── Evidence sends (журнал отправок поставщику) ─────────
+export type EvidenceSendStatus = 'draft' | 'sent_to_supplier' | 'supplier_viewed' | 'response_received' | 'closed';
+
+export const EVIDENCE_SEND_STATUS_LABELS: Record<EvidenceSendStatus, string> = {
+  draft:             'Черновик',
+  sent_to_supplier:  'Отправлено',
+  supplier_viewed:   'Поставщик увидел',
+  response_received: 'Получен ответ',
+  closed:            'Закрыто',
+};
+
+export type EvidenceLinkedTarget =
+  | { type: 'return';  id: string }
+  | { type: 'asn';     id: string; asnItemId?: string }
+  | { type: 'damage';  id: string }
+  | { type: 'dispute'; id: string }
+  | { type: 'problem'; id: string };
+
+export interface EvidenceSendItem {
+  kind: 'image' | 'video';
+  src: string;
+  /** Откуда взято: чтобы видно было «фото склада» / «видео клиента». */
+  source: 'customer' | 'supplier' | 'warehouse' | 'courier' | 'return' | 'receiving';
+  title?: string;
+}
+
+export interface EvidenceSend {
+  id: string;                       // ES-…
+  supplierId: string;
+  supplierName: string;
+  supplierContact?: string;
+  channel: 'email' | 'phone' | 'portal';
+  comment: string;
+  items: EvidenceSendItem[];
+  status: EvidenceSendStatus;
+  sentBy: string;
+  sentAt: string;
+  viewedAt?: string;
+  responseAt?: string;
+  responseText?: string;
+  closedAt?: string;
+  linkedTo?: EvidenceLinkedTarget;
+  invoiceNumber?: string;
+  sku?: string;
 }
 
 // ───────── Evidence sources (общая категория для viewer) ─────────

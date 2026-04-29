@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { EvidenceViewer, type Evidence } from '../components/EvidenceViewer';
+import { OwnerCard } from '../components/OwnerCard';
 import {
   PROBLEM_TYPE_LABELS, DAMAGE_TYPE_LABELS, DISPUTE_REASON_LABELS, DISPUTE_STATUS_LABELS,
 } from '../domain/types';
@@ -38,7 +39,7 @@ const KIND_COLORS: Record<ClaimKind, { bg: string; fg: string; icon: any }> = {
 };
 
 export function ClaimsPage() {
-  const { returns, problems, damageReports, supplierDisputes, skus, workers, asns } = useStore();
+  const { returns, problems, damageReports, supplierDisputes, skus, workers, asns, suppliers } = useStore();
   const nav = useNavigate();
   const [filter, setFilter] = useState<ClaimKind | 'ALL'>('ALL');
 
@@ -180,6 +181,20 @@ export function ClaimsPage() {
                       <span className="text-[#6B7280] font-mono ml-auto">{sku.sku}</span>
                     </div>
                   )}
+
+                  {(() => {
+                    const sup = sku?.supplierId ? suppliers.find(s => s.id === sku.supplierId) : undefined;
+                    if (!sup && !sku?.sellerName && !r.invoice) return null;
+                    return (
+                      <div className="mb-2">
+                        <OwnerCard
+                          supplier={sup}
+                          sellerName={sku?.sellerName}
+                          invoiceNumber={r.invoice}
+                        />
+                      </div>
+                    );
+                  })()}
 
                   <div className="text-[12px] text-[#374151] mb-2" style={{ fontWeight: 500 }}>{r.subtitle}</div>
 

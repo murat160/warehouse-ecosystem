@@ -1,7 +1,7 @@
 import type {
   Worker, Sku, Bin, WarehouseOrder, Task, InventoryRow, Movement,
   CountTask, Asn, ReturnRow, Problem, DocumentRow, Courier,
-  Supplier, SupplierMedia, DamageReport, SupplierDispute,
+  Supplier, SupplierMedia, DamageReport, SupplierDispute, EvidenceSend,
 } from './types';
 
 const now = () => new Date().toISOString();
@@ -20,14 +20,14 @@ export const MOCK_WORKERS: Worker[] = [
 ];
 
 export const MOCK_SKUS: Sku[] = [
-  { sku: 'SHOE-00991', barcode: '5901234567890', name: 'Nike Air Max Black', category: 'Кроссовки',  sellerArticle: 'NK-AM-BLK-42', photo: '👟', weightKg: 0.9, defaultZone: 'RED' },
-  { sku: 'TS-RED-M',   barcode: '5901234567891', name: 'Футболка красная M', category: 'Одежда',     sellerArticle: 'TR-M-RED',     photo: '👕', weightKg: 0.2, defaultZone: 'YELLOW' },
-  { sku: 'JN-BLU-32',  barcode: '5901234567892', name: 'Джинсы синие 32',    category: 'Одежда',     sellerArticle: 'JN-32-BLU',    photo: '👖', weightKg: 0.6, defaultZone: 'YELLOW' },
-  { sku: 'PHN-IP15',   barcode: '5901234567893', name: 'iPhone 15 Pro 128',  category: 'Электроника', sellerArticle: 'AP-IP15-128',  photo: '📱', weightKg: 0.4, fragile: true, defaultZone: 'BLUE' },
-  { sku: 'BAG-LV-01',  barcode: '5901234567894', name: 'Сумка Louis V.',     category: 'Аксессуары', sellerArticle: 'LV-BAG-01',    photo: '👜', weightKg: 0.7, defaultZone: 'PURPLE' },
-  { sku: 'GRC-MILK',   barcode: '5901234567895', name: 'Молоко 1л',          category: 'Продукты',   sellerArticle: 'MLK-1L',       photo: '🥛', weightKg: 1.0, temperatureControlled: true, defaultZone: 'GREEN' },
-  { sku: 'JK-GRY-L',   barcode: '5901234567896', name: 'Куртка серая L',     category: 'Одежда',     sellerArticle: 'JK-L-GRY',     photo: '🧥', weightKg: 1.2, defaultZone: 'YELLOW' },
-  { sku: 'GIFT-FLW-1', barcode: '5901234567897', name: 'Букет роз',          category: 'Цветы',      sellerArticle: 'FLW-RZ-1',     photo: '💐', weightKg: 0.5, fragile: true, defaultZone: 'PURPLE' },
+  { sku: 'SHOE-00991', barcode: '5901234567890', name: 'Nike Air Max Black', category: 'Кроссовки',  sellerArticle: 'NK-AM-BLK-42', photo: '👟', weightKg: 0.9, defaultZone: 'RED',    supplierId: 'SUP-7711', sellerId: 'SLR-NIKE',     sellerName: 'Nike Store KZ' },
+  { sku: 'TS-RED-M',   barcode: '5901234567891', name: 'Футболка красная M', category: 'Одежда',     sellerArticle: 'TR-M-RED',     photo: '👕', weightKg: 0.2, defaultZone: 'YELLOW', supplierId: 'SUP-7720', sellerId: 'SLR-APP',      sellerName: 'KZ Apparel'    },
+  { sku: 'JN-BLU-32',  barcode: '5901234567892', name: 'Джинсы синие 32',    category: 'Одежда',     sellerArticle: 'JN-32-BLU',    photo: '👖', weightKg: 0.6, defaultZone: 'YELLOW', supplierId: 'SUP-7720', sellerId: 'SLR-APP',      sellerName: 'KZ Apparel'    },
+  { sku: 'PHN-IP15',   barcode: '5901234567893', name: 'iPhone 15 Pro 128',  category: 'Электроника', sellerArticle: 'AP-IP15-128',  photo: '📱', weightKg: 0.4, fragile: true, defaultZone: 'BLUE',  supplierId: 'SUP-7730', sellerId: 'SLR-MOBEL',    sellerName: 'MobEl'         },
+  { sku: 'BAG-LV-01',  barcode: '5901234567894', name: 'Сумка Louis V.',     category: 'Аксессуары', sellerArticle: 'LV-BAG-01',    photo: '👜', weightKg: 0.7, defaultZone: 'PURPLE', supplierId: 'SUP-7740', sellerId: 'SLR-LUXBAG',   sellerName: 'Lux Bags KZ'   },
+  { sku: 'GRC-MILK',   barcode: '5901234567895', name: 'Молоко 1л',          category: 'Продукты',   sellerArticle: 'MLK-1L',       photo: '🥛', weightKg: 1.0, temperatureControlled: true, defaultZone: 'GREEN', supplierId: 'SUP-7750', sellerId: 'SLR-DAIRY', sellerName: 'AlemDairy' },
+  { sku: 'JK-GRY-L',   barcode: '5901234567896', name: 'Куртка серая L',     category: 'Одежда',     sellerArticle: 'JK-L-GRY',     photo: '🧥', weightKg: 1.2, defaultZone: 'YELLOW', supplierId: 'SUP-7720', sellerId: 'SLR-APP',      sellerName: 'KZ Apparel'    },
+  { sku: 'GIFT-FLW-1', barcode: '5901234567897', name: 'Букет роз',          category: 'Цветы',      sellerArticle: 'FLW-RZ-1',     photo: '💐', weightKg: 0.5, fragile: true, defaultZone: 'PURPLE', supplierId: 'SUP-7760', sellerId: 'SLR-FLW',      sellerName: 'FlowerHouse'   },
 ];
 
 export const MOCK_BINS: Bin[] = [
@@ -125,9 +125,12 @@ export const MOCK_COUNTS: CountTask[] = [
 ];
 
 export const MOCK_SUPPLIERS: Supplier[] = [
-  { id: 'SUP-7711', name: 'ТОО SneakerHub',    contactPerson: 'Алмас Б.',   phone: '+7 700 111 2233', email: 'sneakers@hub.kz' },
-  { id: 'SUP-7720', name: 'KZ Apparel Co.',    contactPerson: 'Айгерим К.', phone: '+7 700 444 5566', email: 'orders@kzapparel.kz' },
-  { id: 'SUP-7730', name: 'Mobile Electronics', contactPerson: 'Тимур Н.',  phone: '+7 700 777 8899', email: 'b2b@mobel.kz' },
+  { id: 'SUP-7711', name: 'ТОО SneakerHub',     contactPerson: 'Алмас Б.',   phone: '+7 700 111 2233', email: 'sneakers@hub.kz',     contractStatus: 'active',  notifyChannel: 'email'  },
+  { id: 'SUP-7720', name: 'KZ Apparel Co.',     contactPerson: 'Айгерим К.', phone: '+7 700 444 5566', email: 'orders@kzapparel.kz', contractStatus: 'active',  notifyChannel: 'email'  },
+  { id: 'SUP-7730', name: 'Mobile Electronics', contactPerson: 'Тимур Н.',   phone: '+7 700 777 8899', email: 'b2b@mobel.kz',        contractStatus: 'on_hold', notifyChannel: 'portal' },
+  { id: 'SUP-7740', name: 'Lux Bags Distrib.',  contactPerson: 'Дина С.',    phone: '+7 700 222 3344', email: 'wh@luxbags.kz',       contractStatus: 'active',  notifyChannel: 'email'  },
+  { id: 'SUP-7750', name: 'AlemDairy LLP',      contactPerson: 'Ержан К.',   phone: '+7 700 555 6677', email: 'logistics@alem.kz',   contractStatus: 'active',  notifyChannel: 'phone'  },
+  { id: 'SUP-7760', name: 'FlowerHouse',        contactPerson: 'Эмине Б.',   phone: '+7 700 888 9900', email: 'fh@flowers.kz',       contractStatus: 'expired', notifyChannel: 'email'  },
 ];
 
 export const MOCK_ASNS: Asn[] = [
@@ -203,6 +206,7 @@ export const MOCK_RETURNS: ReturnRow[] = [
     items: [{ sku: 'SHOE-00991', qty: 1, condition: 'new' }],
     photosBefore: ['mock://rma/001/before-1.jpg'],
     comment: 'Клиент сообщил, что размер мал.',
+    supplierId: 'SUP-7711', sellerName: 'Nike Store KZ',
   },
   {
     id: 'RMA-002', orderId: 'ORD-2026-004491', customerName: 'Денис К.', reason: 'Брак',
@@ -212,6 +216,7 @@ export const MOCK_RETURNS: ReturnRow[] = [
     photosDamage: ['mock://rma/002/damage-1.jpg', 'mock://rma/002/damage-2.jpg'],
     videoFromCustomer: 'mock://rma/002/customer.mp4',
     comment: 'Экран с трещиной — клиент прислал видео распаковки.',
+    supplierId: 'SUP-7730', sellerName: 'MobEl', invoiceNumber: 'INV-7820', asnId: 'a2',
   },
 ];
 
@@ -228,6 +233,21 @@ export const MOCK_DOCUMENTS: DocumentRow[] = [
   { id: 'D-002', type: 'shipping_label',  number: 'LBL-998877',        orderId: 'o5', status: 'approved', createdAt: now() },
   { id: 'D-003', type: 'inventory_report',number: 'RPT-2026-04-28-A',  status: 'pending', createdAt: now() },
   { id: 'D-004', type: 'damage_photo',    number: 'DMG-PHOTO-001',     asnId: 'a2', status: 'pending', createdAt: now() },
+];
+
+export const MOCK_EVIDENCE_SENDS: EvidenceSend[] = [
+  {
+    id: 'ES-0001', supplierId: 'SUP-7730', supplierName: 'Mobile Electronics',
+    supplierContact: 'b2b@mobel.kz', channel: 'email',
+    comment: 'Поставка INV-7820: вскрытая коробка iPhone 15. Прошу объяснение.',
+    items: [
+      { kind: 'image', src: 'mock://damage/DMG-001/photo-1.jpg', source: 'receiving', title: 'Фото повреждения' },
+    ],
+    status: 'sent_to_supplier', sentBy: 'W-301',
+    sentAt: now(),
+    invoiceNumber: 'INV-7820', sku: 'PHN-IP15',
+    linkedTo: { type: 'asn', id: 'a2', asnItemId: 'ai3' },
+  },
 ];
 
 export const MOCK_COURIERS: Courier[] = [

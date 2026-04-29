@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, AlertTriangle, Camera, Video, Eye } from 'lucide-react';
+import { Plus, AlertTriangle, Camera, Video, Eye, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -7,7 +7,9 @@ import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
-import { PROBLEM_TYPE_LABELS, type ProblemType, type ProblemStatus } from '../domain/types';
+import { OwnerCard } from '../components/OwnerCard';
+import { SendToSupplierModal } from '../components/SendToSupplierModal';
+import { PROBLEM_TYPE_LABELS, type ProblemType, type ProblemStatus, type EvidenceSendItem } from '../domain/types';
 import { can, ROLE_LABELS } from '../domain/roles';
 
 const STATUS_LABELS: Record<ProblemStatus, string> = {
@@ -21,7 +23,7 @@ const STATUS_COLORS: Record<ProblemStatus, { bg: string; fg: string }> = {
 };
 
 export function ProblemsPage() {
-  const { problems, workers, currentWorker } = useStore();
+  const { problems, workers, currentWorker, skus, suppliers } = useStore();
   const canEscalate = can(currentWorker?.role, 'override_block');
   const canReassign = can(currentWorker?.role, 'reassign_task');
 
@@ -34,6 +36,7 @@ export function ProblemsPage() {
   const [confirmResolve, setConfirmResolve] = useState(false);
 
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
+  const [sendFor, setSendFor] = useState<null | { problemId: string; supplierId?: string; sku?: string; items: EvidenceSendItem[] }>(null);
 
   const create = () => {
     if (!desc.trim()) { toast.error('Опишите проблему'); return; }
@@ -78,6 +81,12 @@ export function ProblemsPage() {
                 ...(p.photos ?? []).map((src, i): MediaItem => ({ kind: 'image', src, title: `Фото ${i + 1}`, sku: p.sku, orderId: p.orderId, binId: p.binId, comment: p.description })),
                 ...(p.videos ?? []).map((src, i): MediaItem => ({ kind: 'video', src, title: `Видео ${i + 1}`, sku: p.sku, orderId: p.orderId, binId: p.binId, comment: p.description })),
               ];
+              const sku = p.sku ? skus.find(s => s.sku === p.sku) : undefined;
+              const supplier = sku?.supplierId ? suppliers.find(s => s.id === sku.supplierId) : undefined;
+              const sendItems: EvidenceSendItem[] = [
+                ...(p.photos ?? []).map((src): EvidenceSendItem => ({ kind: 'image', src, source: 'warehouse', title: 'Фото проблемы' })),
+                ...(p.videos ?? []).map((src): EvidenceSendItem => ({ kind: 'video', src, source: 'warehouse', title: 'Видео проблемы' })),
+              ];
               return (
                 <div key={p.id} className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-1">
@@ -100,6 +109,16 @@ export function ProblemsPage() {
                     {p.sku && ` · SKU ${p.sku}`}
                     {' · '}{new Date(p.createdAt).toLocaleString('ru')}
                   </div>
+
+                  {(supplier || sku?.sellerName) && (
+                    <div className="mb-2">
+                      <OwnerCard
+                        supplier={supplier}
+                        sellerName={sku?.sellerName}
+                        hint={supplier ? `Этот товар принадлежит поставщику ${supplier.name}. Можно отправить ему фото проблемы.` : undefined}
+                      />
+                    </div>
+                  )}
 
                   {allMedia.length > 0 && (
                     <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
@@ -126,6 +145,12 @@ export function ProblemsPage() {
                       <>
                         <UploadProblemMedia problemId={p.id} kind="photo" />
                         <UploadProblemMedia problemId={p.id} kind="video" />
+                        {supplier && sendItems.length > 0 && (
+                          <button
+                            onClick={() => setSendFor({ problemId: p.id, supplierId: supplier.id, sku: p.sku, items: sendItems })}
+                            className="px-3 h-9 rounded-lg bg-[#0369A1] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                          ><Send className="w-3 h-3" /> Отправить поставщику</button>
+                        )}
                         {canReassign && !p.assignedTo && (
                           <select
                             defaultValue=""
@@ -221,6 +246,18 @@ export function ProblemsPage() {
         initialIndex={media?.index ?? 0}
         onClose={() => setMedia(null)}
       />
+
+      {sendFor && (
+        <SendToSupplierModal
+          open={!!sendFor}
+          onClose={() => setSendFor(null)}
+          defaultSupplierId={sendFor.supplierId}
+          availableItems={sendFor.items}
+          defaultLinkedTo={{ type: 'problem', id: sendFor.problemId }}
+          defaultSku={sendFor.sku}
+          defaultComment={`Проблема ${sendFor.problemId}: прошу пояснения по товару ${sendFor.sku ?? ''}.`}
+        />
+      )}
     </div>
   );
 }

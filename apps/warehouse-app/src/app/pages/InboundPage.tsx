@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, AlertTriangle, FileWarning, Camera, Video, Eye, MessageSquare } from 'lucide-react';
+import { Upload, AlertTriangle, FileWarning, Camera, Video, Eye, MessageSquare, Send, Lock, ListTree } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -9,11 +9,14 @@ import { SkuThumb } from '../components/SkuThumb';
 import { Modal } from '../components/Modal';
 import { DamageReportModal } from '../components/DamageReportModal';
 import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
+import { SendToSupplierModal } from '../components/SendToSupplierModal';
+import { OwnerCard } from '../components/OwnerCard';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
 import { LocationBadge } from '../components/LocationBadge';
 import {
   SUPPLIER_MEDIA_STATUS_LABELS,
-  type SupplierMediaStatus,
+  type SupplierMediaStatus, type EvidenceSendItem,
 } from '../domain/types';
 
 const STATUS_LABELS = {
@@ -30,7 +33,7 @@ const SM_COLORS: Record<SupplierMediaStatus, { bg: string; fg: string }> = {
 };
 
 export function InboundPage() {
-  const { asns, skus, supplierMedia, bins } = useStore();
+  const { asns, skus, supplierMedia, bins, suppliers } = useStore();
   const [openId, setOpenId] = useState<string | null>(null);
   const [damage, setDamage] = useState<null | { asnId: string; asnItemId: string; sku: string; supplierId: string; supplierName: string; invoiceNumber: string }>(null);
   const [dispute, setDispute] = useState<null | { asnId: string; supplierId: string; supplierName: string; invoiceNumber: string; sku: string; supplierMediaId?: string }>(null);
@@ -39,6 +42,10 @@ export function InboundPage() {
   const [explanation, setExplanation] = useState<{ id: string; text: string } | null>(null);
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
   const [warehousePhotos, setWarehousePhotos] = useState<Record<string, string[]>>({});
+  const [sendFor, setSendFor] = useState<null | { asnId: string; asnItemId: string; supplierId: string; sku: string; invoice: string; items: EvidenceSendItem[] }>(null);
+  const [partialFor, setPartialFor] = useState<string | null>(null);
+  const [blockFor, setBlockFor] = useState<string | null>(null);
+  const [blockReason, setBlockReason] = useState('');
 
   const submitReview = () => {
     if (!reviewSm) return;
@@ -78,6 +85,15 @@ export function InboundPage() {
                 </span>
               </div>
 
+              <div className="mb-2">
+                <OwnerCard
+                  supplier={suppliers.find(s => s.id === a.supplierId)}
+                  invoiceNumber={a.invoiceNumber}
+                  asnId={a.id}
+                  hint={a.status === 'discrepancy' ? 'По поставке расхождение — отправь поставщику фото и создай спор.' : undefined}
+                />
+              </div>
+
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => setOpenId(isOpen ? null : a.id)}
@@ -92,10 +108,20 @@ export function InboundPage() {
                   </button>
                 )}
                 {a.status !== 'closed' && a.status !== 'received' && (
-                  <button
-                    onClick={() => { store.finishReceiving(a.id); toast('Поставка закрыта'); }}
-                    className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press" style={{ fontWeight: 700 }}
-                  >Закрыть приёмку</button>
+                  <>
+                    <button
+                      onClick={() => { store.finishReceiving(a.id); toast('Поставка закрыта'); }}
+                      className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press" style={{ fontWeight: 700 }}
+                    >Закрыть приёмку</button>
+                    <button
+                      onClick={() => setPartialFor(a.id)}
+                      className="px-3 h-9 rounded-lg bg-[#F59E0B] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                    ><ListTree className="w-3 h-3" /> Принять частично</button>
+                    <button
+                      onClick={() => { setBlockFor(a.id); setBlockReason(''); }}
+                      className="px-3 h-9 rounded-lg bg-[#7F1D1D] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                    ><Lock className="w-3 h-3" /> Заблокировать партию</button>
+                  </>
                 )}
                 <button
                   onClick={() => setDispute({
@@ -244,6 +270,18 @@ export function InboundPage() {
                             })}
                             className="px-3 h-8 rounded-lg bg-[#3730A3] text-white text-[11px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
                           ><FileWarning className="w-3 h-3" /> Создать спор</button>
+                          <button
+                            onClick={() => setSendFor({
+                              asnId: a.id, asnItemId: it.id, supplierId: a.supplierId,
+                              sku: it.sku, invoice: a.invoiceNumber,
+                              items: [
+                                ...(sm?.photos ?? []).map(src => ({ kind: 'image' as const, src, source: 'supplier' as const, title: 'Фото поставщика' })),
+                                ...(sm?.videos ?? []).map(src => ({ kind: 'video' as const, src, source: 'supplier' as const, title: 'Видео поставщика' })),
+                                ...whPhotos.map(src => ({ kind: 'image' as const, src, source: 'warehouse' as const, title: 'Фото склада' })),
+                              ],
+                            })}
+                            className="px-3 h-8 rounded-lg bg-[#0369A1] text-white text-[11px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                          ><Send className="w-3 h-3" /> Отправить поставщику</button>
                         </div>
 
                         <ReceiveControls asnId={a.id} item={it} />
@@ -281,6 +319,63 @@ export function InboundPage() {
           defaults={{ ...dispute, initialReason: 'damaged_goods' }}
         />
       )}
+
+      {sendFor && (
+        <SendToSupplierModal
+          open={!!sendFor}
+          onClose={() => setSendFor(null)}
+          defaultSupplierId={sendFor.supplierId}
+          availableItems={sendFor.items}
+          defaultLinkedTo={{ type: 'asn', id: sendFor.asnId, asnItemId: sendFor.asnItemId }}
+          defaultInvoice={sendFor.invoice}
+          defaultSku={sendFor.sku}
+          defaultComment={`По поставке ${sendFor.invoice}, SKU ${sendFor.sku}: пришлите пожалуйста объяснение.`}
+        />
+      )}
+
+      <ConfirmModal
+        open={!!partialFor}
+        title="Принять только годное?"
+        message="Из этой поставки в available stock попадёт только то, что без брака. Битое уйдёт в damaged stock и в discrepancy_act."
+        confirmLabel="Принять частично"
+        onConfirm={() => {
+          if (!partialFor) return;
+          const r = store.partialReceiveAsn(partialFor);
+          if (r.ok) toast.success('Частичная приёмка зафиксирована');
+          else      toast.error(r.reason ?? 'Ошибка');
+          setPartialFor(null);
+        }}
+        onCancel={() => setPartialFor(null)}
+      />
+
+      <Modal
+        open={!!blockFor}
+        title={`Заблокировать партию ${blockFor ?? ''}`}
+        onClose={() => { setBlockFor(null); setBlockReason(''); }}
+        footer={
+          <button
+            onClick={() => {
+              if (!blockFor || !blockReason.trim()) { toast.error('Укажите причину'); return; }
+              store.blockAsnBatch(blockFor, blockReason);
+              toast('Партия заблокирована, создана проблема');
+              setBlockFor(null); setBlockReason('');
+            }}
+            className="w-full h-11 rounded-xl bg-[#7F1D1D] text-white active-press" style={{ fontWeight: 800 }}
+          >Заблокировать</button>
+        }
+      >
+        <div className="text-[12px] text-[#374151] mb-2" style={{ fontWeight: 500 }}>
+          Партия не пойдёт в обработку, пока проблему не решат. Создастся problem-ticket для Shift Manager / Warehouse Admin.
+        </div>
+        <textarea
+          rows={3}
+          value={blockReason}
+          onChange={e => setBlockReason(e.target.value)}
+          placeholder="Причина блокировки…"
+          className="w-full px-3 py-2 rounded-xl border-2 border-[#E5E7EB] focus:border-[#7F1D1D] focus:outline-none text-[14px] resize-none"
+          style={{ fontWeight: 500 }}
+        />
+      </Modal>
 
       <Modal
         open={!!reviewSm}

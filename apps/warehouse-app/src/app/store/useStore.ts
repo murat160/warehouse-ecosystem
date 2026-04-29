@@ -6,6 +6,7 @@ import type {
   Supplier, SupplierMedia, SupplierMediaStatus,
   DamageReport, DamageType,
   SupplierDispute, DisputeReason, DisputeStatus,
+  EvidenceSend, EvidenceSendItem, EvidenceLinkedTarget,
 } from '../domain/types';
 import type { OrderStatus } from '../domain/orderStatus';
 import { NEXT_STATUSES } from '../domain/orderStatus';
@@ -14,6 +15,7 @@ import {
   MOCK_INVENTORY, MOCK_MOVEMENTS, MOCK_COUNTS, MOCK_ASNS,
   MOCK_RETURNS, MOCK_PROBLEMS, MOCK_DOCUMENTS, MOCK_COURIERS,
   MOCK_SUPPLIERS, MOCK_SUPPLIER_MEDIA, MOCK_DAMAGE_REPORTS, MOCK_SUPPLIER_DISPUTES,
+  MOCK_EVIDENCE_SENDS,
 } from '../domain/mock';
 import { MOCK_SORT_BINS, type SortBin } from '../domain/sortBins';
 
@@ -38,6 +40,7 @@ interface State {
   supplierMedia: SupplierMedia[];
   damageReports: DamageReport[];
   supplierDisputes: SupplierDispute[];
+  evidenceSends: EvidenceSend[];
   /** Журнал scanner-проверок: блокировки и нужные override-ы. */
   scanBlocks: ScanBlock[];
 }
@@ -72,6 +75,7 @@ let state: State = {
   supplierMedia:    MOCK_SUPPLIER_MEDIA,
   damageReports:    MOCK_DAMAGE_REPORTS,
   supplierDisputes: MOCK_SUPPLIER_DISPUTES,
+  evidenceSends:    MOCK_EVIDENCE_SENDS,
   scanBlocks:       [],
 };
 
@@ -888,6 +892,126 @@ export const store = {
     }
     emit();
     return { ok: false, reason: detail, blockId };
+  },
+
+  // ── Evidence sends ──────────────────────────────────
+  sendEvidence(input: {
+    supplierId: string;
+    items: EvidenceSendItem[];
+    comment: string;
+    linkedTo?: EvidenceLinkedTarget;
+    invoiceNumber?: string;
+    sku?: string;
+  }): { ok: boolean; id?: string; reason?: string } {
+    const sup = state.suppliers.find(s => s.id === input.supplierId);
+    if (!sup) return { ok: false, reason: 'Поставщик не найден' };
+    if (input.items.length === 0) return { ok: false, reason: 'Выберите хотя бы один файл' };
+    const id = `ES-${Date.now()}`;
+    const e: EvidenceSend = {
+      id,
+      supplierId: sup.id, supplierName: sup.name,
+      supplierContact: sup.email ?? sup.phone,
+      channel: sup.notifyChannel ?? 'email',
+      comment: input.comment,
+      items: input.items,
+      status: 'sent_to_supplier',
+      sentBy: state.currentWorker?.id ?? 'system',
+      sentAt: new Date().toISOString(),
+      linkedTo: input.linkedTo,
+      invoiceNumber: input.invoiceNumber,
+      sku: input.sku,
+    };
+    state = { ...state, evidenceSends: [e, ...state.evidenceSends] };
+    audit('EVIDENCE_SEND', `${id}: → ${sup.name} (${e.items.length} файлов)`, {
+      sku: input.sku, asnId: input.linkedTo?.type === 'asn' ? input.linkedTo.id : undefined,
+      rmaId: input.linkedTo?.type === 'return' ? input.linkedTo.id : undefined,
+    });
+    emit();
+    return { ok: true, id };
+  },
+
+  markEvidenceViewed(id: string) {
+    state = {
+      ...state,
+      evidenceSends: state.evidenceSends.map(e => e.id === id
+        ? { ...e, status: 'supplier_viewed', viewedAt: new Date().toISOString() }
+        : e),
+    };
+    audit('EVIDENCE_VIEWED', `${id}: поставщик увидел`);
+    emit();
+  },
+
+  addEvidenceResponse(id: string, text: string) {
+    state = {
+      ...state,
+      evidenceSends: state.evidenceSends.map(e => e.id === id
+        ? { ...e, status: 'response_received', responseAt: new Date().toISOString(), responseText: text }
+        : e),
+    };
+    audit('EVIDENCE_RESPONSE', `${id}: ${text}`);
+    emit();
+  },
+
+  closeEvidenceSend(id: string) {
+    state = {
+      ...state,
+      evidenceSends: state.evidenceSends.map(e => e.id === id
+        ? { ...e, status: 'closed', closedAt: new Date().toISOString() }
+        : e),
+    };
+    audit('EVIDENCE_CLOSE', `${id}: закрыт`);
+    emit();
+  },
+
+  // ── Inbound: partial / block batch ──────────────────
+  partialReceiveAsn(asnId: string): { ok: boolean; reason?: string } {
+    const a = state.asns.find(x => x.id === asnId);
+    if (!a) return { ok: false, reason: 'Поставка не найдена' };
+    state = {
+      ...state,
+      asns: state.asns.map(x => x.id !== asnId ? x : {
+        ...x,
+        status: 'discrepancy',
+        items: x.items.map(it => ({
+          ...it,
+          // принимаем только good — без damaged
+          receivedQty: Math.max(0, it.expectedQty - it.damagedQty),
+        })),
+      }),
+    };
+    state = {
+      ...state,
+      documents: [{
+        id: `D-${Date.now()}`, type: 'discrepancy_act',
+        number: `ACT-PARTIAL-${asnId}`, asnId, status: 'pending',
+        uploadedBy: state.currentWorker?.id,
+        createdAt: new Date().toISOString(),
+      }, ...state.documents],
+    };
+    audit('RECEIVE_PARTIAL', `Частичная приёмка ${a.invoiceNumber}: только good-units`, { asnId });
+    emit();
+    return { ok: true };
+  },
+
+  blockAsnBatch(asnId: string, reason: string) {
+    state = {
+      ...state,
+      asns: state.asns.map(x => x.id === asnId ? { ...x, status: 'discrepancy' } : x),
+    };
+    this._pushProblem('damaged', `Партия ${asnId} заблокирована: ${reason}`, { asnId });
+    audit('BATCH_BLOCK', `Партия ${asnId} заблокирована: ${reason}`, { asnId });
+    emit();
+  },
+
+  /** Запрос дополнительных медиа у клиента/поставщика по target. */
+  requestAdditionalMedia(target: { type: 'return' | 'asn' | 'damage' | 'dispute'; id: string }, mediaType: 'photo' | 'video') {
+    if (target.type === 'return') {
+      if (mediaType === 'photo') this.requestReturnPhoto(target.id);
+      else                       this.requestReturnVideo(target.id);
+      return;
+    }
+    audit('MEDIA_REQUEST_EXTRA', `${target.type}/${target.id}: запрошено доп. ${mediaType}`);
+    emit();
   },
 
   /** Override блокировки сканирования — может только override_block-роль. */

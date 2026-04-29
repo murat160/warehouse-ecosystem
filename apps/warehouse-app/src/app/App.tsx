@@ -29,6 +29,7 @@ import { DocumentsPage } from './pages/DocumentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ClaimsPage } from './pages/ClaimsPage';
 import { SupplierDisputesPage } from './pages/SupplierDisputesPage';
+import { EvidenceLogPage } from './pages/EvidenceLogPage';
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const { currentWorker } = useStore();
@@ -68,6 +69,7 @@ export function App() {
           <Route path="/reports"           element={<RoleGuard perm="view_reports"><ReportsPage /></RoleGuard>} />
           <Route path="/claims"            element={<RoleGuard perm="claims"><ClaimsPage /></RoleGuard>} />
           <Route path="/supplier-disputes" element={<RoleGuard perm="supplier_disputes"><SupplierDisputesPage /></RoleGuard>} />
+          <Route path="/evidence-log"      element={<RoleGuard perm="claims"><EvidenceLogPage /></RoleGuard>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

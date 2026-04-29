@@ -30,6 +30,7 @@ const NAV: NavItem[] = [
   { to: '/returns',       label: 'Возвраты',           icon: Undo2,           perm: 'returns' },
   { to: '/problems',      label: 'Проблемы',           icon: AlertTriangle,   perm: 'problems' },
   { to: '/claims',        label: 'Жалобы и доказательства', icon: ShieldAlert, perm: 'claims' },
+  { to: '/evidence-log',  label: 'Отправки поставщикам',    icon: FileText,    perm: 'claims' },
   { to: '/supplier-disputes', label: 'Споры с поставщиками', icon: FileWarning, perm: 'supplier_disputes' },
   { to: '/scanner',       label: 'Сканер',             icon: ScanLine,        perm: 'scanner' },
   { to: '/documents',     label: 'Документы',          icon: FileText,        perm: 'documents' },

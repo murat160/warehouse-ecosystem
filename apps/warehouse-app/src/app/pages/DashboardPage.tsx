@@ -63,14 +63,14 @@ export function DashboardPage() {
 
       <div className="px-5 -mt-5">
         <div className="bg-white rounded-2xl p-4 shadow-sm grid grid-cols-3 md:grid-cols-4 gap-3">
-          <Stat label="К сборке"   value={counts.pickQueue + counts.inPicking} color="#F59E0B" />
-          <Stat label="Сортировка" value={counts.inSorting}                    color="#06B6D4" />
-          <Stat label="К упаковке" value={counts.toPack}                       color="#10B981" />
-          <Stat label="К выдаче"   value={counts.ready}                        color="#22C55E" />
-          <Stat label="Передано"   value={counts.handed}                       color="#7C3AED" />
-          <Stat label="Задач"      value={counts.activeT}                      color="#0EA5E9" />
-          <Stat label="Проблем"    value={counts.openProb}                     color="#EF4444" />
-          <Stat label="Заказов"    value={orders.length}                       color="#6B7280" />
+          <Stat label="К сборке"   value={counts.pickQueue + counts.inPicking} color="#F59E0B" onClick={() => nav('/orders')} />
+          <Stat label="Сортировка" value={counts.inSorting}                    color="#06B6D4" onClick={() => nav('/sorting')} />
+          <Stat label="К упаковке" value={counts.toPack}                       color="#10B981" onClick={() => nav('/packing')} />
+          <Stat label="К выдаче"   value={counts.ready}                        color="#22C55E" onClick={() => nav('/ready')} />
+          <Stat label="Передано"   value={counts.handed}                       color="#7C3AED" onClick={() => nav('/handoff')} />
+          <Stat label="Задач"      value={counts.activeT}                      color="#0EA5E9" onClick={() => nav('/tasks')} />
+          <Stat label="Проблем"    value={counts.openProb}                     color="#EF4444" onClick={() => nav('/problems')} />
+          <Stat label="Заказов"    value={orders.length}                       color="#6B7280" onClick={() => nav('/orders')} />
         </div>
       </div>
 
@@ -101,11 +101,15 @@ export function DashboardPage() {
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+function Stat({ label, value, color, onClick }: { label: string; value: number; color: string; onClick?: () => void }) {
+  const Tag: any = onClick ? 'button' : 'div';
   return (
-    <div className="bg-[#F9FAFB] rounded-xl p-3">
+    <Tag
+      onClick={onClick}
+      className={`bg-[#F9FAFB] rounded-xl p-3 text-left ${onClick ? 'active-press hover:bg-[#F3F4F6]' : ''}`}
+    >
       <div className="text-[20px]" style={{ fontWeight: 900, color }}>{value}</div>
       <div className="text-[11px] text-[#6B7280] mt-0.5" style={{ fontWeight: 600 }}>{label}</div>
-    </div>
+    </Tag>
   );
 }

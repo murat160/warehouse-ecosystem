@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Image as ImageIcon, Video, Eye, Send } from 'lucide-react';
+import { Camera, Image as ImageIcon, Video, Eye, Send, FileWarning } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -8,7 +8,10 @@ import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { MediaPreviewModal, type MediaItem } from '../components/MediaPreviewModal';
 import { SkuThumb } from '../components/SkuThumb';
-import type { ReturnRow, ReturnStatus, MediaRequest } from '../domain/types';
+import { OwnerCard } from '../components/OwnerCard';
+import { SendToSupplierModal } from '../components/SendToSupplierModal';
+import { SupplierDisputeModal } from '../components/SupplierDisputeModal';
+import type { ReturnRow, ReturnStatus, MediaRequest, EvidenceSendItem } from '../domain/types';
 
 const STATUS_LABELS: Record<ReturnStatus, string> = {
   received:             'Получен',
@@ -46,10 +49,20 @@ const DECISIONS: ReturnStatus[] = ['restock', 'damaged', 'write_off', 'returned_
 interface DecisionDraft { id: string; decision: ReturnStatus; comment: string; }
 
 export function ReturnsPage() {
-  const { returns, skus } = useStore();
+  const { returns, skus, suppliers } = useStore();
   const [decideDraft, setDecideDraft] = useState<DecisionDraft | null>(null);
   const [confirmDraft, setConfirmDraft] = useState<DecisionDraft | null>(null);
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
+  const [sendFor, setSendFor] = useState<{ rmaId: string; items: EvidenceSendItem[]; supplierId?: string; sku?: string; invoice?: string } | null>(null);
+  const [disputeFor, setDisputeFor] = useState<{ rmaId: string; supplierId: string; supplierName: string; sku: string; invoice?: string; asnId?: string } | null>(null);
+
+  const resolveSupplier = (r: ReturnRow) => {
+    if (r.supplierId) return suppliers.find(s => s.id === r.supplierId);
+    const firstSkuId = r.items[0]?.sku;
+    if (!firstSkuId) return undefined;
+    const sku = skus.find(s => s.sku === firstSkuId);
+    return sku?.supplierId ? suppliers.find(s => s.id === sku.supplierId) : undefined;
+  };
 
   const buildMediaForReturn = (r: ReturnRow): MediaItem[] => {
     const items: MediaItem[] = [];
@@ -99,6 +112,21 @@ export function ReturnsPage() {
           const mediaItems = buildMediaForReturn(r);
           const hasVideo = !!(r.videoFromCustomer || r.videoFromInspection);
           const totalPhotos = (r.photosBefore?.length ?? 0) + (r.photosAfter?.length ?? 0) + (r.photosDamage?.length ?? 0);
+          const supplier = resolveSupplier(r);
+          const sku = r.items[0]?.sku;
+
+          // Файлы, доступные к отправке поставщику
+          const sendItems: EvidenceSendItem[] = [
+            ...(r.photosBefore ?? []).map(src => ({ kind: 'image' as const, src, source: 'return'   as const, title: 'Фото клиента (до)' })),
+            ...(r.photosDamage ?? []).map(src => ({ kind: 'image' as const, src, source: 'warehouse' as const, title: 'Фото повреждения' })),
+            ...(r.photosAfter  ?? []).map(src => ({ kind: 'image' as const, src, source: 'warehouse' as const, title: 'Фото после проверки' })),
+            ...(r.videoFromCustomer   ? [{ kind: 'video' as const, src: r.videoFromCustomer,   source: 'customer'  as const, title: 'Видео клиента' }] : []),
+            ...(r.videoFromInspection ? [{ kind: 'video' as const, src: r.videoFromInspection, source: 'warehouse' as const, title: 'Видео проверки' }] : []),
+          ];
+
+          const hint = supplier && (r.status === 'inspection' || r.status === 'damaged')
+            ? `Этот возврат связан с поставщиком ${supplier.name}. Отправь доказательства, если товар бракованный.`
+            : undefined;
 
           return (
             <div key={r.id} className="bg-white rounded-2xl p-4 shadow-sm">
@@ -166,6 +194,18 @@ export function ReturnsPage() {
                 </div>
               )}
 
+              {(supplier || r.sellerName || r.invoiceNumber || r.asnId) && (
+                <div className="mb-3">
+                  <OwnerCard
+                    supplier={supplier}
+                    sellerName={r.sellerName}
+                    invoiceNumber={r.invoiceNumber}
+                    asnId={r.asnId}
+                    hint={hint}
+                  />
+                </div>
+              )}
+
               {mediaItems.length > 0 && (
                 <div className="mb-3">
                   <div className="text-[11px] text-[#6B7280] mb-1.5" style={{ fontWeight: 700 }}>
@@ -218,6 +258,22 @@ export function ReturnsPage() {
                     <Video className="w-3 h-3" /> {r.mediaRequest === 'video_requested' ? 'Видео запрошено' : 'Запросить видео'}
                   </button>
                   <UploadInspectionMedia rmaId={r.id} />
+                  <button
+                    onClick={() => setSendFor({ rmaId: r.id, items: sendItems, supplierId: supplier?.id, sku, invoice: r.invoiceNumber })}
+                    disabled={!supplier && !r.supplierId}
+                    className="px-3 h-9 rounded-lg text-white text-[12px] active-press inline-flex items-center gap-1 disabled:opacity-50"
+                    style={{ backgroundColor: '#3730A3', fontWeight: 700 }}
+                    title={!supplier ? 'Поставщик неизвестен' : undefined}
+                  ><Send className="w-3 h-3" /> Отправить поставщику</button>
+                  {supplier && (
+                    <button
+                      onClick={() => setDisputeFor({
+                        rmaId: r.id, supplierId: supplier.id, supplierName: supplier.name,
+                        sku: sku ?? '', invoice: r.invoiceNumber, asnId: r.asnId,
+                      })}
+                      className="px-3 h-9 rounded-lg bg-[#7F1D1D] text-white text-[12px] active-press inline-flex items-center gap-1" style={{ fontWeight: 700 }}
+                    ><FileWarning className="w-3 h-3" /> Создать спор</button>
+                  )}
                   <button onClick={() => openDecision(r, 'restock')}              className="px-3 h-9 rounded-lg bg-[#10B981] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В продажу</button>
                   <button onClick={() => openDecision(r, 'damaged')}              className="px-3 h-9 rounded-lg bg-[#F59E0B] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>В брак</button>
                   <button onClick={() => openDecision(r, 'write_off')}            className="px-3 h-9 rounded-lg bg-[#EF4444] text-white text-[12px] active-press" style={{ fontWeight: 700 }}>Списать</button>
@@ -292,6 +348,31 @@ export function ReturnsPage() {
         initialIndex={media?.index ?? 0}
         onClose={() => setMedia(null)}
       />
+
+      {sendFor && (
+        <SendToSupplierModal
+          open={!!sendFor}
+          onClose={() => setSendFor(null)}
+          defaultSupplierId={sendFor.supplierId}
+          availableItems={sendFor.items}
+          defaultLinkedTo={{ type: 'return', id: sendFor.rmaId }}
+          defaultInvoice={sendFor.invoice}
+          defaultSku={sendFor.sku}
+          defaultComment={`Возврат ${sendFor.rmaId}: прошу пояснения по товару ${sendFor.sku ?? ''}.`}
+        />
+      )}
+
+      {disputeFor && (
+        <SupplierDisputeModal
+          open={!!disputeFor}
+          onClose={() => setDisputeFor(null)}
+          defaults={{
+            supplierId: disputeFor.supplierId, supplierName: disputeFor.supplierName,
+            sku: disputeFor.sku, invoiceNumber: disputeFor.invoice, asnId: disputeFor.asnId,
+            initialReason: 'damaged_goods',
+          }}
+        />
+      )}
     </div>
   );
 }
