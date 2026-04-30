@@ -71,7 +71,7 @@ export function InboundPage() {
       <PageHeader title="Приёмка" subtitle={`Поставок: ${asns.length}`} />
 
       <div className="px-5 -mt-5">
-        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
           <KpiPill label="Все"           value={asns.length}                                              active={filter === 'ALL'}          onClick={() => setFilter('ALL')} />
           <KpiPill label="Прибыли"       value={asns.filter(a => a.status === 'arrived').length}         active={filter === 'arrived'}      onClick={() => setFilter('arrived')}      color="#0369A1" />
           <KpiPill label="Расхождения"   value={asns.filter(a => a.status === 'discrepancy').length}     active={filter === 'discrepancy'}  onClick={() => setFilter('discrepancy')}  color="#9A3412" />

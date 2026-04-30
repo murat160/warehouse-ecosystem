@@ -40,18 +40,18 @@ const NAV: NavItem[] = [
 ];
 
 const BOTTOM = [
-  { to: '/',          label: 'Главная',  icon: LayoutDashboard },
-  { to: '/tasks',     label: 'Задачи',   icon: ListTodo },
-  { to: '/scanner',   label: 'Сканер',   icon: ScanLine },
-  { to: '/inventory', label: 'Остатки',  icon: Boxes },
-  { to: '/problems',  label: 'Проблемы', icon: AlertTriangle },
+  { to: '/',              label: 'Главная',  icon: LayoutDashboard },
+  { to: '/tasks',         label: 'Задачи',   icon: ListTodo },
+  { to: '/internal-chat', label: 'Чат',      icon: MessagesSquare },
+  { to: '/scanner',       label: 'Сканер',   icon: ScanLine },
+  { to: '/problems',      label: 'Проблемы', icon: AlertTriangle },
 ];
 
 // Простой sidebar для обычного складчика — задачи + сборка + сканер + проблемы + жалобы + чат + документы.
 const WORKER_PATHS = new Set(['/shift', '/tasks', '/picking', '/scanner', '/problems', '/claims', '/internal-chat', '/documents']);
 
 export function AppShell() {
-  const { currentWorker, problems } = useStore();
+  const { currentWorker, problems, chatThreads } = useStore();
   const nav = useNavigate();
   const role = currentWorker?.role;
   const isSimpleWorker = role === 'warehouse_worker';
@@ -59,6 +59,14 @@ export function AppShell() {
     ? NAV.filter(n => WORKER_PATHS.has(n.to))
     : NAV.filter(n => can(role, n.perm));
   const openProblems = problems.filter(p => p.status !== 'resolved').length;
+  const unreadChats = currentWorker
+    ? chatThreads.filter(t =>
+        t.status !== 'closed' &&
+        t.messages.length > 0 &&
+        !t.readBy.includes(currentWorker.id) &&
+        (t.participantIds.includes(currentWorker.id) || t.assignedTo === currentWorker.id || t.kind === 'shift')
+      ).length
+    : 0;
 
   const onLogout = () => {
     store.logout();
@@ -96,6 +104,11 @@ export function AppShell() {
                 {item.to === '/problems' && openProblems > 0 && (
                   <span className="ml-auto text-[10px] bg-[#EF4444] text-white rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" style={{ fontWeight: 800 }}>
                     {openProblems}
+                  </span>
+                )}
+                {item.to === '/internal-chat' && unreadChats > 0 && (
+                  <span className="ml-auto text-[10px] bg-[#7C3AED] text-white rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" style={{ fontWeight: 800 }}>
+                    {unreadChats}
                   </span>
                 )}
               </NavLink>
@@ -152,6 +165,11 @@ export function AppShell() {
               {item.to === '/problems' && openProblems > 0 && (
                 <span className="absolute top-1 right-2 text-[8px] bg-[#EF4444] text-white rounded-full min-w-[14px] h-[14px] px-1 flex items-center justify-center" style={{ fontWeight: 800 }}>
                   {openProblems}
+                </span>
+              )}
+              {item.to === '/internal-chat' && unreadChats > 0 && (
+                <span className="absolute top-1 right-2 text-[8px] bg-[#7C3AED] text-white rounded-full min-w-[14px] h-[14px] px-1 flex items-center justify-center" style={{ fontWeight: 800 }}>
+                  {unreadChats}
                 </span>
               )}
             </NavLink>

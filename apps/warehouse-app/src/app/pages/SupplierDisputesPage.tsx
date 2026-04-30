@@ -93,7 +93,7 @@ export function SupplierDisputesPage() {
       <PageHeader title="Споры с поставщиками" subtitle={`Всего: ${supplierDisputes.length}`} />
 
       <div className="px-5 -mt-5">
-        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-3 md:grid-cols-4 gap-2 mb-3">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
           <FilterPill label="Все"        value={supplierDisputes.length}                                                  active={filter === 'ALL'}                       onClick={() => setFilter('ALL')} />
           <FilterPill label="Черновики"  value={supplierDisputes.filter(x => x.status === 'draft').length}               active={filter === 'draft'}                     onClick={() => setFilter('draft')}                     color="#374151" />
           <FilterPill label="Отправлены" value={supplierDisputes.filter(x => x.status === 'sent_to_supplier').length}    active={filter === 'sent_to_supplier'}          onClick={() => setFilter('sent_to_supplier')}          color="#3730A3" />

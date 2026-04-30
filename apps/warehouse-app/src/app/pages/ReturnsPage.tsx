@@ -109,7 +109,7 @@ export function ReturnsPage() {
       <PageHeader title="Возвраты" subtitle={`Активных: ${returns.length}`} />
 
       <div className="px-5 -mt-5">
-        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
           <FilterPill label="Все"        value={returns.length}                                                active={filter === 'ALL'}        onClick={() => setFilter('ALL')} />
           <FilterPill label="Получены"   value={returns.filter(x => x.status === 'received').length}           active={filter === 'received'}   onClick={() => setFilter('received')}   color="#991B1B" />
           <FilterPill label="Проверка"   value={returns.filter(x => x.status === 'inspection').length}         active={filter === 'inspection'} onClick={() => setFilter('inspection')} color="#92400E" />

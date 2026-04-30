@@ -68,7 +68,7 @@ export function ProblemsPage() {
       <PageHeader title="Проблемы" subtitle={`Активных: ${problems.filter(p => p.status !== 'resolved').length}`} />
 
       <div className="px-5 -mt-5">
-        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-white rounded-2xl p-3 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
           <FilterPill label="Все"        value={problems.length}                                           active={filter === 'ALL'}            onClick={() => setFilter('ALL')} />
           <FilterPill label="Открыты"    value={problems.filter(p => p.status === 'open').length}          active={filter === 'open'}           onClick={() => setFilter('open')}           color="#7F1D1D" />
           <FilterPill label="Изучаются"  value={problems.filter(p => p.status === 'investigating').length} active={filter === 'investigating'}  onClick={() => setFilter('investigating')}  color="#92400E" />

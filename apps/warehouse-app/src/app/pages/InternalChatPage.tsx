@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Search, Send, Camera, Video, FileText, MessageSquareReply, Phone } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Send, Camera, Video, FileText, MessageSquareReply, Phone, ArrowLeft, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
@@ -110,7 +111,7 @@ export function InternalChatPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3">
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className={`bg-white rounded-2xl shadow-sm overflow-hidden ${activeId ? 'hidden lg:block' : 'block'}`}>
             {filtered.length === 0 ? (
               <EmptyState emoji="💬" title="Нет тредов" subtitle="Откройте чат из любой карточки заказа/задачи/спора." />
             ) : (
@@ -157,11 +158,12 @@ export function InternalChatPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm">
+          <div className={`bg-white rounded-2xl shadow-sm ${activeId ? 'block' : 'hidden lg:block'}`}>
             {active ? (
               <ThreadPanel
                 key={active.id}
                 thread={active}
+                onBack={() => setActiveId(null)}
                 onCallParticipant={(workerId) => setCallFor(workerId)}
                 onAssign={() => setShowAssign(true)}
                 onChangePriority={() => setShowPriority(true)}
@@ -231,19 +233,29 @@ function threadTitle(t: ChatThread) {
   return CHAT_THREAD_KIND_LABELS[t.kind];
 }
 
-function ThreadPanel({ thread, onCallParticipant, onAssign, onChangePriority }: {
+function ThreadPanel({ thread, onBack, onCallParticipant, onAssign, onChangePriority }: {
   thread: ChatThread;
+  onBack?: () => void;
   onCallParticipant: (workerId: string) => void;
   onAssign: () => void;
   onChangePriority: () => void;
 }) {
   const { workers } = useStore();
+  const nav = useNavigate();
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [media, setMedia] = useState<{ items: MediaItem[]; index: number } | null>(null);
   const [showRespond, setShowRespond] = useState(false);
   const [respondAs, setRespondAs] = useState<ChatAuthor>('admin');
   const [respondText, setRespondText] = useState('');
+
+  const objectLinks: { label: string; to: string }[] = [];
+  if (thread.orderId)   objectLinks.push({ label: `Заказ ${thread.orderId}`,   to: `/picking/${thread.orderId}` });
+  if (thread.taskId)    objectLinks.push({ label: `Задача ${thread.taskId}`,    to: '/tasks' });
+  if (thread.problemId) objectLinks.push({ label: `Проблема ${thread.problemId}`, to: '/problems' });
+  if (thread.disputeId) objectLinks.push({ label: `Спор ${thread.disputeId}`,     to: '/supplier-disputes' });
+  if (thread.rmaId)     objectLinks.push({ label: `Возврат ${thread.rmaId}`,     to: '/returns' });
+  if (thread.asnId)     objectLinks.push({ label: `Поставка ${thread.asnId}`,    to: '/inbound' });
 
   const onAttach = (e: React.ChangeEvent<HTMLInputElement>, kind: 'image' | 'video' | 'document') => {
     const files = e.target.files;
@@ -276,8 +288,19 @@ function ThreadPanel({ thread, onCallParticipant, onAssign, onChangePriority }: 
     <>
       <div className="p-4 border-b border-[#F3F4F6]">
         <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-          <div className="text-[15px] text-[#1F2430]" style={{ fontWeight: 800 }}>
-            {threadTitle(thread)}
+          <div className="flex items-center gap-2 min-w-0">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="lg:hidden w-8 h-8 rounded-full bg-[#F3F4F6] flex items-center justify-center active-press flex-shrink-0"
+                aria-label="Назад к списку"
+              >
+                <ArrowLeft className="w-4 h-4 text-[#1F2430]" />
+              </button>
+            )}
+            <div className="text-[15px] text-[#1F2430] truncate" style={{ fontWeight: 800 }}>
+              {threadTitle(thread)}
+            </div>
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ ...sc, fontWeight: 800 }}>
@@ -288,6 +311,21 @@ function ThreadPanel({ thread, onCallParticipant, onAssign, onChangePriority }: 
             </span>
           </div>
         </div>
+
+        {objectLinks.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {objectLinks.map((link, i) => (
+              <button
+                key={i}
+                onClick={() => nav(link.to)}
+                className="text-[10px] px-2 py-0.5 rounded-full bg-[#E0F2FE] text-[#0369A1] inline-flex items-center gap-1 active-press"
+                style={{ fontWeight: 800 }}
+              >
+                <ExternalLink className="w-3 h-3" /> {link.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-1 flex-wrap text-[10px] text-[#6B7280]" style={{ fontWeight: 600 }}>
           {otherWorkers.slice(0, 4).map(w => (
             <button
