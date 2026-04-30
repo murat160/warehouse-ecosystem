@@ -34,7 +34,38 @@ jobs:
 
             npm --workspace apps/admin-panel run build -- --base=/admin/
 
-            nginx -t
-            systemctl restart nginx
+            # ── Sync the freshly-tracked nginx config from the repo to the
+            # actual nginx directory on the VPS. Without this step, fixes
+            # to deploy/nginx/wms.conf never reach the running nginx.
+            #
+            # Tries the standard Debian/Ubuntu layout first, then RHEL-style.
+            # If neither path exists, prints a warning but does not fail —
+            # the existing nginx config is still tested and reloaded.
+            if [ -f /etc/nginx/sites-available/wms.conf ]; then
+              echo "[nginx] syncing → /etc/nginx/sites-available/wms.conf"
+              sudo cp -f deploy/nginx/wms.conf /etc/nginx/sites-available/wms.conf
+            elif [ -f /etc/nginx/conf.d/wms.conf ]; then
+              echo "[nginx] syncing → /etc/nginx/conf.d/wms.conf"
+              sudo cp -f deploy/nginx/wms.conf /etc/nginx/conf.d/wms.conf
+            else
+              echo "[nginx] WARNING: no managed wms.conf found at standard paths"
+              echo "[nginx] → /etc/nginx/sites-available/ contents:"
+              sudo ls -la /etc/nginx/sites-available/ || true
+              echo "[nginx] → /etc/nginx/conf.d/ contents:"
+              sudo ls -la /etc/nginx/conf.d/ || true
+            fi
+
+            sudo nginx -t
+            sudo systemctl reload nginx
 
             echo "=== ADMIN PANEL DEPLOY DONE ==="
+
+            # Self-test: index.html should be 200, and the JS chunk it
+            # references should also be 200 (not 404 / not text/html).
+            echo "--- self-test ---"
+            curl -sS -I http://127.0.0.1/admin/ | head -n 1 || true
+            JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js' apps/admin-panel/dist/index.html | head -n 1)
+            if [ -n "$JS_PATH" ]; then
+              echo "[self-test] checking $JS_PATH"
+              curl -sS -I "http://127.0.0.1${JS_PATH}" | head -n 2 || true
+            fi
