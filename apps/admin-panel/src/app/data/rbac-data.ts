@@ -1,10 +1,61 @@
 // ─── Shared RBAC data — used by both UsersList and RBACManagement ─────────────
+//
+// IMPORTANT — architectural separation (see docs/ROLES.md):
+//
+// The roles below fall into two groups:
+//
+//   1. Admin Panel roles  — log into apps/admin-panel (admin.ehlitrend.com).
+//      These are SUPERVISORY positions: SuperAdmin, Admin, OperationsManager,
+//      Accountant, Lawyer, ComplianceManager, SellerManager, ProductManager,
+//      ShowcaseManager, MarketingManager, SecurityOfficer, SupportAgent,
+//      OperationsManager, WarehouseManager (manager — NOT a worker),
+//      CourierManager (manager — NOT a worker), PVZManager (manager — NOT
+//      an operator), Analyst, ChiefAccountant, PolandFinance,
+//      TurkmenistanOperator, SupplierAccountant, RegionalManager,
+//      DocumentReviewer, ComplianceAdmin, LegalReviewer, Finance, QA,
+//      Support, Admin.
+//
+//   2. External-app roles — work in their own app on their own subdomain.
+//      They appear in this file because UsersList shows ALL users, but
+//      they SHOULD NOT be assigned to a person who needs to use Admin Panel
+//      as a working tool. Their working interface is elsewhere.
+//
+//      Courier        → apps/courier-app    (courier.ehlitrend.com)
+//      Warehouse      → apps/warehouse-app  (warehouse.ehlitrend.com)
+//      Merchant       → apps/seller-app     (partner.ehlitrend.com)
+//      PVZOperator    → apps/pickup-point-app (pvz.ehlitrend.com)
+//      Customer       → apps/customer-app   (ehlitrend.com)
+//      Partner        → apps/seller-app     (partner.ehlitrend.com)
+//
+// The new registry in `data/rbac.ts` formalises this with `appScope`.
 
 import {
   LayoutDashboard, MapPin, Package, Bike, Warehouse, Store,
   DollarSign, MessageSquare, BarChart3, Settings, Shield, Route, Users,
   ShieldCheck,
 } from 'lucide-react';
+
+/**
+ * Roles whose working interface lives outside Admin Panel.
+ * Use this set to tag/filter users in admin views (badge "External app",
+ * disable "Open as user", etc).
+ */
+export const EXTERNAL_APP_ROLES: Record<string, { app: string; host: string }> = {
+  Courier:          { app: 'Courier App',     host: 'courier.ehlitrend.com'   },
+  Warehouse:        { app: 'Warehouse App',   host: 'warehouse.ehlitrend.com' },
+  WarehouseWorker:  { app: 'Warehouse App',   host: 'warehouse.ehlitrend.com' },
+  Merchant:         { app: 'Seller App',      host: 'partner.ehlitrend.com'   },
+  Seller:           { app: 'Seller App',      host: 'partner.ehlitrend.com'   },
+  Partner:          { app: 'Seller App',      host: 'partner.ehlitrend.com'   },
+  PVZOperator:      { app: 'PVZ App',         host: 'pvz.ehlitrend.com'       },
+  PickupOperator:   { app: 'PVZ App',         host: 'pvz.ehlitrend.com'       },
+  Customer:         { app: 'Customer App',    host: 'ehlitrend.com'           },
+};
+
+/** True when the role's working interface is outside Admin Panel. */
+export function isExternalAppRole(role: string): boolean {
+  return !!EXTERNAL_APP_ROLES[role];
+}
 
 // All navigable modules in the system
 export const ALL_MODULES = [

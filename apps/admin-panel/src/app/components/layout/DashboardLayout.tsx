@@ -16,7 +16,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { unreadCount, subscribe as subscribeNotifs } from '../../store/notificationsStore';
 import { NotificationDropdown } from '../ui/NotificationDropdown';
 import {
-  SIDEBAR_MODULES, PREDEFINED_ROLES, type SidebarModule, type SidebarChild,
+  SIDEBAR_MODULES, PREDEFINED_ROLES, APP_SCOPE_LABELS,
+  type SidebarModule, type SidebarChild,
 } from '../../data/rbac';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -399,15 +400,17 @@ export function DashboardLayout() {
                         <p className="text-xs font-bold text-purple-900">Просмотр панели от роли</p>
                         <p className="text-[10px] text-purple-700">SuperAdmin может проверить, что видит каждая роль</p>
                       </div>
-                      <div className="max-h-80 overflow-y-auto p-2 space-y-0.5">
+                      <div className="max-h-96 overflow-y-auto p-2 space-y-0.5">
                         {isImpersonating && (
                           <button
                             onClick={() => { impersonateRole(null); setRoleSwitcherOpen(false); }}
-                            className="w-full text-left px-3 py-2 rounded-lg text-sm bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold flex items-center gap-2">
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold flex items-center gap-2 mb-1">
                             <X className="w-3.5 h-3.5" />Вернуться к SuperAdmin
                           </button>
                         )}
-                        {PREDEFINED_ROLES.map(r => {
+                        {/* Admin Panel roles */}
+                        <p className="px-3 pt-1 pb-1 text-[9px] uppercase tracking-widest text-gray-400 font-bold">Роли Admin Panel</p>
+                        {PREDEFINED_ROLES.filter(r => r.appScope === 'admin').map(r => {
                           const isCurrent = user?.role === r.name;
                           return (
                             <button
@@ -419,6 +422,29 @@ export function DashboardLayout() {
                                   : 'hover:bg-gray-50 text-gray-700'
                               }`}>
                               <p className="font-medium">{r.label}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{r.description}</p>
+                            </button>
+                          );
+                        })}
+                        {/* External app roles */}
+                        <p className="px-3 pt-3 pb-1 text-[9px] uppercase tracking-widest text-purple-700 font-bold">Внешние приложения · preview</p>
+                        {PREDEFINED_ROLES.filter(r => r.appScope !== 'admin').map(r => {
+                          const isCurrent = user?.role === r.name;
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => { impersonateRole(r.name as any); setRoleSwitcherOpen(false); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                isCurrent
+                                  ? 'bg-purple-50 text-purple-800 font-semibold'
+                                  : 'hover:bg-purple-50/40 text-gray-700'
+                              }`}>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium">{r.label}</p>
+                                <span className="px-1.5 py-0 bg-purple-100 text-purple-700 rounded text-[9px] font-bold uppercase tracking-wide">
+                                  {APP_SCOPE_LABELS[r.appScope]}
+                                </span>
+                              </div>
                               <p className="text-[10px] text-gray-500 truncate">{r.description}</p>
                             </button>
                           );

@@ -531,14 +531,31 @@ export function PVZScanTerminal() {
 
   return (
     <div className="space-y-5 pb-8 max-w-6xl">
+      {/* Architectural notice: this terminal lives in admin-panel only as
+          a preview/manager view. Real operators work in apps/pickup-point-app
+          (pvz.ehlitrend.com). */}
+      <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-xs text-purple-800 flex items-start gap-2">
+        <Shield className="w-4 h-4 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold">Preview-режим (для PVZ Manager / SuperAdmin)</p>
+          <p className="text-purple-700 mt-0.5">
+            Реальный терминал оператора ПВЗ работает в отдельном приложении —
+            <span className="font-mono mx-1">pvz.ehlitrend.com</span>
+            (<span className="font-mono">apps/pickup-point-app</span>).
+            Здесь страница доступна для контроля и тестирования: оператор ПВЗ
+            не должен входить в Admin Panel для своей рабочей смены.
+          </p>
+        </div>
+      </div>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <ScanLine className="w-5 h-5 text-blue-600" />
             Терминал ПВЗ
+            <span className="ml-1 px-1.5 py-0 bg-purple-100 text-purple-700 rounded text-[9px] font-bold uppercase tracking-wide">Preview</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Приёмка, выдача и возврат посылок · операционный режим</p>
+          <p className="text-sm text-gray-500 mt-0.5">Приёмка, выдача и возврат посылок · operations-view (preview)</p>
         </div>
         <div className="flex items-center gap-3">
           {/* PVZ selector */}

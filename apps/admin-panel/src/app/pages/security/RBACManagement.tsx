@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import {
   PREDEFINED_ROLES, SIDEBAR_MODULES, BASE_VERBS, SPECIAL_PERMS,
-  permsForModule,
-  type PredefinedRole,
+  permsForModule, APP_SCOPE_LABELS, APP_SCOPE_HOSTS,
+  type PredefinedRole, type AppScope,
 } from '../../data/rbac';
 import { exportToCsv } from '../../utils/downloads';
 
@@ -379,6 +379,11 @@ export function RBACManagement() {
                               Sys
                             </span>
                           )}
+                          {r.appScope !== 'admin' && (
+                            <span className="px-1.5 py-0 bg-purple-100 text-purple-700 rounded text-[9px] font-bold uppercase tracking-wide" title={`Эта роль работает в другом приложении: ${APP_SCOPE_HOSTS[r.appScope]}`}>
+                              {APP_SCOPE_LABELS[r.appScope]}
+                            </span>
+                          )}
                           {!r.active && (
                             <span className="px-1.5 py-0 bg-red-100 text-red-700 rounded text-[9px] font-bold uppercase tracking-wide">
                               Off
@@ -417,6 +422,11 @@ export function RBACManagement() {
                         <Crown className="w-3 h-3" />Полный доступ
                       </span>
                     )}
+                    {selectedRole.appScope !== 'admin' && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 border border-purple-300 text-purple-800 rounded-full text-[10px] font-bold">
+                        Работает в {APP_SCOPE_LABELS[selectedRole.appScope]}
+                      </span>
+                    )}
                     {!selectedRole.active && (
                       <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 border border-red-300 text-red-700 rounded-full text-[10px] font-bold">
                         <Ban className="w-3 h-3" />Отключена
@@ -427,7 +437,21 @@ export function RBACManagement() {
                   <p className="text-xs text-gray-500 mt-1.5">
                     <UsersIcon className="w-3 h-3 inline mr-1" />{selectedRole.users ?? 0} пользователей · {' '}
                     {isWildcard(selectedRole) ? '∞' : selectedRole.permissions.length} прав
+                    {selectedRole.appScope !== 'admin' && (
+                      <> · <span className="font-mono text-purple-700">{APP_SCOPE_HOSTS[selectedRole.appScope]}</span></>
+                    )}
                   </p>
+                  {selectedRole.appScope !== 'admin' && (
+                    <div className="mt-3 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg text-[11px] text-purple-800 flex items-start gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        Это роль внешнего приложения. Пользователи с ней работают
+                        в <span className="font-bold">{APP_SCOPE_LABELS[selectedRole.appScope]}</span>,
+                        а не в Admin Panel. Здесь они видны только для управления
+                        и preview через «Просмотр как роль».
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button onClick={() => openEdit(selectedRole)} className="p-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg" title="Редактировать">

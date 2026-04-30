@@ -173,4 +173,7 @@ The Partner API surface is reserved already — see
 - **Partner integrations** authenticate with `X-Partner-Key`, get a
   separate quota and audit channel, and never share JWT space with users.
 
-See [`DEVELOPMENT_RULES.md`](./DEVELOPMENT_RULES.md) for code-level rules.
+See [`DEVELOPMENT_RULES.md`](./DEVELOPMENT_RULES.md) for code-level rules
+and [`ROLES.md`](./ROLES.md) for the role-per-app separation contract
+(which role logs into which subdomain, and why Admin Panel never replaces
+the courier/warehouse/seller/pickup/customer working interfaces).

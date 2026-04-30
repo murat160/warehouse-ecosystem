@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   ALL_MODULES, ROLE_DEFAULT_MODULES, SCOPES, ROLE_LABELS, ROLE_COLORS,
+  EXTERNAL_APP_ROLES, isExternalAppRole,
   COLOR_BADGE, COLOR_BG, COLOR_ICON, ROLE_DESCRIPTIONS, ROLE_CAPABILITIES,
   INITIAL_USERS, type ManagedUser, type ModuleKey,
 } from '../../data/rbac-data';
@@ -143,12 +144,23 @@ function StatusBadge({ status }: { status: ManagedUser['status'] }) {
 function RoleBadge({ role }: { role: string }) {
   const color = ROLE_COLORS[role] ?? 'blue';
   const badge = COLOR_BADGE[color] ?? COLOR_BADGE.blue;
+  const ext = EXTERNAL_APP_ROLES[role];
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge}`}>
-      <Shield className="w-3 h-3" />{ROLE_LABELS[role] ?? role}
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge}`}>
+        <Shield className="w-3 h-3" />{ROLE_LABELS[role] ?? role}
+      </span>
+      {ext && (
+        <span className="px-1.5 py-0 bg-purple-100 text-purple-700 rounded text-[9px] font-bold uppercase tracking-wide" title={`Работает в ${ext.app} (${ext.host}). Не использует Admin Panel как рабочий инструмент.`}>
+          {ext.app}
+        </span>
+      )}
     </span>
   );
 }
+
+// Surface unused-import suppression by referencing helper.
+void isExternalAppRole;
 
 // ─── Confirm Dialog ───────────────────────────────────────────────────────────
 

@@ -73,7 +73,8 @@ export const SIDEBAR_MODULES: SidebarModule[] = [
     key: 'pvz', label: 'ПВЗ', href: '/pvz', icon: MapPin,
     children: [
       { key: 'pvz',         label: 'Список ПВЗ',           href: '/pvz',      icon: MapPin, exact: true },
-      { key: 'pvz.scan',    label: 'Терминал сканирования',href: '/pvz/scan', icon: ScanLine },
+      // Preview-only inside admin-panel; real terminal lives in apps/pickup-point-app
+      { key: 'pvz.scan',    label: 'Терминал ПВЗ (preview)', href: '/pvz/scan', icon: ScanLine },
     ],
   },
   {
@@ -323,6 +324,43 @@ export function permsForModule(moduleKey: string): string[] {
 
 // ─── Predefined roles ─────────────────────────────────────────────────────────
 
+/**
+ * Which app a role belongs to.
+ *
+ * IMPORTANT — architectural rule:
+ *  - 'admin'   → the user logs into apps/admin-panel (admin.ehlitrend.com).
+ *  - any other → the user logs into the corresponding app on its own
+ *    subdomain (courier.*, warehouse.*, partner.*, pvz.*, ehlitrend.com).
+ *    Admin Panel never exposes the working interface of those roles —
+ *    it only manages / supervises them.
+ *  - 'preview' is a dev convenience: SuperAdmin can impersonate this role
+ *    inside Admin Panel to *see what would be visible* in another app,
+ *    without that user actually working from Admin Panel.
+ */
+export type AppScope =
+  | 'admin' | 'courier' | 'warehouse' | 'seller' | 'pickup' | 'customer'
+  | 'preview';
+
+export const APP_SCOPE_LABELS: Record<AppScope, string> = {
+  admin:     'Admin Panel',
+  courier:   'Courier App',
+  warehouse: 'Warehouse App',
+  seller:    'Seller App',
+  pickup:    'PVZ App',
+  customer:  'Customer App',
+  preview:   'Preview',
+};
+
+export const APP_SCOPE_HOSTS: Record<AppScope, string> = {
+  admin:     'admin.ehlitrend.com',
+  courier:   'courier.ehlitrend.com',
+  warehouse: 'warehouse.ehlitrend.com',
+  seller:    'partner.ehlitrend.com',
+  pickup:    'pvz.ehlitrend.com',
+  customer:  'ehlitrend.com',
+  preview:   '—',
+};
+
 export interface PredefinedRole {
   id:          string;
   /** Identifier used in user.role + URL params. */
@@ -339,6 +377,12 @@ export interface PredefinedRole {
   permissions: string[];
   /** Default user count (used as a non-functional badge in RBAC list). */
   users?:      number;
+  /**
+   * Which app this role logs into. See AppScope.
+   * Roles where appScope !== 'admin' are listed in Admin Panel for
+   * supervision/preview, but the user actually works in another app.
+   */
+  appScope:    AppScope;
 }
 
 /**
@@ -353,13 +397,13 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-superadmin', name: 'SuperAdmin', label: 'Супер-администратор',
     description: 'Полный доступ ко всему: видит все разделы, создаёт роли, управляет правами.',
-    color: 'red', isSystem: true, active: true, users: 2,
+    color: 'red', isSystem: true, active: true, users: 2, appScope: 'admin',
     permissions: ['*'],
   },
   {
     id: 'r-admin', name: 'Admin', label: 'Администратор',
     description: 'Управляет операционными разделами: пользователи, заказы, ПВЗ, курьеры, склады, продавцы, поддержка.',
-    color: 'purple', isSystem: true, active: true, users: 5,
+    color: 'purple', isSystem: true, active: true, users: 5, appScope: 'admin',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('users', 'view', 'create', 'edit', 'block', 'unblock', 'assign'),
@@ -382,7 +426,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-ops', name: 'OperationsManager', label: 'Операционный менеджер',
     description: 'Контроль операций: заказы, ПВЗ, курьеры, склады, логистика, SLA.',
-    color: 'blue', isSystem: true, active: true, users: 6,
+    color: 'blue', isSystem: true, active: true, users: 6, appScope: 'admin',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('pvz', 'view'),
@@ -397,7 +441,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-pvz', name: 'PVZManager', label: 'Менеджер ПВЗ',
     description: 'Управляет ПВЗ: смена, приёмка, выдача, кассa, персонал, аудит ПВЗ.',
-    color: 'green', isSystem: true, active: true, users: 14,
+    color: 'green', isSystem: true, active: true, users: 14, appScope: 'admin',
     permissions: [
       ...m('pvz', 'view', 'edit', 'manage', 'audit_view'),
       ...m('pvz.scan', 'view'),
@@ -408,7 +452,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-warehouse', name: 'WarehouseManager', label: 'Менеджер склада',
     description: 'Поставки, отгрузки, остатки, персонал склада, складские отчёты.',
-    color: 'teal', isSystem: true, active: true, users: 8,
+    color: 'teal', isSystem: true, active: true, users: 8, appScope: 'admin',
     permissions: [
       ...m('warehouses', 'view', 'edit', 'manage', 'export'),
       ...m('orders', 'view'),
@@ -418,7 +462,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-couriers', name: 'CourierManager', label: 'Менеджер курьеров',
     description: 'Назначение заказов, маршруты, контроль доставки.',
-    color: 'yellow', isSystem: true, active: true, users: 4,
+    color: 'yellow', isSystem: true, active: true, users: 4, appScope: 'admin',
     permissions: [
       ...m('couriers', 'view', 'manage', 'assign'),
       ...m('orders', 'view', 'edit'),
@@ -430,7 +474,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-support', name: 'SupportAgent', label: 'Поддержка',
     description: 'Чаты, тикеты, эскалация, запросы фото/документов.',
-    color: 'pink', isSystem: true, active: true, users: 12,
+    color: 'pink', isSystem: true, active: true, users: 12, appScope: 'admin',
     permissions: [
       ...m('chat', 'view', 'edit'),
       ...m('support', 'view', 'create', 'edit', 'resolve'),
@@ -441,7 +485,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-accountant', name: 'Accountant', label: 'Бухгалтер',
     description: 'Бухгалтерия, финансы, выплаты, возвраты, комиссии, инвойсы, налоги.',
-    color: 'orange', isSystem: true, active: true, users: 3,
+    color: 'orange', isSystem: true, active: true, users: 3, appScope: 'admin',
     permissions: [
       ...m('accounting', 'view', 'edit', 'export'),
       ...m('accounting.reconciliations', 'view', 'edit', 'export'),
@@ -483,7 +527,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-chiefacc', name: 'ChiefAccountant', label: 'Главный бухгалтер',
     description: 'Бухгалтер + утверждение крупных выплат, налоговые отчёты, сверки, аудит финансовых действий.',
-    color: 'orange', isSystem: true, active: true, users: 1,
+    color: 'orange', isSystem: true, active: true, users: 1, appScope: 'admin',
     permissions: [
       // Inherits accountant perms
       ...m('accounting'),
@@ -533,7 +577,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-lawyer', name: 'Lawyer', label: 'Юрист',
     description: 'Договоры, претензии, споры, жалобы, документы продавцов, юридические отчёты.',
-    color: 'indigo', isSystem: true, active: true, users: 2,
+    color: 'indigo', isSystem: true, active: true, users: 2, appScope: 'admin',
     permissions: [
       ...m('legal', 'view', 'edit', 'export'),
       ...m('legal.contracts',  'view', 'create', 'edit', 'archive'),
@@ -562,7 +606,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-compliance', name: 'ComplianceManager', label: 'Compliance manager',
     description: 'Проверка документов, продавцы, audit log, compliance отчёты.',
-    color: 'violet', isSystem: true, active: true, users: 2,
+    color: 'violet', isSystem: true, active: true, users: 2, appScope: 'admin',
     permissions: [
       ...m('compliance', 'view', 'approve', 'reject', 'request_documents', 'export'),
       ...m('merchants', 'view', 'block', 'unblock'),
@@ -574,7 +618,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-sellers', name: 'SellerManager', label: 'Менеджер продавцов',
     description: 'Открытие профилей, статусы, документы, рейтинги, экспорт списка продавцов.',
-    color: 'teal', isSystem: true, active: true, users: 3,
+    color: 'teal', isSystem: true, active: true, users: 3, appScope: 'admin',
     permissions: [
       ...m('merchants', 'view', 'edit', 'export', 'block', 'unblock', 'request_documents'),
       ...m('products', 'view'),
@@ -585,7 +629,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-products', name: 'ProductManager', label: 'Product manager',
     description: 'Каталог: добавление, редактирование, медиа, категории, модерация.',
-    color: 'blue', isSystem: true, active: true, users: 4,
+    color: 'blue', isSystem: true, active: true, users: 4, appScope: 'admin',
     permissions: [
       ...m('products', 'view', 'create', 'edit', 'archive', 'export'),
       ...m('products.own',         'view', 'create', 'edit', 'archive'),
@@ -598,7 +642,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-showcase', name: 'ShowcaseManager', label: 'Менеджер витрины',
     description: 'Витрина / первые ряды, рекомендуемые, популярные, продвижение, audit.',
-    color: 'yellow', isSystem: true, active: true, users: 1,
+    color: 'yellow', isSystem: true, active: true, users: 1, appScope: 'admin',
     permissions: [
       ...m('products', 'view'),
       ...m('products.popular',     'view', 'manage'),
@@ -615,7 +659,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-marketing', name: 'MarketingManager', label: 'Маркетинг-менеджер',
     description: 'Акции, скидки, рекомендуемые, отчёты маркетинга.',
-    color: 'pink', isSystem: true, active: true, users: 2,
+    color: 'pink', isSystem: true, active: true, users: 2, appScope: 'admin',
     permissions: [
       ...m('promotions', 'view', 'create', 'edit', 'archive', 'export'),
       ...m('discounts',  'view', 'create', 'edit', 'archive'),
@@ -630,7 +674,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-security', name: 'SecurityOfficer', label: 'Офицер безопасности',
     description: 'Сессии, IP, токены, SSO, audit log, security report.',
-    color: 'red', isSystem: true, active: true, users: 1,
+    color: 'red', isSystem: true, active: true, users: 1, appScope: 'admin',
     permissions: [
       ...m('security', 'view', 'edit', 'export'),
       ...m('security.audit',    'view', 'export'),
@@ -650,7 +694,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-analyst', name: 'Analyst', label: 'Аналитик',
     description: 'Аналитика, отчёты, заказы (read-only), финансы (read-only при разрешении).',
-    color: 'gray', isSystem: true, active: true, users: 3,
+    color: 'gray', isSystem: true, active: true, users: 3, appScope: 'admin',
     permissions: [
       ...m('analytics', 'view', 'export'),
       ...m('reports', 'view', 'export'),
@@ -669,7 +713,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-poland-fin', name: 'PolandFinance', label: 'Польша · Финансы',
     description: 'Видит оплату клиента, маржу Польши, долги перед TM/поставщиками. Экспорт отчётов.',
-    color: 'blue', isSystem: true, active: true, users: 2,
+    color: 'blue', isSystem: true, active: true, users: 2, appScope: 'admin',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('foreign_delivery'),
@@ -699,7 +743,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-tm-ops', name: 'TurkmenistanOperator', label: 'Туркменистан · Оператор',
     description: 'Видит локальное исполнение, продавцов, доставку, упаковку. Не видит маржу Польши без отдельного права.',
-    color: 'green', isSystem: true, active: true, users: 4,
+    color: 'green', isSystem: true, active: true, users: 4, appScope: 'admin',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('foreign_delivery', 'view'),
@@ -724,7 +768,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
   {
     id: 'r-supp-acc', name: 'SupplierAccountant', label: 'Бухгалтер по поставщикам',
     description: 'Видит поставщиков, invoices, отмечает оплаты, готовит отчёты по supplier-payables.',
-    color: 'orange', isSystem: true, active: true, users: 1,
+    color: 'orange', isSystem: true, active: true, users: 1, appScope: 'admin',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('foreign_delivery', 'view'),
@@ -742,33 +786,60 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
       'foreign_delivery.accounting_export',
     ],
   },
-  // ── External / mobile-app preview roles ────────────────────────────────────
-  // These don't actually do anything in the admin panel — they exist so
-  // SuperAdmin can test "what does the sidebar look like for a courier?"
-  // by impersonating them. Permissions are minimal / self-only.
+  // ── External-app roles (preview-only inside Admin Panel) ──────────────────
+  //
+  // These roles do NOT belong to Admin Panel. The user with one of these
+  // roles works in their own app (courier-app / customer-app / seller-app
+  // / pickup-point-app / warehouse-app). They appear in Admin Panel only
+  // so SuperAdmin can:
+  //   1. Manage them (assign/disable, see audit) from /admin/users.
+  //   2. Impersonate them via "Просмотр как роль" to verify what their
+  //      app *would* show — but the real working interface is elsewhere.
+  //
+  // Permissions are intentionally minimal: dashboard.view + the few
+  // read-only modules an external user could glimpse if they accidentally
+  // hit /admin/. Admin Panel never replaces their app.
   {
-    id: 'r-courier', name: 'Courier', label: 'Курьер (мобильное прил.)',
-    description: 'Только свои доставки. Используется для preview, реальный кабинет — в курьерском приложении.',
-    color: 'yellow', isSystem: true, active: true, users: 0,
+    id: 'r-courier', name: 'Courier', label: 'Курьер',
+    description: 'Работает в Courier App (courier.ehlitrend.com). В Admin Panel — preview / управление.',
+    color: 'yellow', isSystem: true, active: true, users: 0, appScope: 'courier',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('orders', 'view'),
     ],
   },
   {
-    id: 'r-customer', name: 'Customer', label: 'Покупатель (preview)',
-    description: 'Минимальный набор для preview. Покупатель не пользуется админкой.',
-    color: 'gray', isSystem: true, active: true, users: 0,
+    id: 'r-customer', name: 'Customer', label: 'Покупатель',
+    description: 'Работает в Customer App (ehlitrend.com). В Admin Panel — preview только.',
+    color: 'gray', isSystem: true, active: true, users: 0, appScope: 'customer',
     permissions: [],
   },
   {
-    id: 'r-seller', name: 'Seller', label: 'Продавец (preview)',
-    description: 'Только свои товары и заказы. Реальный кабинет — в Seller Portal.',
-    color: 'green', isSystem: true, active: true, users: 0,
+    id: 'r-seller', name: 'Seller', label: 'Продавец / Партнёр',
+    description: 'Работает в Seller App (partner.ehlitrend.com). В Admin Panel — preview / управление.',
+    color: 'green', isSystem: true, active: true, users: 0, appScope: 'seller',
     permissions: [
       ...m('dashboard', 'view'),
       ...m('products', 'view'),
       ...m('orders', 'view'),
+    ],
+  },
+  {
+    id: 'r-pvz-op', name: 'PickupOperator', label: 'Оператор ПВЗ',
+    description: 'Работает в Pickup-Point App (pvz.ehlitrend.com). В Admin Panel — preview / управление.',
+    color: 'green', isSystem: true, active: true, users: 0, appScope: 'pickup',
+    permissions: [
+      ...m('dashboard', 'view'),
+      ...m('orders', 'view'),
+    ],
+  },
+  {
+    id: 'r-wh-worker', name: 'WarehouseWorker', label: 'Складчик',
+    description: 'Работает в Warehouse App (warehouse.ehlitrend.com). В Admin Panel — preview / управление.',
+    color: 'teal', isSystem: true, active: true, users: 0, appScope: 'warehouse',
+    permissions: [
+      ...m('dashboard', 'view'),
+      ...m('warehouses', 'view'),
     ],
   },
 ];
