@@ -125,3 +125,11 @@ export interface AuditEntry {
   action: string;
   meta?: Record<string, unknown>;
 }
+
+export interface CourierSettings {
+  notifications: boolean;
+}
+
+export const DEFAULT_SETTINGS: CourierSettings = {
+  notifications: true,
+};

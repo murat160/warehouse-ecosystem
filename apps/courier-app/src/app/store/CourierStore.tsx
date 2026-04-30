@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import type {
-  ChatMessage, CourierProfile, Order, OrderStatus, ProblemReport, ProblemType,
+  ChatMessage, CourierProfile, CourierSettings, Order, OrderStatus, ProblemReport, ProblemType,
 } from './types';
-import { TRANSITIONS } from './types';
+import { DEFAULT_SETTINGS, TRANSITIONS } from './types';
 import { audit } from '../lib/audit';
 
 // ─── Mock seed ────────────────────────────────────────────────
@@ -64,6 +64,7 @@ interface State {
   earningsToday: number;
   problems: ProblemReport[];
   messages: ChatMessage[];
+  settings: CourierSettings;
   initialized: boolean;
 }
 
@@ -80,7 +81,8 @@ type Action =
   | { type: 'COMPLETE_ORDER' }
   | { type: 'ADD_PROBLEM'; problem: ProblemReport }
   | { type: 'ADD_MESSAGE'; message: ChatMessage }
-  | { type: 'MARK_MESSAGES_VIEWED'; channelKey: string };
+  | { type: 'MARK_MESSAGES_VIEWED'; channelKey: string }
+  | { type: 'UPDATE_SETTINGS'; patch: Partial<CourierSettings> };
 
 const initialState: State = {
   authenticated: false,
@@ -92,6 +94,7 @@ const initialState: State = {
   earningsToday: 0,
   problems: [],
   messages: [],
+  settings: DEFAULT_SETTINGS,
   initialized: false,
 };
 
@@ -116,6 +119,7 @@ function saveToStorage(state: State) {
       earningsToday: state.earningsToday,
       problems: state.problems.slice(-30),
       messages: state.messages.slice(-200),
+      settings: state.settings,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch {}
@@ -124,7 +128,12 @@ function saveToStorage(state: State) {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'HYDRATE':
-      return { ...state, ...action.state, initialized: true };
+      return {
+        ...state,
+        ...action.state,
+        settings: { ...DEFAULT_SETTINGS, ...(action.state.settings ?? {}) },
+        initialized: true,
+      };
 
     case 'LOGIN':
       return { ...state, authenticated: true, courier: action.courier };
@@ -231,6 +240,9 @@ function reducer(state: State, action: Action): State {
         ),
       };
 
+    case 'UPDATE_SETTINGS':
+      return { ...state, settings: { ...state.settings, ...action.patch } };
+
     default:
       return state;
   }
@@ -253,6 +265,7 @@ interface Api {
   sendMessage: (channelKey: string, msg: { text?: string; photoUrl?: string; videoUrl?: string }) => ChatMessage;
   markChannelViewed: (channelKey: string) => void;
   channelKeyForActiveCustomer: () => string | null;
+  updateSettings: (patch: Partial<CourierSettings>) => void;
   unreadCount: (channelKey: string) => number;
 }
 
@@ -396,6 +409,10 @@ export function CourierStoreProvider({ children }: { children: ReactNode }) {
     },
     markChannelViewed: (channelKey) => dispatch({ type: 'MARK_MESSAGES_VIEWED', channelKey }),
     channelKeyForActiveCustomer: () => state.activeOrder ? `customer:${state.activeOrder.id}` : null,
+    updateSettings: (patch) => {
+      audit(state.courier?.id ?? 'unknown', 'settings.update', { patch });
+      dispatch({ type: 'UPDATE_SETTINGS', patch });
+    },
     unreadCount: (channelKey) =>
       state.messages.filter(m => m.channelKey === channelKey && m.from !== 'courier' && m.status !== 'viewed').length,
   }), [state]);
