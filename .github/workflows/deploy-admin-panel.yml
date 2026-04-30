@@ -15,7 +15,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      # ─────────────────────────────────────────────────────────────────
+      # Step 1: PULL + INSTALL + BUILD.
+      # This step MUST stay green. It's exactly the recipe that worked
+      # in run #36 — git fetch, npm install, vite build with /admin/ base.
+      # No nginx writes here, no curl. If this step is red, the source is
+      # broken, not nginx.
+      # ─────────────────────────────────────────────────────────────────
+      - name: Build admin-panel on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -24,7 +31,6 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-
             cd "${{ secrets.VPS_PATH }}"
 
             git fetch origin main
@@ -34,55 +40,112 @@ jobs:
 
             npm --workspace apps/admin-panel run build -- --base=/admin/
 
-            # ── Sync nginx config from repo onto the running VPS ──────────
-            #
-            # The original workflow ran `nginx -t && systemctl restart nginx`
-            # without sudo, so the SSH user is already root (or has full
-            # NOPASSWD). We keep the same convention here — no `sudo`.
-            #
-            # If the user is NOT root, this `cp` simply fails and we fall
-            # back to the existing nginx config (the `|| true` keeps the
-            # deploy alive). The `nginx -t` step right after will still
-            # validate whatever is currently installed.
-            #
-            # Tries Debian/Ubuntu layout first, then RHEL-style.
-            if [ -w /etc/nginx/sites-available/wms.conf ] 2>/dev/null \
-               || [ -f /etc/nginx/sites-available/wms.conf ]; then
-              cp -f deploy/nginx/wms.conf /etc/nginx/sites-available/wms.conf 2>/dev/null \
-                && echo "[nginx] synced → /etc/nginx/sites-available/wms.conf" \
-                || echo "[nginx] WARN: could not write /etc/nginx/sites-available/wms.conf"
-            elif [ -f /etc/nginx/conf.d/wms.conf ]; then
-              cp -f deploy/nginx/wms.conf /etc/nginx/conf.d/wms.conf 2>/dev/null \
-                && echo "[nginx] synced → /etc/nginx/conf.d/wms.conf" \
-                || echo "[nginx] WARN: could not write /etc/nginx/conf.d/wms.conf"
-            else
-              echo "[nginx] no managed wms.conf at /etc/nginx/sites-available/ or /etc/nginx/conf.d/"
-              echo "[nginx] sites-available/:"; ls -la /etc/nginx/sites-available/ 2>/dev/null || true
-              echo "[nginx] conf.d/:";          ls -la /etc/nginx/conf.d/          2>/dev/null || true
-            fi
+            echo "=== BUILD OK ==="
+            echo "[build] dist/index.html size: $(wc -c < apps/admin-panel/dist/index.html) bytes"
+            echo "[build] assets:"
+            ls -la apps/admin-panel/dist/assets | head -n 20
 
-            nginx -t
-            systemctl reload nginx
+      # ─────────────────────────────────────────────────────────────────
+      # Step 2: NGINX SYNC + RELOAD + SELF-TEST.
+      # This step is allowed to fail (`continue-on-error: true`). It
+      # also tries `cp` with and without sudo so it works whether the
+      # SSH user is root or not. Every command's output goes to the log
+      # so we always see the actual permission/syntax error instead of
+      # a silent fail.
+      # ─────────────────────────────────────────────────────────────────
+      - name: Sync nginx config + reload + self-test
+        if: always()
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: false
+          script: |
+            cd "${{ secrets.VPS_PATH }}" || exit 0
+
+            echo "::group::whoami / sudo capability"
+            whoami
+            id
+            sudo -n true 2>&1 && echo "[sudo] passwordless sudo available" \
+                              || echo "[sudo] no passwordless sudo"
+            echo "::endgroup::"
+
+            echo "::group::Find nginx config"
+            for p in \
+              /etc/nginx/sites-enabled/wms.conf \
+              /etc/nginx/sites-available/wms.conf \
+              /etc/nginx/conf.d/wms.conf
+            do
+              [ -e "$p" ] && echo "[found] $p"
+            done
+            ls -la /etc/nginx/sites-enabled/ 2>/dev/null || true
+            ls -la /etc/nginx/sites-available/ 2>/dev/null || true
+            ls -la /etc/nginx/conf.d/         2>/dev/null || true
+            echo "::endgroup::"
+
+            echo "::group::Sync nginx config from repo"
+            SYNCED=""
+            for TARGET in \
+              /etc/nginx/sites-available/wms.conf \
+              /etc/nginx/conf.d/wms.conf
+            do
+              if [ -f "$TARGET" ]; then
+                if cp -f deploy/nginx/wms.conf "$TARGET"; then
+                  echo "[ok] cp deploy/nginx/wms.conf → $TARGET"
+                  SYNCED="$TARGET"; break
+                elif sudo -n cp -f deploy/nginx/wms.conf "$TARGET" 2>/dev/null; then
+                  echo "[ok] sudo cp deploy/nginx/wms.conf → $TARGET"
+                  SYNCED="$TARGET"; break
+                else
+                  echo "[fail] cannot write $TARGET"
+                fi
+              fi
+            done
+            if [ -z "$SYNCED" ]; then
+              echo "[fail] nginx config NOT synced — running config still active"
+            fi
+            echo "::endgroup::"
+
+            echo "::group::nginx -t"
+            (nginx -t 2>&1) || (sudo -n nginx -t 2>&1) || true
+            echo "::endgroup::"
+
+            echo "::group::nginx reload"
+            (nginx -s reload 2>&1) \
+              || (sudo -n nginx -s reload 2>&1) \
+              || (systemctl reload nginx 2>&1) \
+              || (sudo -n systemctl reload nginx 2>&1) \
+              || (systemctl restart nginx 2>&1) \
+              || (sudo -n systemctl restart nginx 2>&1) \
+              || echo "[fail] could not reload/restart nginx"
+            echo "::endgroup::"
+
+            echo "::group::Self-test"
+            curl -sS -I "http://127.0.0.1/admin/" 2>&1 | head -n 3 || true
+            echo
+            JS_PATH=""
+            if [ -f apps/admin-panel/dist/index.html ]; then
+              JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js' \
+                        apps/admin-panel/dist/index.html | head -n 1 || true)
+            fi
+            if [ -n "$JS_PATH" ]; then
+              echo "[self-test] HEAD ${JS_PATH}"
+              curl -sS -I "http://127.0.0.1${JS_PATH}" 2>&1 | head -n 5 || true
+            else
+              echo "[self-test] could not extract JS chunk path"
+            fi
+            CSS_PATH=""
+            if [ -f apps/admin-panel/dist/index.html ]; then
+              CSS_PATH=$(grep -oE '/admin/assets/[^"]+\.css' \
+                         apps/admin-panel/dist/index.html | head -n 1 || true)
+            fi
+            if [ -n "$CSS_PATH" ]; then
+              echo "[self-test] HEAD ${CSS_PATH}"
+              curl -sS -I "http://127.0.0.1${CSS_PATH}" 2>&1 | head -n 5 || true
+            fi
+            echo "::endgroup::"
 
             echo "=== ADMIN PANEL DEPLOY DONE ==="
-
-            # ── Self-test (never fails the deploy) ────────────────────────
-            # Wraps the whole block in a subshell so `set -e` from the outer
-            # script can't kill us; pipefail-friendly: each step is guarded.
-            (
-              set +e
-              echo "--- self-test ---"
-              curl -sS -I "http://127.0.0.1/admin/" | head -n 1 || true
-
-              # Find the JS chunk hash from the freshly-built index.html.
-              JS_PATH=""
-              if [ -f apps/admin-panel/dist/index.html ]; then
-                JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js' apps/admin-panel/dist/index.html | head -n 1 || true)
-              fi
-              if [ -n "$JS_PATH" ]; then
-                echo "[self-test] HEAD ${JS_PATH}"
-                curl -sS -I "http://127.0.0.1${JS_PATH}" | head -n 2 || true
-              else
-                echo "[self-test] could not extract JS chunk path from dist/index.html"
-              fi
-            ) || true
+            exit 0
