@@ -34,38 +34,55 @@ jobs:
 
             npm --workspace apps/admin-panel run build -- --base=/admin/
 
-            # ── Sync the freshly-tracked nginx config from the repo to the
-            # actual nginx directory on the VPS. Without this step, fixes
-            # to deploy/nginx/wms.conf never reach the running nginx.
+            # ── Sync nginx config from repo onto the running VPS ──────────
             #
-            # Tries the standard Debian/Ubuntu layout first, then RHEL-style.
-            # If neither path exists, prints a warning but does not fail —
-            # the existing nginx config is still tested and reloaded.
-            if [ -f /etc/nginx/sites-available/wms.conf ]; then
-              echo "[nginx] syncing → /etc/nginx/sites-available/wms.conf"
-              sudo cp -f deploy/nginx/wms.conf /etc/nginx/sites-available/wms.conf
+            # The original workflow ran `nginx -t && systemctl restart nginx`
+            # without sudo, so the SSH user is already root (or has full
+            # NOPASSWD). We keep the same convention here — no `sudo`.
+            #
+            # If the user is NOT root, this `cp` simply fails and we fall
+            # back to the existing nginx config (the `|| true` keeps the
+            # deploy alive). The `nginx -t` step right after will still
+            # validate whatever is currently installed.
+            #
+            # Tries Debian/Ubuntu layout first, then RHEL-style.
+            if [ -w /etc/nginx/sites-available/wms.conf ] 2>/dev/null \
+               || [ -f /etc/nginx/sites-available/wms.conf ]; then
+              cp -f deploy/nginx/wms.conf /etc/nginx/sites-available/wms.conf 2>/dev/null \
+                && echo "[nginx] synced → /etc/nginx/sites-available/wms.conf" \
+                || echo "[nginx] WARN: could not write /etc/nginx/sites-available/wms.conf"
             elif [ -f /etc/nginx/conf.d/wms.conf ]; then
-              echo "[nginx] syncing → /etc/nginx/conf.d/wms.conf"
-              sudo cp -f deploy/nginx/wms.conf /etc/nginx/conf.d/wms.conf
+              cp -f deploy/nginx/wms.conf /etc/nginx/conf.d/wms.conf 2>/dev/null \
+                && echo "[nginx] synced → /etc/nginx/conf.d/wms.conf" \
+                || echo "[nginx] WARN: could not write /etc/nginx/conf.d/wms.conf"
             else
-              echo "[nginx] WARNING: no managed wms.conf found at standard paths"
-              echo "[nginx] → /etc/nginx/sites-available/ contents:"
-              sudo ls -la /etc/nginx/sites-available/ || true
-              echo "[nginx] → /etc/nginx/conf.d/ contents:"
-              sudo ls -la /etc/nginx/conf.d/ || true
+              echo "[nginx] no managed wms.conf at /etc/nginx/sites-available/ or /etc/nginx/conf.d/"
+              echo "[nginx] sites-available/:"; ls -la /etc/nginx/sites-available/ 2>/dev/null || true
+              echo "[nginx] conf.d/:";          ls -la /etc/nginx/conf.d/          2>/dev/null || true
             fi
 
-            sudo nginx -t
-            sudo systemctl reload nginx
+            nginx -t
+            systemctl reload nginx
 
             echo "=== ADMIN PANEL DEPLOY DONE ==="
 
-            # Self-test: index.html should be 200, and the JS chunk it
-            # references should also be 200 (not 404 / not text/html).
-            echo "--- self-test ---"
-            curl -sS -I http://127.0.0.1/admin/ | head -n 1 || true
-            JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js' apps/admin-panel/dist/index.html | head -n 1)
-            if [ -n "$JS_PATH" ]; then
-              echo "[self-test] checking $JS_PATH"
-              curl -sS -I "http://127.0.0.1${JS_PATH}" | head -n 2 || true
-            fi
+            # ── Self-test (never fails the deploy) ────────────────────────
+            # Wraps the whole block in a subshell so `set -e` from the outer
+            # script can't kill us; pipefail-friendly: each step is guarded.
+            (
+              set +e
+              echo "--- self-test ---"
+              curl -sS -I "http://127.0.0.1/admin/" | head -n 1 || true
+
+              # Find the JS chunk hash from the freshly-built index.html.
+              JS_PATH=""
+              if [ -f apps/admin-panel/dist/index.html ]; then
+                JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js' apps/admin-panel/dist/index.html | head -n 1 || true)
+              fi
+              if [ -n "$JS_PATH" ]; then
+                echo "[self-test] HEAD ${JS_PATH}"
+                curl -sS -I "http://127.0.0.1${JS_PATH}" | head -n 2 || true
+              else
+                echo "[self-test] could not extract JS chunk path from dist/index.html"
+              fi
+            ) || true
