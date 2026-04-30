@@ -1,9 +1,16 @@
 name: Deploy Admin Panel to VPS
 
+# Triggers ONLY when something inside admin-panel changed,
+# or when the deploy plumbing for admin-panel changed.
+# Stops courier/warehouse/etc commits from running this workflow.
 on:
   push:
     branches:
       - main
+    paths:
+      - 'apps/admin-panel/**'
+      - '.github/workflows/deploy-admin-panel.yml'
+      - 'deploy/nginx/wms.conf'
   workflow_dispatch:
 
 concurrency:
@@ -17,10 +24,7 @@ jobs:
     steps:
       # ─────────────────────────────────────────────────────────────────
       # Step 1: PULL + INSTALL + BUILD.
-      # This step MUST stay green. It's exactly the recipe that worked
-      # in run #36 — git fetch, npm install, vite build with /admin/ base.
-      # No nginx writes here, no curl. If this step is red, the source is
-      # broken, not nginx.
+      # Exact recipe of run #36 which was green. Must pass.
       # ─────────────────────────────────────────────────────────────────
       - name: Build admin-panel on VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -32,28 +36,20 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ secrets.VPS_PATH }}"
-
             git fetch origin main
             git reset --hard origin/main
-
             npm install --no-audit --no-fund
-
             npm --workspace apps/admin-panel run build -- --base=/admin/
-
             echo "=== BUILD OK ==="
             echo "[build] dist/index.html size: $(wc -c < apps/admin-panel/dist/index.html) bytes"
-            echo "[build] assets:"
             ls -la apps/admin-panel/dist/assets | head -n 20
 
       # ─────────────────────────────────────────────────────────────────
-      # Step 2: NGINX SYNC + RELOAD + SELF-TEST.
-      # This step is allowed to fail (`continue-on-error: true`). It
-      # also tries `cp` with and without sudo so it works whether the
-      # SSH user is root or not. Every command's output goes to the log
-      # so we always see the actual permission/syntax error instead of
-      # a silent fail.
+      # Step 2: NGINX SYNC + RELOAD.
+      # Diagnostic-friendly. Allowed to fail; the assertion in Step 3
+      # is what gates the deploy.
       # ─────────────────────────────────────────────────────────────────
-      - name: Sync nginx config + reload + self-test
+      - name: Sync nginx config + reload
         if: always()
         continue-on-error: true
         uses: appleboy/ssh-action@v1.0.3
@@ -66,20 +62,17 @@ jobs:
             cd "${{ secrets.VPS_PATH }}" || exit 0
 
             echo "::group::whoami / sudo capability"
-            whoami
-            id
+            whoami; id
             sudo -n true 2>&1 && echo "[sudo] passwordless sudo available" \
                               || echo "[sudo] no passwordless sudo"
             echo "::endgroup::"
 
-            echo "::group::Find nginx config"
+            echo "::group::Find nginx config files"
             for p in \
               /etc/nginx/sites-enabled/wms.conf \
               /etc/nginx/sites-available/wms.conf \
               /etc/nginx/conf.d/wms.conf
-            do
-              [ -e "$p" ] && echo "[found] $p"
-            done
+            do [ -e "$p" ] && echo "[found] $p"; done
             ls -la /etc/nginx/sites-enabled/ 2>/dev/null || true
             ls -la /etc/nginx/sites-available/ 2>/dev/null || true
             ls -la /etc/nginx/conf.d/         2>/dev/null || true
@@ -92,20 +85,16 @@ jobs:
               /etc/nginx/conf.d/wms.conf
             do
               if [ -f "$TARGET" ]; then
-                if cp -f deploy/nginx/wms.conf "$TARGET"; then
-                  echo "[ok] cp deploy/nginx/wms.conf → $TARGET"
-                  SYNCED="$TARGET"; break
-                elif sudo -n cp -f deploy/nginx/wms.conf "$TARGET" 2>/dev/null; then
-                  echo "[ok] sudo cp deploy/nginx/wms.conf → $TARGET"
-                  SYNCED="$TARGET"; break
+                if cp -f deploy/nginx/wms.conf "$TARGET" 2>&1; then
+                  echo "[ok] cp → $TARGET"; SYNCED="$TARGET"; break
+                elif sudo -n cp -f deploy/nginx/wms.conf "$TARGET" 2>&1; then
+                  echo "[ok] sudo cp → $TARGET"; SYNCED="$TARGET"; break
                 else
                   echo "[fail] cannot write $TARGET"
                 fi
               fi
             done
-            if [ -z "$SYNCED" ]; then
-              echo "[fail] nginx config NOT synced — running config still active"
-            fi
+            [ -z "$SYNCED" ] && echo "[fail] nginx config NOT synced — running config still active"
             echo "::endgroup::"
 
             echo "::group::nginx -t"
@@ -121,31 +110,113 @@ jobs:
               || (sudo -n systemctl restart nginx 2>&1) \
               || echo "[fail] could not reload/restart nginx"
             echo "::endgroup::"
+            exit 0
 
-            echo "::group::Self-test"
-            curl -sS -I "http://127.0.0.1/admin/" 2>&1 | head -n 3 || true
-            echo
-            JS_PATH=""
-            if [ -f apps/admin-panel/dist/index.html ]; then
-              JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js' \
-                        apps/admin-panel/dist/index.html | head -n 1 || true)
-            fi
-            if [ -n "$JS_PATH" ]; then
-              echo "[self-test] HEAD ${JS_PATH}"
-              curl -sS -I "http://127.0.0.1${JS_PATH}" 2>&1 | head -n 5 || true
-            else
-              echo "[self-test] could not extract JS chunk path"
-            fi
-            CSS_PATH=""
-            if [ -f apps/admin-panel/dist/index.html ]; then
-              CSS_PATH=$(grep -oE '/admin/assets/[^"]+\.css' \
-                         apps/admin-panel/dist/index.html | head -n 1 || true)
-            fi
-            if [ -n "$CSS_PATH" ]; then
-              echo "[self-test] HEAD ${CSS_PATH}"
-              curl -sS -I "http://127.0.0.1${CSS_PATH}" 2>&1 | head -n 5 || true
-            fi
+      # ─────────────────────────────────────────────────────────────────
+      # Step 3: HARD ASSERTION.
+      # MUST pass. If /admin/, /admin/orders, the JS chunk, or the CSS
+      # chunk don't return the expected status + Content-Type, this step
+      # exits non-zero and the whole deploy goes red. No silent green.
+      # ─────────────────────────────────────────────────────────────────
+      - name: Assert admin-panel is actually serving
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -uo pipefail
+            cd "${{ secrets.VPS_PATH }}"
+
+            FAIL=0
+
+            echo "::group::Active nginx config (relevant /admin/ blocks)"
+            (nginx -T 2>/dev/null || sudo -n nginx -T 2>/dev/null || true) \
+              | awk '/location[^;]*\/admin/{p=1} p{print; if(/^\}/){p=0}}' \
+              | head -n 80 || true
             echo "::endgroup::"
 
-            echo "=== ADMIN PANEL DEPLOY DONE ==="
-            exit 0
+            echo "::group::Repo wms.conf (the file we tried to sync)"
+            sed -n '50,75p' deploy/nginx/wms.conf
+            echo "::endgroup::"
+
+            echo "::group::dist/ contents"
+            ls -la apps/admin-panel/dist/
+            ls -la apps/admin-panel/dist/assets/
+            echo "::endgroup::"
+
+            echo "::group::dist/index.html"
+            cat apps/admin-panel/dist/index.html
+            echo "::endgroup::"
+
+            JS_PATH=$(grep -oE '/admin/assets/[^"]+\.js'  apps/admin-panel/dist/index.html | head -n 1 || echo "")
+            CSS_PATH=$(grep -oE '/admin/assets/[^"]+\.css' apps/admin-panel/dist/index.html | head -n 1 || echo "")
+            echo "Parsed from index.html:"
+            echo "  JS=${JS_PATH:-(none)}"
+            echo "  CSS=${CSS_PATH:-(none)}"
+            echo
+
+            BASE="http://127.0.0.1"
+
+            check () {
+              # check <label> <url> <expected_status> <expected_content_type_substr>
+              local LABEL="$1" URL="$2" WANT_STATUS="$3" WANT_CT="$4"
+              echo "─── ${LABEL} → ${URL} ───"
+              local RESP
+              RESP=$(curl -sS -o /tmp/body.$$ -D /tmp/hdr.$$ -w "%{http_code}\n" "${URL}" 2>&1) || true
+              local STATUS="$RESP"
+              local CT
+              CT=$(grep -i '^content-type:' /tmp/hdr.$$ | head -n 1 | tr -d '\r')
+              echo "Status:       ${STATUS}"
+              echo "${CT}"
+              echo "Body (first 5 lines):"
+              head -n 5 /tmp/body.$$ 2>/dev/null | sed 's/^/  /'
+              rm -f /tmp/body.$$ /tmp/hdr.$$
+              if [ "$STATUS" != "$WANT_STATUS" ]; then
+                echo "  [FAIL] expected status ${WANT_STATUS}, got ${STATUS}"
+                return 1
+              fi
+              if ! echo "$CT" | grep -qi "$WANT_CT"; then
+                echo "  [FAIL] expected Content-Type to contain '${WANT_CT}', got: ${CT}"
+                return 1
+              fi
+              echo "  [PASS] ${LABEL}"
+              return 0
+            }
+
+            echo "::group::HARD ASSERTIONS (local 127.0.0.1)"
+
+            check "/admin/"          "${BASE}/admin/"        "200" "text/html"          || FAIL=1
+            check "/admin/orders"    "${BASE}/admin/orders"  "200" "text/html"          || FAIL=1
+
+            if [ -n "$JS_PATH" ]; then
+              check "JS chunk"  "${BASE}${JS_PATH}"  "200" "javascript" || FAIL=1
+            else
+              echo "[FAIL] JS chunk path not extracted from index.html"
+              FAIL=1
+            fi
+
+            if [ -n "$CSS_PATH" ]; then
+              check "CSS chunk" "${BASE}${CSS_PATH}" "200" "text/css"   || FAIL=1
+            else
+              echo "[FAIL] CSS chunk path not extracted from index.html"
+              FAIL=1
+            fi
+
+            echo "::endgroup::"
+
+            echo "::group::Same checks via public IP (firewall sanity)"
+            PUB="http://46.202.189.230"
+            curl -sS -I -o /dev/null -w "  /admin/        %{http_code}\n" "${PUB}/admin/"        || true
+            curl -sS -I -o /dev/null -w "  /admin/orders  %{http_code}\n" "${PUB}/admin/orders"  || true
+            [ -n "$JS_PATH"  ] && curl -sS -I -o /dev/null -w "  JS             %{http_code}\n" "${PUB}${JS_PATH}"  || true
+            [ -n "$CSS_PATH" ] && curl -sS -I -o /dev/null -w "  CSS            %{http_code}\n" "${PUB}${CSS_PATH}" || true
+            echo "::endgroup::"
+
+            if [ "$FAIL" -ne 0 ]; then
+              echo "::error::Admin Panel is NOT serving correctly. See group logs above."
+              exit 1
+            fi
+            echo "=== ADMIN PANEL ASSERTIONS PASSED ==="

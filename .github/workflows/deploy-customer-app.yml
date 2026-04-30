@@ -1,0 +1,80 @@
+name: Deploy Customer App to VPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/customer-app/**'
+      - '.github/workflows/deploy-customer-app.yml'
+      - 'deploy/nginx/wms.conf'
+  workflow_dispatch:
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build customer-app on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.VPS_PATH }}"
+            git fetch origin main
+            git reset --hard origin/main
+            npm install --no-audit --no-fund
+            # customer-app may still be a skeleton.
+            if [ -f apps/customer-app/index.html ]; then
+              npm --workspace apps/customer-app run build -- --base=/ || {
+                echo "[customer] build failed — keeping previous dist if any"; }
+            else
+              echo "[customer] no index.html — skeleton only, nothing to build"
+            fi
+            ls -la apps/customer-app/dist/ 2>/dev/null || echo "(no dist)"
+
+      - name: Sync nginx + reload
+        if: always()
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: false
+          script: |
+            cd "${{ secrets.VPS_PATH }}" || exit 0
+            for TARGET in /etc/nginx/sites-available/wms.conf /etc/nginx/conf.d/wms.conf; do
+              if [ -f "$TARGET" ]; then
+                cp -f deploy/nginx/wms.conf "$TARGET" 2>&1 \
+                  || sudo -n cp -f deploy/nginx/wms.conf "$TARGET" 2>&1 \
+                  || echo "[fail] cp $TARGET"
+                break
+              fi
+            done
+            (nginx -t 2>&1) || (sudo -n nginx -t 2>&1) || true
+            (nginx -s reload 2>&1)  || (sudo -n nginx -s reload 2>&1)  \
+              || (systemctl reload nginx 2>&1)  || (sudo -n systemctl reload nginx 2>&1)  \
+              || (systemctl restart nginx 2>&1) || (sudo -n systemctl restart nginx 2>&1) \
+              || echo "[fail] reload"
+            exit 0
+
+      - name: Self-test / (best effort while skeleton)
+        if: always()
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: false
+          script: |
+            curl -sS -I "http://127.0.0.1/" 2>&1 | head -n 3 || true
+            echo "=== CUSTOMER APP DEPLOY DONE (skeleton mode) ==="

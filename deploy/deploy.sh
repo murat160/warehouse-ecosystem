@@ -107,14 +107,19 @@ build_app() {
   c_log "Building $pkg with base=$base…"
   ( cd "apps/$pkg" && VITE_BASE="$base" npx vite build --base="$base" )
 }
+# Canonical URL map — must match deploy/nginx/wms.conf and docs/DEPLOY_MAP.md
 build_app admin-panel      /admin/
+build_app warehouse-app    /warehouse/
+build_app courier-app      /courier/
+build_app pickup-point-app /pvz/
+build_app seller-app       /partner/
+build_app customer-app     /
+# Legacy slots (still in repo as separate apps, kept for compatibility)
 build_app staff-app        /staff/
 build_app supervisor-panel /supervisor/
-build_app seller-app       /seller/
-build_app courier-app      /courier/
-build_app customer-app     /customer/
-build_app pickup-point-app /pickup/
-c_ok "All 7 frontends built"
+# Reserved for the future Warehouse Courier App:
+#   build_app warehouse-courier-app /warehouse-courier/
+c_ok "Frontends built"
 
 # ---------- Start / restart API via pm2 ----------
 c_log "(Re)starting API with pm2…"

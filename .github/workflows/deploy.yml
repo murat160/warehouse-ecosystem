@@ -1,22 +1,30 @@
 # ============================================================
-#  GitHub Actions — auto-deploy to Hostinger VPS on push to main.
+#  Manual "deploy everything" workflow.
 #
-#  Required GitHub repo secrets:
-#    VPS_HOST       — IP or hostname (e.g. 123.45.67.89)
-#    VPS_USER       — SSH user (e.g. deploy)
-#    VPS_SSH_KEY    — private SSH key with access to VPS
-#    VPS_APP_DIR    — absolute path on VPS (e.g. /var/www/wms)
+#  Per-app workflows handle normal pushes:
+#    - deploy-admin-panel.yml      → apps/admin-panel/**
+#    - deploy-warehouse-app.yml    → apps/warehouse-app/**
+#    - deploy-courier-app.yml      → apps/courier-app/**
+#    - deploy-pickup-point-app.yml → apps/pickup-point-app/**
+#    - deploy-seller-app.yml       → apps/seller-app/**
+#    - deploy-customer-app.yml     → apps/customer-app/**
 #
-#  How it works: SSH into VPS, run deploy.sh which pulls + builds
-#  + restarts. Build happens on the server, not in CI — keeps the
-#  CI minimal and avoids artifact transfer.
+#  Until 2026-04-30 this workflow ran on every push to main, which
+#  meant every commit (even a typo fix in one app) re-built and
+#  redeployed ALL frontends — racing the per-app workflows in the
+#  same `vps-deploy` concurrency group and producing flaky, opaque
+#  failures (e.g. courier commit failing the admin deploy).
+#
+#  It is now manual-only — useful for "rebuild everything from
+#  scratch" after a server move or first-run.
+#
+#  Required secrets:
+#    VPS_HOST · VPS_USER · VPS_SSH_KEY · VPS_APP_DIR
 # ============================================================
 
-name: Deploy to Hostinger VPS
+name: Deploy ALL apps to VPS (manual)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:

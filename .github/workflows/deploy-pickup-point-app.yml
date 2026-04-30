@@ -1,15 +1,12 @@
-name: Deploy Warehouse App to VPS
+name: Deploy Pickup Point (PVZ) App to VPS
 
-# Триггерится только при изменениях в самом warehouse-app или в его
-# deploy plumbing (включая общий wms.conf, который описывает /warehouse/).
 on:
   push:
     branches:
       - main
     paths:
-      - 'apps/warehouse-app/**'
-      - '.github/workflows/deploy-warehouse-app.yml'
-      - 'deploy/deploy-warehouse.sh'
+      - 'apps/pickup-point-app/**'
+      - '.github/workflows/deploy-pickup-point-app.yml'
       - 'deploy/nginx/wms.conf'
   workflow_dispatch:
 
@@ -21,7 +18,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger warehouse-app deploy on VPS
+      - name: Build pickup-point-app on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -31,10 +28,12 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ secrets.VPS_PATH }}"
-            git pull origin main
-            chmod +x ./deploy/deploy-warehouse.sh
-            ./deploy/deploy-warehouse.sh
-            echo "=== WAREHOUSE APP BUILD DONE ==="
+            git fetch origin main
+            git reset --hard origin/main
+            npm install --no-audit --no-fund
+            npm --workspace apps/pickup-point-app run build -- --base=/pvz/
+            echo "=== BUILD OK ==="
+            ls -la apps/pickup-point-app/dist/assets | head -n 20
 
       - name: Sync nginx + reload
         if: always()
@@ -62,7 +61,7 @@ jobs:
               || echo "[fail] reload"
             exit 0
 
-      - name: Assert /warehouse/ is serving
+      - name: Assert /pvz/ is serving
         if: always()
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -75,8 +74,8 @@ jobs:
             cd "${{ secrets.VPS_PATH }}"
             BASE="http://127.0.0.1"
             FAIL=0
-            JS=$(grep -oE '/warehouse/assets/[^"]+\.js'  apps/warehouse-app/dist/index.html | head -n 1 || echo "")
-            CSS=$(grep -oE '/warehouse/assets/[^"]+\.css' apps/warehouse-app/dist/index.html | head -n 1 || echo "")
+            JS=$(grep -oE '/pvz/assets/[^"]+\.js'  apps/pickup-point-app/dist/index.html | head -n 1 || echo "")
+            CSS=$(grep -oE '/pvz/assets/[^"]+\.css' apps/pickup-point-app/dist/index.html | head -n 1 || echo "")
             echo "JS=${JS:-(none)}  CSS=${CSS:-(none)}"
 
             check () {
@@ -92,12 +91,12 @@ jobs:
                 || { echo "  [FAIL] want ${S}+${T}"; return 1; }
             }
 
-            check "/warehouse/" "${BASE}/warehouse/" "200" "text/html" || FAIL=1
+            check "/pvz/" "${BASE}/pvz/" "200" "text/html" || FAIL=1
             [ -n "$JS" ]  && { check "JS"  "${BASE}${JS}"  "200" "javascript" || FAIL=1; } || FAIL=1
             [ -n "$CSS" ] && { check "CSS" "${BASE}${CSS}" "200" "text/css"   || FAIL=1; } || FAIL=1
 
             if [ "$FAIL" -ne 0 ]; then
-              echo "::error::Warehouse App is NOT serving correctly"
+              echo "::error::Pickup Point App is NOT serving correctly"
               exit 1
             fi
-            echo "=== WAREHOUSE ASSERTIONS PASSED ==="
+            echo "=== PICKUP POINT DEPLOY DONE ==="

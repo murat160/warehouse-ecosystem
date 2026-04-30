@@ -1,15 +1,12 @@
-name: Deploy Warehouse App to VPS
+name: Deploy Courier App to VPS
 
-# Триггерится только при изменениях в самом warehouse-app или в его
-# deploy plumbing (включая общий wms.conf, который описывает /warehouse/).
 on:
   push:
     branches:
       - main
     paths:
-      - 'apps/warehouse-app/**'
-      - '.github/workflows/deploy-warehouse-app.yml'
-      - 'deploy/deploy-warehouse.sh'
+      - 'apps/courier-app/**'
+      - '.github/workflows/deploy-courier-app.yml'
       - 'deploy/nginx/wms.conf'
   workflow_dispatch:
 
@@ -20,8 +17,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Trigger warehouse-app deploy on VPS
+      - name: Build courier-app on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -31,10 +29,12 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ secrets.VPS_PATH }}"
-            git pull origin main
-            chmod +x ./deploy/deploy-warehouse.sh
-            ./deploy/deploy-warehouse.sh
-            echo "=== WAREHOUSE APP BUILD DONE ==="
+            git fetch origin main
+            git reset --hard origin/main
+            npm install --no-audit --no-fund
+            npm --workspace apps/courier-app run build -- --base=/courier/
+            echo "=== BUILD OK ==="
+            ls -la apps/courier-app/dist/assets | head -n 20
 
       - name: Sync nginx + reload
         if: always()
@@ -55,14 +55,14 @@ jobs:
                 break
               fi
             done
-            (nginx -t 2>&1) || (sudo -n nginx -t 2>&1) || true
+            (nginx -t 2>&1)         || (sudo -n nginx -t 2>&1)         || true
             (nginx -s reload 2>&1)  || (sudo -n nginx -s reload 2>&1)  \
               || (systemctl reload nginx 2>&1)  || (sudo -n systemctl reload nginx 2>&1)  \
               || (systemctl restart nginx 2>&1) || (sudo -n systemctl restart nginx 2>&1) \
               || echo "[fail] reload"
             exit 0
 
-      - name: Assert /warehouse/ is serving
+      - name: Assert /courier/ is serving
         if: always()
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -75,8 +75,8 @@ jobs:
             cd "${{ secrets.VPS_PATH }}"
             BASE="http://127.0.0.1"
             FAIL=0
-            JS=$(grep -oE '/warehouse/assets/[^"]+\.js'  apps/warehouse-app/dist/index.html | head -n 1 || echo "")
-            CSS=$(grep -oE '/warehouse/assets/[^"]+\.css' apps/warehouse-app/dist/index.html | head -n 1 || echo "")
+            JS=$(grep -oE '/courier/assets/[^"]+\.js'  apps/courier-app/dist/index.html | head -n 1 || echo "")
+            CSS=$(grep -oE '/courier/assets/[^"]+\.css' apps/courier-app/dist/index.html | head -n 1 || echo "")
             echo "JS=${JS:-(none)}  CSS=${CSS:-(none)}"
 
             check () {
@@ -92,12 +92,12 @@ jobs:
                 || { echo "  [FAIL] want ${S}+${T}"; return 1; }
             }
 
-            check "/warehouse/" "${BASE}/warehouse/" "200" "text/html" || FAIL=1
+            check "/courier/" "${BASE}/courier/" "200" "text/html" || FAIL=1
             [ -n "$JS" ]  && { check "JS"  "${BASE}${JS}"  "200" "javascript" || FAIL=1; } || FAIL=1
             [ -n "$CSS" ] && { check "CSS" "${BASE}${CSS}" "200" "text/css"   || FAIL=1; } || FAIL=1
 
             if [ "$FAIL" -ne 0 ]; then
-              echo "::error::Warehouse App is NOT serving correctly"
+              echo "::error::Courier App is NOT serving correctly"
               exit 1
             fi
-            echo "=== WAREHOUSE ASSERTIONS PASSED ==="
+            echo "=== COURIER APP DEPLOY DONE ==="
