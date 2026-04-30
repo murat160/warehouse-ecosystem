@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Send, Camera, Video, FileText, Phone, ArrowLeft,
-  ExternalLink, Info, Users, MessageSquareReply,
+  ExternalLink, Info, Users, MessageSquareReply, Smile, Paperclip,
+  Mic, Image as ImageIcon, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
@@ -436,59 +437,16 @@ function ThreadView({ thread, onBack, onCall, onProfile, headerEmployee }: {
         <div ref={endRef} />
       </div>
 
-      {/* Composer */}
-      <div className="p-3 border-t border-[#F3F4F6] bg-white">
-        {attachments.length > 0 && (
-          <div className="flex gap-1 flex-wrap mb-2">
-            {attachments.map((a, i) => (
-              <button
-                key={i}
-                onClick={() => setAttachments(prev => prev.filter((_, k) => k !== i))}
-                className="text-[10px] px-2 py-1 rounded bg-[#E0E7FF] text-[#3730A3]" style={{ fontWeight: 700 }}
-              >
-                {a.kind === 'image' ? '📷' : a.kind === 'video' ? '🎬' : '📄'} {a.title} ✕
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <label className="w-10 h-10 rounded-full bg-[#0EA5E9] text-white inline-flex items-center justify-center cursor-pointer active-press" aria-label={t('chat.attachPhoto')}>
-            <Camera className="w-4 h-4" />
-            <input type="file" accept="image/*" multiple onChange={(e) => onAttach(e, 'image')} className="hidden" />
-          </label>
-          <label className="w-10 h-10 rounded-full bg-[#7C3AED] text-white inline-flex items-center justify-center cursor-pointer active-press" aria-label={t('chat.attachVideo')}>
-            <Video className="w-4 h-4" />
-            <input type="file" accept="video/mp4,video/webm" multiple onChange={(e) => onAttach(e, 'video')} className="hidden" />
-          </label>
-          <label className="w-10 h-10 rounded-full bg-[#374151] text-white inline-flex items-center justify-center cursor-pointer active-press" aria-label={t('chat.attachDoc')}>
-            <FileText className="w-4 h-4" />
-            <input type="file" accept=".pdf,.doc,.docx,.xlsx,.csv,.txt" multiple onChange={(e) => onAttach(e, 'document')} className="hidden" />
-          </label>
-          <input
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={t('chat.placeholder')}
-            className="flex-1 px-3 py-2 rounded-full border-2 border-[#E5E7EB] focus:border-[#7C3AED] focus:outline-none text-[14px]"
-            style={{ fontWeight: 500 }}
-          />
-          <button
-            onClick={send}
-            className="w-10 h-10 rounded-full bg-[#7C3AED] text-white flex items-center justify-center active-press"
-            aria-label={t('chat.sendMessage')}
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex justify-between items-center mt-2">
-          <button onClick={() => setShowRespond(true)} className="text-[10px] text-[#6B7280] underline" style={{ fontWeight: 700 }}>
-            {t('chat.tabThreads')}: записать ответ
-          </button>
-          <span className="text-[10px] text-[#9CA3AF]" style={{ fontWeight: 600 }}>
-            {thread.messages.length} ✉
-          </span>
-        </div>
-      </div>
+      {/* Composer — WhatsApp-style */}
+      <Composer
+        text={text}
+        setText={setText}
+        attachments={attachments}
+        setAttachments={setAttachments}
+        onSend={send}
+        onAttach={onAttach}
+        onRecordVoice={() => toast(t('chat.voiceMockToast'))}
+      />
 
       <Modal open={showRespond} onClose={() => { setShowRespond(false); setRespondText(''); }} title={t('action.confirm')}
         footer={<button onClick={submitResponse} className="w-full h-11 rounded-xl bg-[#10B981] text-white active-press" style={{ fontWeight: 800 }}>{t('action.save')}</button>}>
@@ -583,4 +541,177 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 
 function EmptyItem({ children }: { children: React.ReactNode }) {
   return <li className="p-6 text-center text-[12px] text-[#6B7280]" style={{ fontWeight: 500 }}>{children}</li>;
+}
+
+function Composer({
+  text, setText, attachments, setAttachments, onSend, onAttach, onRecordVoice,
+}: {
+  text: string;
+  setText: (v: string) => void;
+  attachments: ChatAttachment[];
+  setAttachments: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
+  onSend: () => void;
+  onAttach: (e: React.ChangeEvent<HTMLInputElement>, kind: 'image' | 'video' | 'document') => void;
+  onRecordVoice: () => void;
+}) {
+  const t = useT();
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const photoRef = useRef<HTMLInputElement | null>(null);
+  const cameraRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLInputElement | null>(null);
+  const docRef = useRef<HTMLInputElement | null>(null);
+
+  const hasContent = text.trim().length > 0 || attachments.length > 0;
+
+  const onEmoji = (emoji: string) => {
+    setText(`${text}${emoji}`);
+    setEmojiOpen(false);
+  };
+
+  return (
+    <div className="border-t border-[#F3F4F6] bg-white">
+      {attachments.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto p-3 pb-0">
+          {attachments.map((a, i) => (
+            <div key={i} className="relative flex-shrink-0">
+              <div
+                className="w-16 h-16 rounded-xl bg-[#F3F4F6] flex items-center justify-center text-[22px]"
+                title={a.title}
+              >
+                {a.kind === 'image' ? '📷' : a.kind === 'video' ? '🎬' : '📄'}
+              </div>
+              <button
+                onClick={() => setAttachments(prev => prev.filter((_, k) => k !== i))}
+                aria-label={t('chat.removeAttach')}
+                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#EF4444] text-white flex items-center justify-center"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-end gap-2 p-2 md:p-3">
+        <div className="flex items-center gap-1 pb-1">
+          <CircleBtn onClick={() => setEmojiOpen(o => !o)} aria-label={t('chat.attachEmoji')}>
+            <Smile className="w-5 h-5 text-[#6B7280]" />
+          </CircleBtn>
+          <CircleBtn onClick={() => setAttachOpen(true)} aria-label={t('chat.attachTitle')}>
+            <Paperclip className="w-5 h-5 text-[#6B7280]" />
+          </CircleBtn>
+          <CircleBtn onClick={() => cameraRef.current?.click()} aria-label={t('chat.attachCamera')}>
+            <Camera className="w-5 h-5 text-[#6B7280]" />
+          </CircleBtn>
+        </div>
+
+        <div className="flex-1 min-w-0 relative">
+          {emojiOpen && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-lg border border-[#E5E7EB] p-2 grid grid-cols-8 gap-1 max-h-32 overflow-y-auto">
+              {['👍','✅','❌','📦','🔥','⚠️','📸','🎬','📄','🙂','👌','🚚','🆗','❤️','😊','💪','🙏','🤝','💬','📍','🔍','🟢','🟡','🔴'].map(em => (
+                <button
+                  key={em}
+                  onClick={() => onEmoji(em)}
+                  className="text-[20px] hover:bg-[#F3F4F6] rounded p-1 active-press"
+                >{em}</button>
+              ))}
+            </div>
+          )}
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+            placeholder={t('chat.placeholder')}
+            rows={1}
+            className="w-full resize-none px-4 py-2.5 rounded-3xl border-2 border-[#E5E7EB] focus:border-[#7C3AED] focus:outline-none text-[14px] max-h-32"
+            style={{ fontWeight: 500 }}
+          />
+        </div>
+
+        {hasContent ? (
+          <button
+            onClick={onSend}
+            aria-label={t('chat.sendMessage')}
+            className="w-11 h-11 rounded-full bg-[#7C3AED] text-white flex items-center justify-center active-press flex-shrink-0"
+            style={{ boxShadow: '0 4px 12px rgba(124,58,237,0.35)' }}
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        ) : (
+          <button
+            onClick={onRecordVoice}
+            aria-label={t('chat.recordVoice')}
+            className="w-11 h-11 rounded-full bg-[#10B981] text-white flex items-center justify-center active-press flex-shrink-0"
+            style={{ boxShadow: '0 4px 12px rgba(16,185,129,0.35)' }}
+          >
+            <Mic className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* hidden file inputs */}
+      <input ref={photoRef}  type="file" accept="image/*"           multiple onChange={(e) => onAttach(e, 'image')} className="hidden" />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={(e) => onAttach(e, 'image')} className="hidden" />
+      <input ref={videoRef}  type="file" accept="video/mp4,video/webm" multiple onChange={(e) => onAttach(e, 'video')} className="hidden" />
+      <input ref={docRef}    type="file" accept=".pdf,.doc,.docx,.xlsx,.csv,.txt" multiple onChange={(e) => onAttach(e, 'document')} className="hidden" />
+
+      {/* Bottom-sheet attach */}
+      <Modal open={attachOpen} onClose={() => setAttachOpen(false)} title={t('chat.attachTitle')} size="sm">
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <AttachBtn
+            color="#0EA5E9"
+            icon={<ImageIcon className="w-6 h-6 text-white" />}
+            label={t('chat.attachPhoto')}
+            onClick={() => { setAttachOpen(false); photoRef.current?.click(); }}
+          />
+          <AttachBtn
+            color="#7C3AED"
+            icon={<Camera className="w-6 h-6 text-white" />}
+            label={t('chat.attachCamera')}
+            onClick={() => { setAttachOpen(false); cameraRef.current?.click(); }}
+          />
+          <AttachBtn
+            color="#EF4444"
+            icon={<Video className="w-6 h-6 text-white" />}
+            label={t('chat.attachVideo')}
+            onClick={() => { setAttachOpen(false); videoRef.current?.click(); }}
+          />
+          <AttachBtn
+            color="#374151"
+            icon={<FileText className="w-6 h-6 text-white" />}
+            label={t('chat.attachDoc')}
+            onClick={() => { setAttachOpen(false); docRef.current?.click(); }}
+          />
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function CircleBtn({ children, onClick, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...rest}
+      onClick={onClick}
+      className="w-10 h-10 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center active-press flex-shrink-0"
+    >
+      {children}
+    </button>
+  );
+}
+
+function AttachBtn({ color, icon, label, onClick }: { color: string; icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-2xl p-4 flex flex-col items-center justify-center gap-2 active-press"
+      style={{ backgroundColor: '#F9FAFB' }}
+    >
+      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: color }}>
+        {icon}
+      </div>
+      <span className="text-[12px] text-[#1F2430]" style={{ fontWeight: 700 }}>{label}</span>
+    </button>
+  );
 }

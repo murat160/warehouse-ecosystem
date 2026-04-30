@@ -1,111 +1,74 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, XCircle, Camera, Cpu, Keyboard, ScanLine } from 'lucide-react';
+import { CheckCircle2, XCircle, Camera, Cpu, Keyboard, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useStore } from '../store/useStore';
+import { useNavigate } from 'react-router-dom';
+import { useStore, store } from '../store/useStore';
 import { PageHeader } from '../components/PageHeader';
 import { ScanInput } from '../components/ScanInput';
+import { CameraScanner } from '../components/CameraScanner';
 import { useT } from '../i18n';
 
-type ScanType = 'BIN' | 'ITEM' | 'ZONE' | 'ORDER' | 'PACKAGE' | 'COURIER' | 'RETURN' | 'INVOICE';
+type ScanType = 'BIN' | 'ITEM' | 'ZONE' | 'ORDER' | 'PACKAGE' | 'COURIER' | 'RETURN' | 'INVOICE' | 'ASN';
 type Mode = 'camera' | 'hardware' | 'manual';
+type HwState = 'ready' | 'received' | 'success' | 'failed';
 
 const TYPE_LABELS: Record<ScanType, string> = {
   BIN: 'BIN', ITEM: 'ITEM', ZONE: 'ZONE',
   ORDER: 'ORDER', PACKAGE: 'PACKAGE',
-  COURIER: 'COURIER', RETURN: 'RETURN', INVOICE: 'INVOICE',
+  COURIER: 'COURIER', RETURN: 'RETURN', INVOICE: 'INVOICE', ASN: 'ASN',
 };
 
 interface ScanRow { ok: boolean; type: ScanType; code: string; result: string; mode: Mode; at: string; }
 
 export function ScannerPage() {
   const t = useT();
-  const { bins, skus, orders, couriers, returns: rmas, asns } = useStore();
+  const nav = useNavigate();
   const [type, setType] = useState<ScanType>('ITEM');
   const [mode, setMode] = useState<Mode>('manual');
   const [history, setHistory] = useState<ScanRow[]>([]);
-  const hwBufferRef = useRef('');
+  const [hwState, setHwState] = useState<HwState>('ready');
+  const [hwHasFocus, setHwHasFocus] = useState(true);
   const hwInputRef = useRef<HTMLInputElement | null>(null);
-  const [camFlash, setCamFlash] = useState(false);
-  const [camDraft, setCamDraft] = useState('');
 
-  // Hardware mode: автофокус скрытого input + reFocus при потере
+  // Hardware mode: автофокус + tracking
   useEffect(() => {
     if (mode !== 'hardware') return;
     const focus = () => hwInputRef.current?.focus();
     focus();
     const interval = window.setInterval(focus, 1500);
-    const onBlur = () => focus();
-    window.addEventListener('focus', onBlur);
-    return () => { clearInterval(interval); window.removeEventListener('focus', onBlur); };
+    return () => clearInterval(interval);
   }, [mode]);
 
-  const onScan = (code: string, viaMode: Mode) => {
-    let ok = false;
-    let result = '';
-    switch (type) {
-      case 'BIN':
-      case 'ZONE': {
-        const bin = bins.find(b => b.id === code || b.qrCode.endsWith(code));
-        if (bin) { ok = true; result = `${bin.id} · ${bin.zone} · ${bin.warehouse}`; }
-        else result = t('scanner.notFound');
-        break;
-      }
-      case 'ITEM': {
-        const sku = skus.find(s => s.sku === code || s.barcode === code);
-        if (sku) { ok = true; result = `${sku.photo} ${sku.name} · ${sku.sku}`; }
-        else result = t('scanner.notFound');
-        break;
-      }
-      case 'ORDER':
-      case 'PACKAGE': {
-        const o = orders.find(x => x.code === code || x.shippingLabel === code);
-        if (o) { ok = true; result = `${o.code} · ${o.customerName} · ${o.status}`; }
-        else result = t('scanner.notFound');
-        break;
-      }
-      case 'COURIER': {
-        const c = couriers.find(x => x.id === code);
-        if (c) { ok = true; result = `${c.name} · ${c.vehiclePlate}`; }
-        else result = t('scanner.notFound');
-        break;
-      }
-      case 'RETURN': {
-        const r = rmas.find(x => x.id === code);
-        if (r) { ok = true; result = `${r.id} · ${r.orderId}`; }
-        else result = t('scanner.notFound');
-        break;
-      }
-      case 'INVOICE': {
-        const a = asns.find(x => x.invoiceNumber === code);
-        if (a) { ok = true; result = `${a.supplierName} · ${a.invoiceNumber}`; }
-        else result = t('scanner.notFound');
-        break;
-      }
-    }
-    setHistory(h => [{ ok, type, code, result, mode: viaMode, at: new Date().toLocaleTimeString() }, ...h].slice(0, 50));
-    if (ok) toast.success(result); else toast.error(`${t('scanner.notFound')}: ${code}`);
+  const onScan = (rawCode: string, viaMode: Mode) => {
+    const code = rawCode.trim();
+    if (!code) return;
+    // Используем единый универсальный валидатор store.scanValidate
+    const r = store.scanValidate({ type: type === 'ASN' ? 'ASN' : type, value: code, context: `Scanner ${viaMode}` });
+    const row: ScanRow = {
+      ok: r.ok, type, code,
+      result: r.ok ? t('scanner.found') : (r.reason ?? t('scanner.notFound')),
+      mode: viaMode, at: new Date().toLocaleTimeString(),
+    };
+    setHistory(h => [row, ...h].slice(0, 50));
+    if (viaMode === 'hardware') setHwState(r.ok ? 'success' : 'failed');
+    if (r.ok) toast.success(`${TYPE_LABELS[type]} · ${code}`);
+    else      toast.error(`${TYPE_LABELS[type]} · ${code}: ${r.reason ?? t('scanner.notFound')}`);
   };
 
-  // Hardware: handle Enter
   const onHwKey: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') {
-      const code = hwBufferRef.current.trim() || (e.target as HTMLInputElement).value.trim();
-      if (code) onScan(code, 'hardware');
-      hwBufferRef.current = '';
-      (e.target as HTMLInputElement).value = '';
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const target = e.target as HTMLInputElement;
+    const code = target.value;
+    if (code) {
+      setHwState('received');
+      onScan(code, 'hardware');
+      target.value = '';
     }
   };
 
-  const triggerCameraScan = () => {
-    setCamFlash(true);
-    window.setTimeout(() => setCamFlash(false), 220);
-    if (camDraft.trim()) {
-      onScan(camDraft.trim(), 'camera');
-      setCamDraft('');
-    } else {
-      toast.error(t('scanner.placeholder'));
-    }
-  };
+  const lastFail = history.find(r => !r.ok);
+  const showCreateProblem = !!lastFail;
 
   return (
     <div className="min-h-screen bg-[#F5F6F8] pb-24 md:pb-8">
@@ -115,7 +78,7 @@ export function ScannerPage() {
         {/* Mode tabs */}
         <div className="bg-white rounded-2xl p-3 shadow-sm">
           <div className="grid grid-cols-3 gap-2">
-            <ModeTab active={mode === 'camera'}  onClick={() => setMode('camera')}  icon={<Camera className="w-4 h-4" />}    label={t('scanner.camera')} />
+            <ModeTab active={mode === 'camera'}   onClick={() => setMode('camera')}   icon={<Camera className="w-4 h-4" />}   label={t('scanner.camera')} />
             <ModeTab active={mode === 'hardware'} onClick={() => setMode('hardware')} icon={<Cpu className="w-4 h-4" />}      label={t('scanner.hardware')} />
             <ModeTab active={mode === 'manual'}   onClick={() => setMode('manual')}   icon={<Keyboard className="w-4 h-4" />} label={t('scanner.manual')} />
           </div>
@@ -129,7 +92,7 @@ export function ScannerPage() {
         {/* Scan type pills */}
         <div className="bg-white rounded-2xl p-3 shadow-sm">
           <div className="text-[11px] text-[#6B7280] mb-2" style={{ fontWeight: 700 }}>{t('scanner.scanType')}</div>
-          <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
+          <div className="grid grid-cols-3 md:grid-cols-9 gap-1.5">
             {(Object.keys(TYPE_LABELS) as ScanType[]).map(tt => (
               <button
                 key={tt}
@@ -140,88 +103,57 @@ export function ScannerPage() {
                   color: type === tt ? 'white' : '#374151',
                   fontWeight: 800,
                 }}
-              >
-                {TYPE_LABELS[tt]}
-              </button>
+              >{TYPE_LABELS[tt]}</button>
             ))}
           </div>
         </div>
 
         {/* Mode body */}
         {mode === 'camera' && (
-          <div className="bg-white rounded-2xl p-3 shadow-sm">
-            <div
-              className="relative w-full aspect-[4/3] md:aspect-video rounded-xl overflow-hidden flex items-center justify-center"
-              style={{ background: 'linear-gradient(180deg, #1F2430 0%, #0B1020 100%)' }}
-            >
-              <div className="absolute inset-6 border-2 border-[#7C3AED] rounded-2xl">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <ScanLine className="w-16 h-16 text-[#7C3AED] animate-pulse" />
-                </div>
-                <div
-                  className="absolute left-3 right-3 top-1/2 h-0.5"
-                  style={{
-                    backgroundColor: '#7C3AED',
-                    boxShadow: '0 0 16px #7C3AED',
-                    transform: 'translateY(-50%)',
-                  }}
-                />
-              </div>
-              {camFlash && <div className="absolute inset-0 bg-white/70 transition-opacity" />}
-              <div className="absolute bottom-3 left-3 right-3">
-                <div className="bg-black/40 backdrop-blur-sm rounded-xl p-2 flex gap-2 items-center">
-                  <input
-                    value={camDraft}
-                    onChange={e => setCamDraft(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') triggerCameraScan(); }}
-                    placeholder={t('scanner.placeholder')}
-                    className="flex-1 px-2 py-1.5 rounded-lg bg-white/90 text-[13px] focus:outline-none"
-                    style={{ fontWeight: 600 }}
-                  />
-                  <button
-                    onClick={triggerCameraScan}
-                    className="h-9 px-3 rounded-lg bg-[#7C3AED] text-white text-[12px] active-press"
-                    style={{ fontWeight: 800 }}
-                  >
-                    {t('scanner.simulate')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <CameraScanner onResult={(code) => onScan(code, 'camera')} />
         )}
 
         {mode === 'hardware' && (
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-center text-center py-6">
-              <div>
-                <div className="w-20 h-20 mx-auto rounded-full bg-[#E0F2FE] flex items-center justify-center mb-3">
-                  <Cpu className="w-9 h-9 text-[#0369A1]" />
-                </div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-xl bg-[#E0F2FE] flex items-center justify-center">
+                <Cpu className="w-6 h-6 text-[#0369A1]" />
+              </div>
+              <div className="flex-1 min-w-0">
                 <div className="text-[14px] text-[#1F2430]" style={{ fontWeight: 800 }}>
                   {t('scanner.hardware')}
                 </div>
-                <div className="text-[11px] text-[#6B7280] max-w-sm mt-1" style={{ fontWeight: 500 }}>
-                  {t('scanner.hwHint')}
+                <div className="text-[11px] text-[#6B7280]" style={{ fontWeight: 500 }}>
+                  Bluetooth · USB · Android terminal
                 </div>
               </div>
+              <HwBadge state={hwState} t={t} hasFocus={hwHasFocus} />
             </div>
-            {/* invisible input collecting HID-keystrokes */}
+
+            {/* Видимый input — даём пользователю явное поле для проверки */}
             <input
               ref={hwInputRef}
               autoFocus
+              placeholder={t('scanner.placeholder')}
+              onFocus={() => setHwHasFocus(true)}
+              onBlur={() => setHwHasFocus(false)}
               onKeyDown={onHwKey}
-              onChange={(e) => { hwBufferRef.current = e.target.value; }}
-              className="opacity-0 absolute pointer-events-none w-px h-px"
-              aria-hidden="true"
+              onChange={() => { if (hwState !== 'received') setHwState('received'); }}
+              className="w-full px-3 py-3 rounded-xl border-2 text-[15px] font-mono mb-2 focus:outline-none"
+              style={{
+                fontWeight: 700,
+                borderColor: hwState === 'success' ? '#10B981' : hwState === 'failed' ? '#EF4444' : '#E5E7EB',
+              }}
             />
-            <button
-              onClick={() => hwInputRef.current?.focus()}
-              className="w-full h-10 rounded-xl bg-[#1F2430] text-white text-[12px] active-press"
-              style={{ fontWeight: 800 }}
-            >
-              {t('scanner.hardware')} · re-focus
-            </button>
+            {!hwHasFocus && (
+              <button
+                onClick={() => hwInputRef.current?.focus()}
+                className="w-full h-10 rounded-xl bg-[#7C3AED] text-white text-[12px] active-press"
+                style={{ fontWeight: 800 }}
+              >
+                {t('scanner.hwReFocus')}
+              </button>
+            )}
           </div>
         )}
 
@@ -234,6 +166,23 @@ export function ScannerPage() {
               autoFocus
               buttonText={t('scanner.check')}
             />
+          </div>
+        )}
+
+        {/* Last result + create problem */}
+        {showCreateProblem && (
+          <div className="bg-[#FEE2E2] border border-[#FECACA] rounded-2xl p-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-[#7F1D1D] flex-shrink-0" />
+            <div className="text-[11px] text-[#7F1D1D] flex-1" style={{ fontWeight: 700 }}>
+              {lastFail!.type} · {lastFail!.code} — {lastFail!.result}
+            </div>
+            <button
+              onClick={() => nav('/problems')}
+              className="px-3 h-9 rounded-lg bg-[#EF4444] text-white text-[11px] active-press"
+              style={{ fontWeight: 800 }}
+            >
+              {t('scanner.createProblem')}
+            </button>
           </div>
         )}
 
@@ -281,5 +230,25 @@ function ModeTab({ active, onClick, icon, label }: { active: boolean; onClick: (
       {icon}
       <span className="text-[10px]">{label}</span>
     </button>
+  );
+}
+
+function HwBadge({ state, t, hasFocus }: { state: HwState; t: (k: string) => string; hasFocus: boolean }) {
+  const map: Record<HwState, { bg: string; fg: string; key: string }> = {
+    ready:    { bg: '#F3F4F6', fg: '#374151', key: 'scanner.hwReady' },
+    received: { bg: '#FEF3C7', fg: '#92400E', key: 'scanner.hwReceived' },
+    success:  { bg: '#DCFCE7', fg: '#166534', key: 'scanner.hwSuccess' },
+    failed:   { bg: '#FEE2E2', fg: '#991B1B', key: 'scanner.hwFailed' },
+  };
+  const c = map[state];
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: c.bg, color: c.fg, fontWeight: 800 }}>
+        {t(c.key)}
+      </span>
+      <span className="text-[9px]" style={{ color: hasFocus ? '#10B981' : '#EF4444', fontWeight: 800 }}>
+        {hasFocus ? '● focus' : '○ no focus'}
+      </span>
+    </div>
   );
 }
