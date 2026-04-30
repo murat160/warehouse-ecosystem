@@ -7,7 +7,9 @@ export default defineConfig({
   server: {
     port: 5179,
     host: true,
-    proxy: { '/api': { target: process.env.VITE_API_URL || 'http://localhost:4000', changeOrigin: true } },
+    proxy: {
+      '/api': { target: process.env.VITE_API_URL || 'http://localhost:4000', changeOrigin: true },
+    },
   },
   build: { outDir: 'dist', target: 'esnext' },
 });
