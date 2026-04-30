@@ -257,6 +257,33 @@ export const COLOR_ICON: Record<string, string> = {
 };
 
 // User type (extended)
+//
+// `extraAllow` / `extraDeny` are SuperAdmin overlays on top of the role.
+// Effective permissions = (role base) ∪ extraAllow \ extraDeny.
+// `documents` are stored as ids referencing the in-memory EMPLOYEE_DOCS pool.
+export interface UserDocument {
+  docId:        string;
+  kind:         'passport' | 'contract' | 'nda' | 'job_description'
+              | 'power_of_attorney' | 'certificate' | 'other';
+  filename:     string;
+  url:          string;          // data URL or empty placeholder
+  uploadedAt:   string;
+  uploadedBy:   string;
+  status:       'pending' | 'verified' | 'rejected';
+  expiresAt?:   string;
+  comment?:     string;
+}
+
+export const DOC_KIND_LABELS_HR: Record<UserDocument['kind'], string> = {
+  passport:           'Паспорт / ID',
+  contract:           'Трудовой договор',
+  nda:                'NDA',
+  job_description:    'Должностная инструкция',
+  power_of_attorney:  'Доверенность',
+  certificate:        'Сертификат',
+  other:              'Другое',
+};
+
 export interface ManagedUser {
   id: string;
   name: string;
@@ -270,6 +297,42 @@ export interface ManagedUser {
   createdAt: string;
   cabinetModules: ModuleKey[] | null;
   notes?: string;
+  // Extended profile fields ────────────────────────────────────────
+  firstName?:   string;
+  lastName?:    string;
+  phone?:       string;
+  avatarUrl?:   string;        // data URL or empty
+  position?:    string;
+  department?:  string;
+  country?:     string;
+  city?:        string;
+  language?:    'ru' | 'en' | 'tk' | 'tr';
+  startDate?:   string;        // when employment started
+  comment?:     string;        // SuperAdmin's note
+  twoFactorRequired?: boolean;
+  /** Extra permissions granted on top of the role. */
+  extraAllow?:  string[];
+  /** Permissions explicitly stripped from the role. */
+  extraDeny?:   string[];
+  /** HR documents (uploaded scans / contracts). */
+  documents?:   UserDocument[];
+}
+
+/**
+ * Compute the effective permission set for a user.
+ *  effective = rolePerms ∪ extraAllow \ extraDeny
+ * Wildcard '*' in rolePerms shortcuts everything.
+ */
+export function effectivePermissions(
+  rolePerms: string[],
+  extraAllow: string[] = [],
+  extraDeny:  string[] = [],
+): string[] {
+  if (rolePerms.includes('*')) return ['*'];
+  const set = new Set(rolePerms);
+  for (const p of extraAllow) set.add(p);
+  for (const p of extraDeny)  set.delete(p);
+  return Array.from(set).sort();
 }
 
 export const INITIAL_USERS: ManagedUser[] = [

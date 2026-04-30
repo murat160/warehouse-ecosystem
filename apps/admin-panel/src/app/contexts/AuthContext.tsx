@@ -1,12 +1,10 @@
 import { createContext, useContext, useState, useMemo, ReactNode } from 'react';
 import { PREDEFINED_ROLES, getRoleByName, hasPerm as registryHasPerm } from '../data/rbac';
+import { INITIAL_USERS, effectivePermissions, type ManagedUser } from '../data/rbac-data';
+import { audit as writeAudit } from '../data/audit-store';
 
 /**
  * Role union.
- * Includes the 17 predefined roles + a handful of legacy ones still
- * referenced elsewhere (Warehouse, Courier, Finance, QA, Partner, Merchant,
- * RegionalManager, PVZOperator, DocumentReviewer, ComplianceAdmin,
- * LegalReviewer). Legacy roles are kept so existing code doesn't break.
  */
 export type Role =
   // Predefined (rbac.ts)
@@ -17,7 +15,7 @@ export type Role =
   // Foreign delivery roles
   | 'PolandFinance' | 'TurkmenistanOperator' | 'SupplierAccountant'
   // External / preview roles
-  | 'Customer' | 'Seller'
+  | 'Customer' | 'Seller' | 'PickupOperator' | 'WarehouseWorker'
   // Legacy
   | 'RegionalManager' | 'PVZOperator' | 'Warehouse' | 'Courier' | 'Finance'
   | 'Support' | 'QA' | 'Partner' | 'Merchant'
@@ -41,25 +39,26 @@ export type User = {
 
 type AuthContextType = {
   user: User | null;
-  /** True when SuperAdmin is currently impersonating another role for testing. */
+  /** True when SuperAdmin is currently impersonating something (role or user). */
   isImpersonating: boolean;
-  /** SuperAdmin's real role saved while impersonating. */
+  /** Kind of current impersonation (for UI badge). */
+  impersonationKind: 'role' | 'user' | null;
+  /** SuperAdmin's real user, kept while impersonating. */
   realUser: User | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   canAccessScope: (scopeType: string, scopeId?: string) => boolean;
-  /**
-   * Switch to a predefined role for testing. Only available to SuperAdmin
-   * (or wildcard `*` permissions). Pass `null` to revert to real role.
-   */
+  /** Impersonate a predefined role for testing. */
   impersonateRole: (roleName: Role | null) => void;
+  /** Impersonate a specific employee (uses their custom-allow / custom-deny). */
+  impersonateUser: (userId: string | null) => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEMO_SUPERADMIN: User = {
-  id: '1',
+  id: 'su-1',
   name: 'Супер Админ',
   email: 'superadmin@platform.com',
   role: 'SuperAdmin',
@@ -71,29 +70,55 @@ const DEMO_SUPERADMIN: User = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [realUser, setRealUser]   = useState<User | null>(DEMO_SUPERADMIN);
   const [imperRole, setImperRole] = useState<Role | null>(null);
+  const [imperUserId, setImperUserId] = useState<string | null>(null);
 
   // The "effective" user — either the real user, or a fake user mirroring
-  // a predefined role (for testing). Real user identity is preserved
-  // (name/email/scope), only role + permissions change.
+  // a predefined role / a specific employee. Real user identity is
+  // preserved (name/email/scope) only when impersonating a role; when
+  // impersonating a user, name/email switch to that user's profile.
   const user = useMemo<User | null>(() => {
     if (!realUser) return null;
-    if (!imperRole) return realUser;
-    const role = getRoleByName(imperRole);
-    return {
-      ...realUser,
-      role: imperRole,
-      permissions: role.permissions,
-    };
-  }, [realUser, imperRole]);
+
+    // Impersonate user (preview-as-employee) takes priority.
+    if (imperUserId) {
+      const u: ManagedUser | undefined = INITIAL_USERS.find(x => x.id === imperUserId);
+      if (u) {
+        const baseRole = getRoleByName(u.role);
+        const eff = effectivePermissions(baseRole.permissions, u.extraAllow, u.extraDeny);
+        return {
+          id:    u.id,
+          name:  u.name,
+          email: u.email,
+          role:  u.role as Role,
+          scope: { type: (u.scopeType as Scope['type']) ?? 'SELF' },
+          twoFactorEnabled: !!u.twoFactorEnabled,
+          permissions: eff,
+        };
+      }
+    }
+
+    if (imperRole) {
+      const role = getRoleByName(imperRole);
+      return {
+        ...realUser,
+        role: imperRole,
+        permissions: role.permissions,
+      };
+    }
+
+    return realUser;
+  }, [realUser, imperRole, imperUserId]);
 
   const login = async (email: string, _password: string) => {
     setRealUser({ ...DEMO_SUPERADMIN, email });
     setImperRole(null);
+    setImperUserId(null);
   };
 
   const logout = () => {
     setRealUser(null);
     setImperRole(null);
+    setImperUserId(null);
   };
 
   const hasPermission = (permission: string): boolean => {
@@ -113,21 +138,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const impersonateRole = (roleName: Role | null) => {
     if (!realUser) return;
-    // Only the real SuperAdmin (or '*') can impersonate.
     const isRealSuper = realUser.role === 'SuperAdmin' || realUser.permissions.includes('*');
     if (!isRealSuper) return;
+    setImperUserId(null); // role-impersonation overrides user-impersonation
     if (roleName === null || roleName === realUser.role) {
       setImperRole(null);
     } else {
-      // Make sure target exists in PREDEFINED_ROLES; if not, ignore.
-      if (PREDEFINED_ROLES.some(r => r.name === roleName)) setImperRole(roleName);
+      if (PREDEFINED_ROLES.some(r => r.name === roleName)) {
+        setImperRole(roleName);
+        writeAudit('access.preview', roleName, `Просмотр панели от роли «${roleName}»`,
+                   realUser.name, realUser.role);
+      }
     }
   };
 
+  const impersonateUser = (userId: string | null) => {
+    if (!realUser) return;
+    const isRealSuper = realUser.role === 'SuperAdmin' || realUser.permissions.includes('*');
+    if (!isRealSuper) return;
+    setImperRole(null);
+    if (userId === null) {
+      setImperUserId(null);
+    } else {
+      const u = INITIAL_USERS.find(x => x.id === userId);
+      if (u) {
+        setImperUserId(userId);
+        writeAudit('access.preview', u.email, `Просмотр от имени сотрудника «${u.name}» (${u.role})`,
+                   realUser.name, realUser.role);
+      }
+    }
+  };
+
+  const impersonationKind: 'role' | 'user' | null =
+    imperUserId ? 'user' : imperRole ? 'role' : null;
+
   return (
     <AuthContext.Provider value={{
-      user, realUser, isImpersonating: imperRole !== null,
-      login, logout, hasPermission, canAccessScope, impersonateRole,
+      user, realUser,
+      isImpersonating: impersonationKind !== null,
+      impersonationKind,
+      login, logout, hasPermission, canAccessScope,
+      impersonateRole, impersonateUser,
     }}>
       {children}
     </AuthContext.Provider>

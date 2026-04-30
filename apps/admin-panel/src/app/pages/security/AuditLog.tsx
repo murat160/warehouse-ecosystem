@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Search, Download, Shield, User, Package, DollarSign, Filter, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToCsv } from '../../utils/downloads';
+import { useAuth } from '../../contexts/AuthContext';
+import { AccessDenied } from '../../components/rbac/AccessDenied';
 
 interface AuditEvent {
   id: string;
@@ -39,6 +41,7 @@ const actionIcons = {
 };
 
 export function AuditLog() {
+  const { hasPermission } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [riskFilter, setRiskFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
@@ -51,6 +54,10 @@ export function AuditLog() {
     const matchRisk = riskFilter === 'all' || e.riskLevel === riskFilter;
     return matchSearch && matchRisk;
   });
+
+  if (!hasPermission('security.audit.view') && !hasPermission('security.rbac.view')) {
+    return <AccessDenied perm="security.audit.view" path="/admin/security/audit" />;
+  }
 
   return (
     <div className="space-y-6">

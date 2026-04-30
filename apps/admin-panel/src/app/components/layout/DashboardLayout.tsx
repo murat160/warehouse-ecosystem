@@ -38,7 +38,11 @@ function groupBySection(modules: SidebarModule[]): { section: string; items: Sid
 
 export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, realUser, isImpersonating, impersonateRole, logout, hasPermission } = useAuth();
+  const { user, realUser, isImpersonating, impersonationKind, impersonateRole, impersonateUser, logout, hasPermission } = useAuth();
+  const stopImpersonation = () => {
+    impersonateRole(null);
+    impersonateUser(null);
+  };
   const [notifCount, setNotifCount] = useState(() => unreadCount());
   const [notifOpen, setNotifOpen] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
@@ -301,9 +305,10 @@ export function DashboardLayout() {
             </NavLink>
             {isImpersonating && realIsSuper && (
               <button
-                onClick={() => impersonateRole(null)}
+                onClick={stopImpersonation}
                 className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-1.5 text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg font-semibold transition-colors">
                 <X className="w-3.5 h-3.5" />Вернуться к SuperAdmin
+                {impersonationKind === 'user' && <span className="text-[10px] opacity-70">(preview сотрудника)</span>}
               </button>
             )}
             <button

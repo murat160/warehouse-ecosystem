@@ -19,6 +19,10 @@ import {
   INITIAL_USERS, type ManagedUser, type ModuleKey,
 } from '../../data/rbac-data';
 import { PersonalCabinet } from '../cabinet/PersonalCabinet';
+import { CreateEmployeeDrawer } from '../../components/users/CreateEmployeeDrawer';
+import { UserAccessTab } from '../../components/users/UserAccessTab';
+import { useAuth } from '../../contexts/AuthContext';
+import { audit } from '../../data/audit-store';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -789,32 +793,7 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
         )}
 
         {tab === 'access' && (
-          <div className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-gray-700">Разделы личного кабинета</p>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isCustom ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                {isCustom ? 'Custom' : 'По роли'}
-              </span>
-            </div>
-            <p className="text-xs text-gray-400">{mods.length} из {ALL_MODULES.length} разделов доступно</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {ALL_MODULES.map(mod => {
-                const active = mods.includes(mod.key as ModuleKey);
-                const Icon = mod.icon;
-                return (
-                  <div key={mod.key} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${active ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50 opacity-50'}`}>
-                    <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-blue-600' : 'text-gray-400'}`} />
-                    <span className={`truncate ${active ? 'text-blue-800 font-medium' : 'text-gray-500'}`}>{mod.label}</span>
-                    {active && <Check className="w-3 h-3 text-blue-500 ml-auto shrink-0" />}
-                  </div>
-                );
-              })}
-            </div>
-            <button onClick={onEdit}
-              className="w-full py-2.5 border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-              <Layers className="w-3.5 h-3.5" />Настроить разделы
-            </button>
-          </div>
+          <UserAccessTab user={user} onOpenChangeRole={onOpenChangeRole} />
         )}
 
         {tab === 'audit' && (
@@ -960,6 +939,7 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
                   if (f.size > 10 * 1024 * 1024) { toast.error('Файл больше 10 MB'); return; }
                   const today = new Date().toLocaleDateString('ru-RU');
                   onAddDoc({ id: `doc-${Date.now()}`, name: f.name, type: 'Загруженный', uploadedAt: today, status: 'pending' });
+                  audit('user.doc.upload', user.email, `Загружен документ ${f.name}`);
                   toast.success(`Документ «${f.name}» загружен`, { description: 'Статус: на проверке' });
                   e.target.value = '';
                 }}
@@ -983,6 +963,8 @@ export function UsersList() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [addEditModal, setAddEditModal] = useState<{ mode: 'add' | 'edit'; user?: ManagedUser } | null>(null);
   const [cabinetPreview, setCabinetPreview] = useState<ManagedUser | null>(null);
+  const [showCreateEmployee, setShowCreateEmployee] = useState(false);
+  const { impersonateUser } = useAuth();
 
   // Modal states — all at root level to avoid transform clipping
   const [roleModal, setRoleModal] = useState<ManagedUser | null>(null);
@@ -1086,9 +1068,9 @@ export function UsersList() {
               className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               <Download className="w-4 h-4" />Экспорт
             </button>
-            <button onClick={() => setAddEditModal({ mode: 'add' })}
+            <button onClick={() => setShowCreateEmployee(true)}
               className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors shadow-sm">
-              <Plus className="w-4 h-4" />Добавить пользователя
+              <Plus className="w-4 h-4" />Создать сотрудника
             </button>
           </div>
         </div>
@@ -1219,6 +1201,7 @@ export function UsersList() {
                         <button onClick={() => setAddEditModal({ mode: 'edit', user })} title="Редактировать" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                         <button onClick={() => setEmailModal(user)} title="Письмо" className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"><Mail className="w-3.5 h-3.5" /></button>
                         <button onClick={() => setCabinetPreview(user)} title="Кабинет" className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Maximize2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => { impersonateUser(user.id); audit('access.preview', user.email, `Просмотр панели от имени «${user.name}»`); toast.success(`Просмотр от имени: ${user.name}`); }} title="Просмотр от имени сотрудника" className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"><UserCheck className="w-3.5 h-3.5" /></button>
                         <button onClick={() => setSelectedUserId(isSelected ? null : user.id)} title="Детали"
                           className={`p-1.5 rounded-lg transition-colors ${isSelected ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}>
                           <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isSelected ? 'rotate-180' : ''}`} />
@@ -1271,6 +1254,14 @@ export function UsersList() {
           <span>2FA обязательна для: SuperAdmin, Admin, Finance · Все изменения ролей логируются в аудит · Custom-кабинет переопределяет настройки роли</span>
         </div>
       </div>
+
+      {/* ════ Create Employee (HR-grade) ════ */}
+      {showCreateEmployee && (
+        <CreateEmployeeDrawer
+          onClose={() => setShowCreateEmployee(false)}
+          onCreate={u => setUsers(prev => [u, ...prev])}
+        />
+      )}
 
       {/* ════ ALL MODALS AT ROOT — no transform parent clipping ════ */}
       <AnimatePresence>

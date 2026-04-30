@@ -25,6 +25,9 @@ import {
   type PredefinedRole, type AppScope,
 } from '../../data/rbac';
 import { exportToCsv } from '../../utils/downloads';
+import { audit as writeAudit } from '../../data/audit-store';
+import { useAuth } from '../../contexts/AuthContext';
+import { AccessDenied } from '../../components/rbac/AccessDenied';
 
 type Tab = 'roles' | 'matrix' | 'assignments' | 'audit';
 
@@ -98,6 +101,7 @@ function nowStr(): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function RBACManagement() {
+  const { hasPermission } = useAuth();
   const [tab, setTab] = useState<Tab>('roles');
   const [roles, setRoles] = useState<PredefinedRole[]>(PREDEFINED_ROLES);
   const [users, setUsers] = useState<AssignedUser[]>(INITIAL_USERS);
@@ -139,8 +143,10 @@ export function RBACManagement() {
   }, []);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function pushAudit(action: string) {
+  function pushAudit(action: string, category: any = 'role.edit', target = 'system') {
     setAudit(prev => [{ at: nowStr(), actor: 'Супер Админ', action }, ...prev]);
+    // Mirror to global audit-store so PersonalCabinet / SecurityAudit see it.
+    writeAudit(category, target, action);
   }
 
   function totalPermsFor(role: PredefinedRole): number {
@@ -170,7 +176,7 @@ export function RBACManagement() {
     setEditing({
       id: `r-${Date.now()}`, name: 'NewRole', label: 'Новая роль',
       description: '', color: 'blue', isSystem: false, active: true,
-      permissions: [], users: 0,
+      permissions: [], users: 0, appScope: 'admin',
     });
     setShowRoleEditor(true);
   }
@@ -295,6 +301,10 @@ export function RBACManagement() {
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
+  if (!hasPermission('security.rbac.view')) {
+    return <AccessDenied perm="security.rbac.view" path="/admin/security/rbac" />;
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -698,6 +708,19 @@ export function RBACManagement() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {Object.keys(COLOR_BG).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Приложение (appScope)</label>
+                  <select value={editing.appScope}
+                    onChange={e => setEditing({ ...editing, appScope: e.target.value as AppScope })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {Object.entries(APP_SCOPE_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Admin Panel — управленческая. Остальное — внешние приложения (preview).
+                  </p>
                 </div>
                 <div className="flex items-end gap-2">
                   <button onClick={toggleWildcard}
