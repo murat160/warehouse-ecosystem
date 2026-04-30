@@ -9,12 +9,18 @@ export interface Worker {
   id: string;
   name: string;
   role: Role;
+  /** Должность (отображается в чате/профиле; может отличаться от role). */
+  position?: string;
+  /** Avatar — emoji или blob/data URL. */
+  avatar?: string;
   shiftStatus: ShiftStatus;
   shiftStart?: string;
   shiftEnd?: string;
   productivity: number; // 0..100
   errorRate: number;    // %
   tasksToday: number;
+  lastSeenAt?: string;
+  warehouseCode?: string;
 }
 
 // ───────── Catalog ─────────

@@ -9,15 +9,15 @@ const now = () => new Date().toISOString();
 const inMin = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
 
 export const MOCK_WORKERS: Worker[] = [
-  { id: 'W-100', name: 'Соколов В.', role: 'warehouse_admin',      shiftStatus: 'on_shift', shiftStart: '08:00', shiftEnd: '20:00', productivity: 99, errorRate: 0.1, tasksToday: 42 },
-  { id: 'W-101', name: 'Захарова Е.', role: 'shift_manager',        shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 96, errorRate: 0.3, tasksToday: 38 },
-  { id: 'W-204', name: 'Иванов И.',   role: 'picker',               shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 94, errorRate: 0.6, tasksToday: 27 },
-  { id: 'W-205', name: 'Петров П.',   role: 'packer',               shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 91, errorRate: 0.4, tasksToday: 19 },
-  { id: 'W-206', name: 'Сидоров С.',  role: 'dispatcher',           shiftStatus: 'on_break', shiftStart: '09:00', shiftEnd: '18:00', productivity: 88, errorRate: 0.2, tasksToday: 11 },
-  { id: 'W-301', name: 'Кузнецов А.', role: 'receiver',             shiftStatus: 'on_shift', shiftStart: '07:00', shiftEnd: '16:00', productivity: 92, errorRate: 0.5, tasksToday: 14 },
-  { id: 'W-401', name: 'Орлова М.',   role: 'inventory_controller', shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 95, errorRate: 0.2, tasksToday: 6  },
-  { id: 'W-501', name: 'Беляев К.',   role: 'returns_operator',     shiftStatus: 'off',                                            productivity: 87, errorRate: 0.7, tasksToday: 0  },
-  { id: 'W-700', name: 'Айдар М.',    role: 'warehouse_worker',     shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 90, errorRate: 0.4, tasksToday: 12 },
+  { id: 'W-100', name: 'Соколов В.', position: 'Администратор склада',  avatar: '👨‍💼', role: 'warehouse_admin',      shiftStatus: 'on_shift', shiftStart: '08:00', shiftEnd: '20:00', productivity: 99, errorRate: 0.1, tasksToday: 42, warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-101', name: 'Захарова Е.', position: 'Старший смены',        avatar: '👩‍💼', role: 'shift_manager',        shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 96, errorRate: 0.3, tasksToday: 38, warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-204', name: 'Иванов И.',   position: 'Сборщик',              avatar: '🧑‍🏭', role: 'picker',               shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 94, errorRate: 0.6, tasksToday: 27, warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-205', name: 'Петров П.',   position: 'Упаковщик',            avatar: '👨‍🔧', role: 'packer',               shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 91, errorRate: 0.4, tasksToday: 19, warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-206', name: 'Сидоров С.',  position: 'Диспетчер выдачи',     avatar: '👨‍🚚', role: 'dispatcher',           shiftStatus: 'on_break', shiftStart: '09:00', shiftEnd: '18:00', productivity: 88, errorRate: 0.2, tasksToday: 11, warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-301', name: 'Кузнецов А.', position: 'Приёмщик',             avatar: '🧑‍🔧', role: 'receiver',             shiftStatus: 'on_shift', shiftStart: '07:00', shiftEnd: '16:00', productivity: 92, errorRate: 0.5, tasksToday: 14, warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-401', name: 'Орлова М.',   position: 'Контролёр остатков',   avatar: '👩‍🔬', role: 'inventory_controller', shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 95, errorRate: 0.2, tasksToday: 6,  warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-501', name: 'Беляев К.',   position: 'Оператор возвратов',   avatar: '🧑‍💼', role: 'returns_operator',     shiftStatus: 'off',                                            productivity: 87, errorRate: 0.7, tasksToday: 0,  warehouseCode: 'WH01', lastSeenAt: now() },
+  { id: 'W-700', name: 'Айдар М.',    position: 'Складчик',             avatar: '🧑‍🏭', role: 'warehouse_worker',     shiftStatus: 'on_shift', shiftStart: '09:00', shiftEnd: '18:00', productivity: 90, errorRate: 0.4, tasksToday: 12, warehouseCode: 'WH01', lastSeenAt: now() },
 ];
 
 export const MOCK_SKUS: Sku[] = [

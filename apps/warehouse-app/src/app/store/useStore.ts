@@ -162,6 +162,30 @@ export const store = {
     emit();
   },
 
+  setAvatar(avatar: string): void {
+    if (!state.currentWorker) return;
+    const updated: Worker = { ...state.currentWorker, avatar };
+    state = {
+      ...state,
+      currentWorker: updated,
+      workers: state.workers.map(w => w.id === updated.id ? updated : w),
+    };
+    audit('AVATAR_UPDATE', `Сохранено новое фото профиля`);
+    emit();
+  },
+
+  setWorkerAvatar(workerId: string, avatar: string): void {
+    state = {
+      ...state,
+      workers: state.workers.map(w => w.id === workerId ? { ...w, avatar } : w),
+      currentWorker: state.currentWorker?.id === workerId
+        ? { ...state.currentWorker, avatar }
+        : state.currentWorker,
+    };
+    audit('AVATAR_UPDATE', `Обновлено фото ${workerId}`);
+    emit();
+  },
+
   setShiftPlan(start: string, end: string): void {
     if (!state.currentWorker) return;
     const updated: Worker = { ...state.currentWorker, shiftStart: start, shiftEnd: end };

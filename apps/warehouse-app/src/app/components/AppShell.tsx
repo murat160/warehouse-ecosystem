@@ -5,56 +5,64 @@ import {
   Undo2, AlertTriangle, FileText, BarChart3, LogOut, ListChecks,
   Settings, Move, FileWarning, ShieldAlert, MessagesSquare,
 } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { useStore, store } from '../store/useStore';
 import { ROLE_LABELS } from '../domain/roles';
 import { can, type Permission } from '../domain/roles';
+import { useT } from '../i18n';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { EmployeeProfileModal } from './EmployeeProfileModal';
 
-interface NavItem { to: string; label: string; icon: any; perm: Permission; }
+interface NavItem { to: string; key: string; icon: any; perm: Permission; }
 
 const NAV: NavItem[] = [
-  { to: '/shift',         label: 'Моя смена',          icon: Clock,           perm: 'view_dashboard' },
-  { to: '/',              label: 'Dashboard',          icon: LayoutDashboard, perm: 'view_dashboard' },
-  { to: '/tasks',         label: 'Задачи',             icon: ListTodo,        perm: 'view_tasks' },
-  { to: '/orders',        label: 'Заказы на сборку',   icon: ListChecks,      perm: 'pick' },
-  { to: '/picking',       label: 'Сборка',             icon: ShoppingCart,    perm: 'pick' },
-  { to: '/sorting',       label: 'Сортировка',         icon: Grid3x3,         perm: 'sort' },
-  { to: '/packing',       label: 'Упаковка',           icon: Package,         perm: 'pack' },
-  { to: '/ready',         label: 'Готово к выдаче',    icon: PackageCheck,    perm: 'handoff' },
-  { to: '/handoff',       label: 'Передача курьеру',   icon: Truck,           perm: 'handoff' },
-  { to: '/inbound',       label: 'Приёмка',            icon: ArrowDownToLine, perm: 'receive' },
-  { to: '/inventory',     label: 'Остатки',            icon: Boxes,           perm: 'inventory' },
-  { to: '/bins',          label: 'Ячейки',             icon: Grid3x3,         perm: 'inventory' },
-  { to: '/count',         label: 'Инвентаризация',     icon: ClipboardCheck,  perm: 'count' },
-  { to: '/movements',     label: 'Перемещения',        icon: Move,            perm: 'move' },
-  { to: '/returns',       label: 'Возвраты',           icon: Undo2,           perm: 'returns' },
-  { to: '/problems',      label: 'Проблемы',           icon: AlertTriangle,   perm: 'problems' },
-  { to: '/claims',        label: 'Жалобы и доказательства', icon: ShieldAlert, perm: 'claims' },
-  { to: '/evidence-log',  label: 'Отправки поставщикам',    icon: FileText,    perm: 'claims' },
-  { to: '/supplier-disputes', label: 'Споры с поставщиками', icon: FileWarning, perm: 'supplier_disputes' },
-  { to: '/internal-chat', label: 'Внутренний чат',          icon: MessagesSquare, perm: 'view_dashboard' },
-  { to: '/scanner',       label: 'Сканер',             icon: ScanLine,        perm: 'scanner' },
-  { to: '/documents',     label: 'Документы',          icon: FileText,        perm: 'documents' },
-  { to: '/reports',       label: 'Отчёты',             icon: BarChart3,       perm: 'view_reports' },
-  { to: '/shift-settings',label: 'Настройки смены',    icon: Settings,        perm: 'configure_shift' },
+  { to: '/shift',         key: 'nav.shift',          icon: Clock,           perm: 'view_dashboard' },
+  { to: '/',              key: 'nav.dashboard',      icon: LayoutDashboard, perm: 'view_dashboard' },
+  { to: '/tasks',         key: 'nav.tasks',          icon: ListTodo,        perm: 'view_tasks' },
+  { to: '/orders',        key: 'nav.orders',         icon: ListChecks,      perm: 'pick' },
+  { to: '/picking',       key: 'nav.picking',        icon: ShoppingCart,    perm: 'pick' },
+  { to: '/sorting',       key: 'nav.sorting',        icon: Grid3x3,         perm: 'sort' },
+  { to: '/packing',       key: 'nav.packing',        icon: Package,         perm: 'pack' },
+  { to: '/ready',         key: 'nav.ready',          icon: PackageCheck,    perm: 'handoff' },
+  { to: '/handoff',       key: 'nav.handoff',        icon: Truck,           perm: 'handoff' },
+  { to: '/inbound',       key: 'nav.inbound',        icon: ArrowDownToLine, perm: 'receive' },
+  { to: '/inventory',     key: 'nav.inventory',      icon: Boxes,           perm: 'inventory' },
+  { to: '/bins',          key: 'nav.bins',           icon: Grid3x3,         perm: 'inventory' },
+  { to: '/count',         key: 'nav.count',          icon: ClipboardCheck,  perm: 'count' },
+  { to: '/movements',     key: 'nav.movements',      icon: Move,            perm: 'move' },
+  { to: '/returns',       key: 'nav.returns',        icon: Undo2,           perm: 'returns' },
+  { to: '/problems',      key: 'nav.problems',       icon: AlertTriangle,   perm: 'problems' },
+  { to: '/claims',        key: 'nav.claims',         icon: ShieldAlert,     perm: 'claims' },
+  { to: '/evidence-log',  key: 'nav.evidenceLog',    icon: FileText,        perm: 'claims' },
+  { to: '/supplier-disputes', key: 'nav.disputes',   icon: FileWarning,     perm: 'supplier_disputes' },
+  { to: '/internal-chat', key: 'nav.chat',           icon: MessagesSquare,  perm: 'view_dashboard' },
+  { to: '/scanner',       key: 'nav.scanner',        icon: ScanLine,        perm: 'scanner' },
+  { to: '/documents',     key: 'nav.documents',      icon: FileText,        perm: 'documents' },
+  { to: '/reports',       key: 'nav.reports',        icon: BarChart3,       perm: 'view_reports' },
+  { to: '/shift-settings',key: 'nav.shiftSettings',  icon: Settings,        perm: 'configure_shift' },
 ];
 
 const BOTTOM = [
-  { to: '/',              label: 'Главная',  icon: LayoutDashboard },
-  { to: '/tasks',         label: 'Задачи',   icon: ListTodo },
-  { to: '/internal-chat', label: 'Чат',      icon: MessagesSquare },
-  { to: '/scanner',       label: 'Сканер',   icon: ScanLine },
-  { to: '/problems',      label: 'Проблемы', icon: AlertTriangle },
+  { to: '/',              key: 'nav.home',     icon: LayoutDashboard },
+  { to: '/tasks',         key: 'nav.tasks',    icon: ListTodo },
+  { to: '/internal-chat', key: 'nav.chat',     icon: MessagesSquare },
+  { to: '/scanner',       key: 'nav.scanner',  icon: ScanLine },
+  { to: '/problems',      key: 'nav.problems', icon: AlertTriangle },
 ];
+
+const isUrl = (s: string) => /^(https?:|blob:|data:)/.test(s);
 
 // Простой sidebar для обычного складчика — задачи + сборка + сканер + проблемы + жалобы + чат + документы.
 const WORKER_PATHS = new Set(['/shift', '/tasks', '/picking', '/scanner', '/problems', '/claims', '/internal-chat', '/documents']);
 
 export function AppShell() {
+  const t = useT();
   const { currentWorker, problems, chatThreads } = useStore();
   const nav = useNavigate();
   const role = currentWorker?.role;
   const isSimpleWorker = role === 'warehouse_worker';
+  const [profileOpen, setProfileOpen] = useState(false);
   const items = isSimpleWorker
     ? NAV.filter(n => WORKER_PATHS.has(n.to))
     : NAV.filter(n => can(role, n.perm));
@@ -77,10 +85,15 @@ export function AppShell() {
   return (
     <div className="min-h-screen flex bg-[#F5F6F8]">
       <aside className="hidden md:flex w-64 flex-col bg-white border-r border-[#E5E7EB] sticky top-0 h-screen">
-        <div className="px-5 py-4 border-b border-[#F3F4F6]">
-          <div className="text-[16px] text-[#1F2430]" style={{ fontWeight: 900 }}>Warehouse App</div>
-          <div className="text-[11px] text-[#6B7280] mt-0.5" style={{ fontWeight: 500 }}>
-            рабочее приложение склада
+        <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-start justify-between gap-2">
+          <div>
+            <div className="text-[16px] text-[#1F2430]" style={{ fontWeight: 900 }}>{t('app.title')}</div>
+            <div className="text-[11px] text-[#6B7280] mt-0.5" style={{ fontWeight: 500 }}>
+              {t('app.subtitle')}
+            </div>
+          </div>
+          <div className="text-[#1F2430]">
+            <LanguageSwitcher />
           </div>
         </div>
 
@@ -100,7 +113,7 @@ export function AppShell() {
                 style={({ isActive }) => ({ fontWeight: isActive ? 800 : 600 })}
               >
                 <Icon className="w-4 h-4" />
-                {item.label}
+                {t(item.key)}
                 {item.to === '/problems' && openProblems > 0 && (
                   <span className="ml-auto text-[10px] bg-[#EF4444] text-white rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" style={{ fontWeight: 800 }}>
                     {openProblems}
@@ -117,25 +130,55 @@ export function AppShell() {
         </nav>
 
         <div className="border-t border-[#F3F4F6] p-4">
-          <div className="text-[12px] text-[#1F2430]" style={{ fontWeight: 700 }}>
-            {currentWorker?.name ?? '—'}
-          </div>
-          <div className="text-[11px] text-[#6B7280] mb-3" style={{ fontWeight: 500 }}>
-            {currentWorker?.id ?? ''} · {currentWorker ? ROLE_LABELS[currentWorker.role] : ''}
-          </div>
+          <button
+            onClick={() => setProfileOpen(true)}
+            className="w-full flex items-center gap-2 mb-3 active-press text-left"
+          >
+            <div className="w-9 h-9 rounded-full bg-[#E0F2FE] flex items-center justify-center text-[18px] overflow-hidden flex-shrink-0">
+              {currentWorker?.avatar
+                ? (isUrl(currentWorker.avatar)
+                    ? <img src={currentWorker.avatar} alt={currentWorker.name} className="w-full h-full object-cover" />
+                    : <span>{currentWorker.avatar}</span>)
+                : <span className="text-[#0369A1]" style={{ fontWeight: 900 }}>{currentWorker?.name.charAt(0) ?? '?'}</span>}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[12px] text-[#1F2430] truncate" style={{ fontWeight: 700 }}>
+                {currentWorker?.name ?? '—'}
+              </div>
+              <div className="text-[11px] text-[#6B7280] truncate" style={{ fontWeight: 500 }}>
+                {currentWorker?.position ?? (currentWorker ? ROLE_LABELS[currentWorker.role] : '')}
+              </div>
+            </div>
+          </button>
           <button
             onClick={onLogout}
             className="w-full flex items-center gap-2 text-[12px] text-[#EF4444] active-press"
             style={{ fontWeight: 700 }}
           >
-            <LogOut className="w-4 h-4" /> Выйти
+            <LogOut className="w-4 h-4" /> {t('common.you')} →
           </button>
         </div>
       </aside>
 
-      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-[#1F2430] text-white px-4 h-12 flex items-center justify-between">
-        <div className="text-[14px]" style={{ fontWeight: 800 }}>Warehouse</div>
-        <div className="text-[11px] opacity-70">{currentWorker?.name ?? '—'}</div>
+      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-[#1F2430] text-white px-3 h-12 flex items-center justify-between">
+        <button onClick={() => setProfileOpen(true)} className="flex items-center gap-2 active-press">
+          <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-[14px] overflow-hidden">
+            {currentWorker?.avatar
+              ? (isUrl(currentWorker.avatar)
+                  ? <img src={currentWorker.avatar} alt={currentWorker.name} className="w-full h-full object-cover" />
+                  : <span>{currentWorker.avatar}</span>)
+              : <span style={{ fontWeight: 900 }}>{currentWorker?.name.charAt(0) ?? '?'}</span>}
+          </div>
+          <div className="text-left min-w-0">
+            <div className="text-[12px] truncate" style={{ fontWeight: 800 }}>
+              {currentWorker?.name ?? t('app.title')}
+            </div>
+            <div className="text-[10px] opacity-70 truncate">
+              {currentWorker?.position ?? t('app.subtitle')}
+            </div>
+          </div>
+        </button>
+        <LanguageSwitcher />
       </header>
 
       <main className="flex-1 min-w-0 pt-12 md:pt-0">
@@ -161,7 +204,7 @@ export function AppShell() {
               style={({ isActive }) => ({ fontWeight: isActive ? 800 : 600 })}
             >
               <Icon className="w-4 h-4" />
-              <span className="text-[10px]">{item.label}</span>
+              <span className="text-[10px]">{t(item.key)}</span>
               {item.to === '/problems' && openProblems > 0 && (
                 <span className="absolute top-1 right-2 text-[8px] bg-[#EF4444] text-white rounded-full min-w-[14px] h-[14px] px-1 flex items-center justify-center" style={{ fontWeight: 800 }}>
                   {openProblems}
@@ -176,6 +219,15 @@ export function AppShell() {
           );
         })}
       </nav>
+
+      <EmployeeProfileModal
+        open={profileOpen}
+        workerId={currentWorker?.id ?? null}
+        onClose={() => setProfileOpen(false)}
+        onMessage={() => { setProfileOpen(false); nav('/internal-chat'); }}
+        onCall={() => { setProfileOpen(false); }}
+        editable
+      />
     </div>
   );
 }
