@@ -25,6 +25,8 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 15m
           script_stop: true
           script: |
             set -euo pipefail
@@ -44,22 +46,55 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 15m
           script_stop: false
           script: |
             cd "${{ secrets.VPS_PATH }}" || exit 0
-            for TARGET in /etc/nginx/sites-available/wms.conf /etc/nginx/conf.d/wms.conf; do
+
+            echo "::group::Find nginx config files"
+            for p in \
+              /etc/nginx/sites-enabled/wms \
+              /etc/nginx/sites-enabled/wms.conf \
+              /etc/nginx/sites-available/wms \
+              /etc/nginx/sites-available/wms.conf \
+              /etc/nginx/conf.d/wms.conf
+            do [ -e "$p" ] && echo "[found] $p"; done
+            echo "::endgroup::"
+
+            echo "::group::Sync nginx config from repo"
+            SYNCED=""
+            for TARGET in \
+              /etc/nginx/sites-available/wms \
+              /etc/nginx/sites-available/wms.conf \
+              /etc/nginx/conf.d/wms.conf
+            do
               if [ -f "$TARGET" ]; then
-                cp -f deploy/nginx/wms.conf "$TARGET" 2>&1 \
-                  || sudo -n cp -f deploy/nginx/wms.conf "$TARGET" 2>&1 \
-                  || echo "[fail] cp $TARGET"
-                break
+                if cp -f deploy/nginx/wms.conf "$TARGET" 2>&1; then
+                  echo "[ok] cp → $TARGET"; SYNCED="$TARGET"; break
+                elif sudo -n cp -f deploy/nginx/wms.conf "$TARGET" 2>&1; then
+                  echo "[ok] sudo cp → $TARGET"; SYNCED="$TARGET"; break
+                else
+                  echo "[fail] cannot write $TARGET"
+                fi
               fi
             done
-            (nginx -t 2>&1)         || (sudo -n nginx -t 2>&1)         || true
-            (nginx -s reload 2>&1)  || (sudo -n nginx -s reload 2>&1)  \
-              || (systemctl reload nginx 2>&1)  || (sudo -n systemctl reload nginx 2>&1)  \
-              || (systemctl restart nginx 2>&1) || (sudo -n systemctl restart nginx 2>&1) \
+            [ -z "$SYNCED" ] && echo "[fail] nginx config NOT synced — running config still active"
+            echo "::endgroup::"
+
+            echo "::group::nginx -t"
+            (nginx -t 2>&1) || (sudo -n nginx -t 2>&1) || true
+            echo "::endgroup::"
+
+            echo "::group::nginx reload"
+            (nginx -s reload 2>&1) \
+              || (sudo -n nginx -s reload 2>&1) \
+              || (systemctl reload nginx 2>&1) \
+              || (sudo -n systemctl reload nginx 2>&1) \
+              || (systemctl restart nginx 2>&1) \
+              || (sudo -n systemctl restart nginx 2>&1) \
               || echo "[fail] reload"
+            echo "::endgroup::"
             exit 0
 
       - name: Assert /courier/ is serving
@@ -69,12 +104,25 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 15m
           script_stop: true
           script: |
             set -uo pipefail
             cd "${{ secrets.VPS_PATH }}"
             BASE="http://127.0.0.1"
             FAIL=0
+
+            echo "::group::Active nginx config (relevant /courier/ blocks)"
+            (nginx -T 2>/dev/null || sudo -n nginx -T 2>/dev/null || true) \
+              | awk '/location[^;]*\/courier/{p=1} p{print; if(/^\}/){p=0}}' \
+              | head -n 80 || true
+            echo "::endgroup::"
+
+            echo "::group::dist/index.html"
+            cat apps/courier-app/dist/index.html || true
+            echo "::endgroup::"
+
             JS=$(grep -oE '/courier/assets/[^"]+\.js'  apps/courier-app/dist/index.html | head -n 1 || echo "")
             CSS=$(grep -oE '/courier/assets/[^"]+\.css' apps/courier-app/dist/index.html | head -n 1 || echo "")
             echo "JS=${JS:-(none)}  CSS=${CSS:-(none)}"
@@ -83,10 +131,12 @@ jobs:
               local L="$1" U="$2" S="$3" T="$4"
               echo "─ ${L} → ${U} ─"
               local RESP CT
-              RESP=$(curl -sS -o /dev/null -D /tmp/h.$$ -w "%{http_code}" "${U}" 2>&1) || true
+              RESP=$(curl -sS -o /tmp/body.$$ -D /tmp/h.$$ -w "%{http_code}" "${U}" 2>&1) || true
               CT=$(grep -i '^content-type:' /tmp/h.$$ | head -n 1 | tr -d '\r')
-              rm -f /tmp/h.$$
               echo "  status=${RESP}  ${CT}"
+              echo "  body(first lines):"
+              head -n 5 /tmp/body.$$ 2>/dev/null | sed 's/^/    /'
+              rm -f /tmp/h.$$ /tmp/body.$$
               [ "$RESP" = "$S" ] && echo "$CT" | grep -qi "$T" \
                 && { echo "  [PASS]"; return 0; } \
                 || { echo "  [FAIL] want ${S}+${T}"; return 1; }
@@ -95,6 +145,13 @@ jobs:
             check "/courier/" "${BASE}/courier/" "200" "text/html" || FAIL=1
             [ -n "$JS" ]  && { check "JS"  "${BASE}${JS}"  "200" "javascript" || FAIL=1; } || FAIL=1
             [ -n "$CSS" ] && { check "CSS" "${BASE}${CSS}" "200" "text/css"   || FAIL=1; } || FAIL=1
+
+            echo "::group::Same checks via public IP"
+            PUB="http://46.202.189.230"
+            curl -sS -I -o /dev/null -w "  /courier/  %{http_code}\n" "${PUB}/courier/" || true
+            [ -n "$JS"  ] && curl -sS -I -o /dev/null -w "  JS         %{http_code}\n" "${PUB}${JS}"  || true
+            [ -n "$CSS" ] && curl -sS -I -o /dev/null -w "  CSS        %{http_code}\n" "${PUB}${CSS}" || true
+            echo "::endgroup::"
 
             if [ "$FAIL" -ne 0 ]; then
               echo "::error::Courier App is NOT serving correctly"
