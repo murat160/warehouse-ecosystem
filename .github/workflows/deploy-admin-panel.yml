@@ -48,6 +48,11 @@ jobs:
       # Step 2: NGINX SYNC + RELOAD.
       # Diagnostic-friendly. Allowed to fail; the assertion in Step 3
       # is what gates the deploy.
+      #
+      # IMPORTANT: this VPS uses /etc/nginx/sites-enabled/wms ->
+      # /etc/nginx/sites-available/wms (without .conf). Keep that
+      # target first, otherwise nginx keeps serving the old config and
+      # app JS/CSS chunks return 404.
       # ─────────────────────────────────────────────────────────────────
       - name: Sync nginx config + reload
         if: always()
@@ -69,7 +74,9 @@ jobs:
 
             echo "::group::Find nginx config files"
             for p in \
+              /etc/nginx/sites-enabled/wms \
               /etc/nginx/sites-enabled/wms.conf \
+              /etc/nginx/sites-available/wms \
               /etc/nginx/sites-available/wms.conf \
               /etc/nginx/conf.d/wms.conf
             do [ -e "$p" ] && echo "[found] $p"; done
@@ -81,6 +88,7 @@ jobs:
             echo "::group::Sync nginx config from repo"
             SYNCED=""
             for TARGET in \
+              /etc/nginx/sites-available/wms \
               /etc/nginx/sites-available/wms.conf \
               /etc/nginx/conf.d/wms.conf
             do
