@@ -19,6 +19,54 @@ import {
   SIDEBAR_MODULES, PREDEFINED_ROLES, APP_SCOPE_LABELS,
   type SidebarModule, type SidebarChild,
 } from '../../data/rbac';
+import { useI18n, type DictKey } from '../../i18n';
+import { LanguageSelector } from './LanguageSelector';
+
+/**
+ * Sidebar labels are pre-computed in Russian inside data/rbac.ts. Here we map
+ * a known module/child label to its translation key. Anything not in this map
+ * is rendered as-is — that's the safe fallback for ad-hoc entries.
+ */
+const SIDEBAR_LABEL_KEYS: Record<string, DictKey> = {
+  // Top-level modules
+  'Операционная панель':         'sidebar.module.dashboard',
+  'Пользователи':                'sidebar.module.users',
+  'ПВЗ':                         'sidebar.module.pvz',
+  'Заказы':                      'sidebar.module.orders',
+  'Курьеры':                     'sidebar.module.couriers',
+  'Проверка документов':         'sidebar.module.compliance',
+  'Склады':                      'sidebar.module.warehouses',
+  'Логистика':                   'sidebar.module.logistics',
+  'Продавцы':                    'sidebar.module.merchants',
+  'Товары':                      'sidebar.module.products',
+  'Продвижение':                 'sidebar.module.promotions',
+  'Финансы':                     'sidebar.module.finance',
+  'Бухгалтерия':                 'sidebar.module.accounting',
+  'Юридический отдел':           'sidebar.module.legal',
+  'Чат-центр':                   'sidebar.module.chat',
+  'Поддержка':                   'sidebar.module.support',
+  'Безопасность':                'sidebar.module.security',
+  'Центр одобрения':             'sidebar.module.approvals',
+  'Зарубежная оплата':           'sidebar.module.foreign',
+  'Аналитика':                   'sidebar.module.analytics',
+  'Отчёты':                      'sidebar.module.reports',
+  'Системные настройки':         'sidebar.module.settings',
+  'Audit log':                   'sidebar.module.audit',
+  'Platform Architecture':       'sidebar.module.architecture',
+  // Sidebar entry "Роли и права" (we deliberately dropped the legacy "(RBAC)"
+  // suffix that broke layout on narrow sidebars).
+  'Роли и права':                'sidebar.module.security.rbac',
+};
+
+const SECTION_KEYS: Record<string, DictKey> = {
+  'Каталог':              'sidebar.section.catalog',
+  'Финансы':              'sidebar.section.finance',
+  'Юридический':          'sidebar.section.legal',
+  'Безопасность':         'sidebar.section.security',
+  'Зарубежные расчёты':   'sidebar.section.foreign',
+  'Отчётность':           'sidebar.section.reports',
+  'Система':              'sidebar.section.system',
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +87,20 @@ function groupBySection(modules: SidebarModule[]): { section: string; items: Sid
 export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, realUser, isImpersonating, impersonationKind, impersonateRole, impersonateUser, logout, hasPermission } = useAuth();
+  const { t } = useI18n();
+  /**
+   * Translate sidebar labels via the SIDEBAR_LABEL_KEYS map. Falls back to
+   * the original label so ad-hoc entries (without a translation key) still
+   * render correctly.
+   */
+  const tLabel = (label: string): string => {
+    const key = SIDEBAR_LABEL_KEYS[label];
+    return key ? t(key) : label;
+  };
+  const tSection = (section: string): string => {
+    const key = SECTION_KEYS[section];
+    return key ? t(key) : section;
+  };
   const stopImpersonation = () => {
     impersonateRole(null);
     impersonateUser(null);
@@ -114,7 +176,20 @@ export function DashboardLayout() {
   const groupedSections = useMemo(() => groupBySection(visibleModules), [visibleModules]);
 
   // ── Sidebar item renderer ────────────────────────────────────────────────
-  function renderItem(item: SidebarModule, onNavClick?: () => void) {
+  /**
+   * Parent rows with children behave like this:
+   *  - Whole row is one button that toggles expand/collapse — never navigates
+   *    on its own, so a stray click can't whisk the user off to the parent
+   *    page when they meant to expand the group.
+   *  - A small chevron on the right gives an explicit visual affordance for
+   *    open/closed.
+   *  - Mobile: clicking the parent does NOT close the sheet (since you didn't
+   *    actually navigate). Only leaf clicks close the mobile sheet — the
+   *    `onNavClick` handler is wired only on leaf NavLinks/buttons.
+   *  - Auto-expanded groups stay open while the user is on a child route
+   *    (driven by the useEffect on `location.pathname/search` above).
+   */
+  function renderItem(item: SidebarModule, onLeafNav?: () => void) {
     const hasChildren = (item.children?.length ?? 0) > 0;
     const isGroupExpanded = expandedGroup === item.label;
     const isGroupActive = hasChildren && item.children!.some(c => {
@@ -126,36 +201,30 @@ export function DashboardLayout() {
     if (hasChildren) {
       return (
         <div key={item.key}>
-          <div className="flex items-center gap-1">
-            <NavLink
-              to={item.href}
-              end={item.exact ?? false}
-              onClick={onNavClick}
-              className={({ isActive }) =>
-                `flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
-                  isActive || isGroupActive
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }>
-              <item.icon className="w-5 h-5 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {item.badge ? (
-                <span className="min-w-[20px] h-5 px-1.5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                  {item.badge}
-                </span>
-              ) : null}
-            </NavLink>
-            <button
-              onClick={() => setExpandedGroup(isGroupExpanded ? null : item.label)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              title={isGroupExpanded ? 'Свернуть' : 'Развернуть'}>
-              {isGroupExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setExpandedGroup(isGroupExpanded ? null : item.label)}
+            aria-expanded={isGroupExpanded}
+            title={isGroupExpanded ? t('sidebar.collapse') : t('sidebar.expand')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm text-left ${
+              isGroupActive
+                ? 'bg-blue-50 text-blue-600 font-medium'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}>
+            <item.icon className="w-5 h-5 shrink-0" />
+            <span className="flex-1">{tLabel(item.label)}</span>
+            {item.badge ? (
+              <span className="min-w-[20px] h-5 px-1.5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                {item.badge}
+              </span>
+            ) : null}
+            {isGroupExpanded
+              ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+              : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+          </button>
           {isGroupExpanded && (
             <div className="mt-0.5 ml-4 pl-3 border-l-2 border-gray-100 space-y-0.5">
-              {item.children!.map(child => renderChild(child, onNavClick))}
+              {item.children!.map(child => renderChild(child, onLeafNav))}
             </div>
           )}
         </div>
@@ -167,14 +236,14 @@ export function DashboardLayout() {
         key={item.key}
         to={item.href}
         end={item.exact ?? false}
-        onClick={onNavClick}
+        onClick={onLeafNav}
         className={({ isActive }) =>
           `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
             isActive ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700 hover:bg-gray-100'
           }`
         }>
         <item.icon className="w-5 h-5 shrink-0" />
-        <span className="flex-1">{item.label}</span>
+        <span className="flex-1">{tLabel(item.label)}</span>
         {item.badge ? (
           <span className="min-w-[20px] h-5 px-1.5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
             {item.badge}
@@ -184,18 +253,18 @@ export function DashboardLayout() {
     );
   }
 
-  function renderChild(child: SidebarChild, onNavClick?: () => void) {
+  function renderChild(child: SidebarChild, onLeafNav?: () => void) {
     if (child.tab) {
       const isTabActive = location.pathname === child.href && location.search === `?tab=${child.tab}`;
       return (
         <button
           key={child.key + child.tab}
-          onClick={() => { navigate(`${child.href}?tab=${child.tab}`); onNavClick?.(); }}
+          onClick={() => { navigate(`${child.href}?tab=${child.tab}`); onLeafNav?.(); }}
           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm text-left ${
             isTabActive ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-100'
           }`}>
           <child.icon className="w-4 h-4 shrink-0" />
-          <span>{child.label}</span>
+          <span>{tLabel(child.label)}</span>
         </button>
       );
     }
@@ -204,14 +273,14 @@ export function DashboardLayout() {
         key={child.key + child.href}
         to={child.href}
         end={child.exact ?? false}
-        onClick={onNavClick}
+        onClick={onLeafNav}
         className={({ isActive }) =>
           `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
             isActive ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-100'
           }`
         }>
         <child.icon className="w-4 h-4 shrink-0" />
-        <span>{child.label}</span>
+        <span>{tLabel(child.label)}</span>
       </NavLink>
     );
   }
@@ -232,7 +301,7 @@ export function DashboardLayout() {
             }`
           }>
           <Briefcase className="w-5 h-5 shrink-0" />
-          <span>Мой кабинет</span>
+          <span>{t('cabinet.my')}</span>
         </NavLink>
 
         <div className="border-t border-gray-100 my-2" />
@@ -243,7 +312,7 @@ export function DashboardLayout() {
               <>
                 {idx > 0 && <div className="border-t border-gray-100 my-2" />}
                 <p className="px-3 mt-2 text-[9px] uppercase tracking-widest text-gray-400 font-semibold mb-1">
-                  {g.section}
+                  {tSection(g.section)}
                 </p>
               </>
             )}
@@ -254,7 +323,7 @@ export function DashboardLayout() {
         {visibleModules.length === 0 && (
           <div className="text-center py-8 text-xs text-gray-400">
             <Shield className="w-6 h-6 mx-auto mb-1 opacity-40" />
-            Нет доступных разделов
+            {t('sidebar.empty')}
           </div>
         )}
       </nav>
@@ -264,10 +333,10 @@ export function DashboardLayout() {
         const isSuper = user.role === 'SuperAdmin';
         const realIsSuper = realUser?.role === 'SuperAdmin' || realUser?.permissions.includes('*');
         const subtitle = isImpersonating
-          ? `Просмотр как: ${user.role}`
+          ? `${t('cabinet.viewAs')} ${user.role}`
           : isSuper
-          ? 'Полный доступ · Мой кабинет →'
-          : `${user.role} · Мой кабинет →`;
+          ? t('cabinet.fullAccess')
+          : `${user.role} · ${t('cabinet.my')} →`;
         return (
           <div className="p-4 border-t">
             <NavLink to="/cabinet" onClick={onNavClick} className="flex items-center gap-3 mb-3 p-2 rounded-xl hover:bg-gray-50 transition-colors group">
@@ -307,15 +376,15 @@ export function DashboardLayout() {
               <button
                 onClick={stopImpersonation}
                 className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-1.5 text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg font-semibold transition-colors">
-                <X className="w-3.5 h-3.5" />Вернуться к SuperAdmin
-                {impersonationKind === 'user' && <span className="text-[10px] opacity-70">(preview сотрудника)</span>}
+                <X className="w-3.5 h-3.5" />{t('cabinet.exitImpersonation')}
+                {impersonationKind === 'user' && <span className="text-[10px] opacity-70">{t('cabinet.previewBadge')}</span>}
               </button>
             )}
             <button
               onClick={logout}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
               <LogOut className="w-4 h-4" />
-              Выйти
+              {t('header.logout')}
             </button>
           </div>
         );
@@ -378,12 +447,15 @@ export function DashboardLayout() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Поиск по заказу, треку, ШК, телефону, ПВЗ..."
+                  placeholder={t('header.search.placeholder')}
                   className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
               </div>
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Language selector */}
+              <LanguageSelector />
+
               {/* Role switcher (visible only for real SuperAdmin) */}
               {realIsSuper && (
                 <div className="relative" ref={roleRef}>
@@ -394,27 +466,27 @@ export function DashboardLayout() {
                         ? 'bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-300'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-transparent'
                     }`}
-                    title="Переключить роль для тестирования">
+                    title={t('header.role.viewAs')}>
                     <Eye className="w-4 h-4" />
-                    <span>{isImpersonating ? `Test: ${user?.role}` : 'Просмотр как роль'}</span>
+                    <span>{isImpersonating ? `${t('header.role.testing')}: ${user?.role}` : t('header.role.viewAs')}</span>
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                   {roleSwitcherOpen && (
                     <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
                       <div className="px-4 py-3 border-b bg-gradient-to-r from-purple-50 to-indigo-50">
-                        <p className="text-xs font-bold text-purple-900">Просмотр панели от роли</p>
-                        <p className="text-[10px] text-purple-700">SuperAdmin может проверить, что видит каждая роль</p>
+                        <p className="text-xs font-bold text-purple-900">{t('header.role.title')}</p>
+                        <p className="text-[10px] text-purple-700">{t('header.role.subtitle')}</p>
                       </div>
                       <div className="max-h-96 overflow-y-auto p-2 space-y-0.5">
                         {isImpersonating && (
                           <button
                             onClick={() => { impersonateRole(null); setRoleSwitcherOpen(false); }}
                             className="w-full text-left px-3 py-2 rounded-lg text-sm bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold flex items-center gap-2 mb-1">
-                            <X className="w-3.5 h-3.5" />Вернуться к SuperAdmin
+                            <X className="w-3.5 h-3.5" />{t('header.role.exit')}
                           </button>
                         )}
                         {/* Admin Panel roles */}
-                        <p className="px-3 pt-1 pb-1 text-[9px] uppercase tracking-widest text-gray-400 font-bold">Роли Admin Panel</p>
+                        <p className="px-3 pt-1 pb-1 text-[9px] uppercase tracking-widest text-gray-400 font-bold">{t('header.role.adminRoles')}</p>
                         {PREDEFINED_ROLES.filter(r => r.appScope === 'admin').map(r => {
                           const isCurrent = user?.role === r.name;
                           return (
@@ -432,7 +504,7 @@ export function DashboardLayout() {
                           );
                         })}
                         {/* External app roles */}
-                        <p className="px-3 pt-3 pb-1 text-[9px] uppercase tracking-widest text-purple-700 font-bold">Внешние приложения · preview</p>
+                        <p className="px-3 pt-3 pb-1 text-[9px] uppercase tracking-widest text-purple-700 font-bold">{t('header.role.externalRoles')}</p>
                         {PREDEFINED_ROLES.filter(r => r.appScope !== 'admin').map(r => {
                           const isCurrent = user?.role === r.name;
                           return (
@@ -464,7 +536,7 @@ export function DashboardLayout() {
                 <button
                   onClick={() => setNotifOpen(v => !v)}
                   className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                  title={notifCount > 0 ? `${notifCount} непрочитанных уведомлений` : 'Уведомления'}>
+                  title={notifCount > 0 ? `${notifCount} ${t('header.notifications.unread')}` : t('header.notifications')}>
                   <Bell className={`w-5 h-5 ${notifCount > 0 ? 'text-violet-600' : ''}`} />
                   {notifCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-0.5 bg-violet-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
@@ -494,7 +566,7 @@ export function DashboardLayout() {
                       : isImpersonating ? 'text-purple-700'
                       : 'text-gray-700 group-hover:text-blue-700'
                     }`}>
-                      {isSuper ? 'Супер админ' : user.role}
+                      {isSuper ? t('cabinet.superAdminLabel') : user.role}
                     </span>
                     {user.twoFactorEnabled && (
                       <span className="text-xs text-green-600">2FA</span>

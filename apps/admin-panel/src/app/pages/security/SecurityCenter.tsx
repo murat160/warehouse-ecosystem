@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Shield, Lock, Key, Globe, AlertTriangle, CheckCircle2,
   X, Plus, Trash2, Pencil as Edit2, Eye, EyeOff, Copy, Download,
@@ -16,6 +16,7 @@ import {
   AlertCircle, CheckCircle, XCircle,
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/downloads';
+import { useI18n, type DictKey } from '../../i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1177,28 +1178,41 @@ function SuperAdminTab() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const TABS_CFG: { id: SecurityTab; label: string; icon: React.ElementType; badge?: number }[] = [
-  { id: 'policies',    label: 'Политики',       icon: Shield },
-  { id: 'sessions',    label: 'Сессии',         icon: Monitor, badge: 5 },
-  { id: 'logins',      label: 'Журнал входов',  icon: LogIn },
-  { id: 'ip',          label: 'IP-доступ',      icon: Globe },
-  { id: 'tokens',      label: 'Токены и ключи', icon: Key },
-  { id: 'sso',         label: 'SSO / OAuth',    icon: Link2 },
-  { id: 'alerts',      label: 'Алерты',         icon: Bell, badge: 3 },
-  { id: 'superadmin',  label: 'SuperAdmin',     icon: ShieldAlert },
+const TABS_CFG: { id: SecurityTab; labelKey: DictKey; icon: React.ElementType; badge?: number }[] = [
+  { id: 'policies',    labelKey: 'security.tab.policies',    icon: Shield },
+  { id: 'sessions',    labelKey: 'security.tab.sessions',    icon: Monitor, badge: 5 },
+  { id: 'logins',      labelKey: 'security.tab.logins',      icon: LogIn },
+  { id: 'ip',          labelKey: 'security.tab.ip',          icon: Globe },
+  { id: 'tokens',      labelKey: 'security.tab.tokens',      icon: Key },
+  { id: 'sso',         labelKey: 'security.tab.sso',         icon: Link2 },
+  { id: 'alerts',      labelKey: 'security.tab.alerts',      icon: Bell, badge: 3 },
+  { id: 'superadmin',  labelKey: 'security.tab.superadmin',  icon: ShieldAlert },
 ];
 
 export function SecurityCenter() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as SecurityTab | null;
   const validTabs: SecurityTab[] = ['policies','sessions','logins','ip','tokens','sso','alerts','superadmin'];
   const initialTab: SecurityTab = (paramTab && validTabs.includes(paramTab)) ? paramTab : 'policies';
   const [tab, setTab] = useState<SecurityTab>(initialTab);
 
-  function handleTabChange(t: SecurityTab) {
-    setTab(t);
-    setSearchParams({ tab: t }, { replace: true });
+  function handleTabChange(target: SecurityTab) {
+    setTab(target);
+    setSearchParams({ tab: target }, { replace: true });
   }
+
+  /**
+   * Sync the local tab state when the URL `?tab=` changes — covers back/forward
+   * navigation and direct deep links. Without this, hitting Back after clicking
+   * a sidebar deep-link wouldn't actually re-render the tab.
+   */
+  React.useEffect(() => {
+    const fromUrl = searchParams.get('tab') as SecurityTab | null;
+    if (fromUrl && validTabs.includes(fromUrl) && fromUrl !== tab) setTab(fromUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const activeAlerts = SECURITY_ALERTS.filter(a => !a.resolved).length;
 
@@ -1207,66 +1221,76 @@ export function SecurityCenter() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Центр безопасности</h1>
+          <h1 className="text-2xl font-black text-gray-900">{t('security.title')}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Политики · Сессии · IP-доступ · Токены · SSO · Алерты · SuperAdmin
+            {t('security.subtitle')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Visible CTA: jump straight to /security/rbac with the create-role
+              modal open. Wired here because RBAC management is one click away
+              from Security Center but most operators never noticed it.       */}
+          <button
+            onClick={() => navigate('/security/rbac?action=create')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+            <Plus className="w-3.5 h-3.5" />{t('security.createRole')}
+          </button>
           {activeAlerts > 0 && (
             <button onClick={() => handleTabChange('alerts')}
               className="flex items-center gap-1.5 px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors">
-              <AlertTriangle className="w-3.5 h-3.5" />{activeAlerts} активных инцидентов
+              <AlertTriangle className="w-3.5 h-3.5" />{activeAlerts} {t('security.activeIncidents')}
             </button>
           )}
           <div className="flex items-center gap-1.5 px-3 py-2 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold">
-            <ShieldCheck className="w-3.5 h-3.5" />Система защищена
+            <ShieldCheck className="w-3.5 h-3.5" />{t('security.systemProtected')}
           </div>
         </div>
       </div>
 
-      {/* KPI strip */}
+      {/* KPI strip — every card is a real button that switches the active tab. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {([
-          { label: 'Активных сессий',   value: '5',                                                       icon: Monitor,       color: 'text-blue-600 bg-blue-50',    tabTarget: 'sessions'  },
-          { label: 'Инцидентов сегодня',value: String(activeAlerts),                                      icon: AlertTriangle, color: 'text-red-600 bg-red-50',      tabTarget: 'alerts'    },
-          { label: 'Заблокировано IP',  value: '3',                                                       icon: Ban,           color: 'text-orange-600 bg-orange-50', tabTarget: 'ip'        },
-          { label: 'API токенов',        value: String(API_TOKENS.filter(t=>t.status==='active').length), icon: Key,           color: 'text-green-600 bg-green-50',  tabTarget: 'tokens'    },
-        ] as Array<{ label: string; value: string; icon: React.ElementType; color: string; tabTarget: SecurityTab }>).map(kpi => {
+          { labelKey: 'security.kpi.activeSessions', value: '5',                                                       icon: Monitor,       color: 'text-blue-600 bg-blue-50',     tabTarget: 'sessions'  },
+          { labelKey: 'security.kpi.todayIncidents', value: String(activeAlerts),                                      icon: AlertTriangle, color: 'text-red-600 bg-red-50',       tabTarget: 'alerts'    },
+          { labelKey: 'security.kpi.blockedIp',      value: '3',                                                       icon: Ban,           color: 'text-orange-600 bg-orange-50', tabTarget: 'ip'        },
+          { labelKey: 'security.kpi.tokens',          value: String(API_TOKENS.filter(t=>t.status==='active').length), icon: Key,           color: 'text-green-600 bg-green-50',   tabTarget: 'tokens'    },
+        ] as Array<{ labelKey: DictKey; value: string; icon: React.ElementType; color: string; tabTarget: SecurityTab }>).map(kpi => {
           const Icon = kpi.icon;
+          const isActive = tab === kpi.tabTarget;
           return (
             <button
-              key={kpi.label}
+              key={kpi.labelKey}
               onClick={() => handleTabChange(kpi.tabTarget)}
-              className={`bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3 text-left cursor-pointer hover:shadow-md hover:border-blue-200 transition-all active:scale-[0.98] ${tab === kpi.tabTarget ? 'ring-2 ring-blue-200 border-blue-300 shadow-sm' : ''}`}
+              aria-label={t(kpi.labelKey)}
+              className={`bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3 text-left cursor-pointer hover:shadow-md hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all active:scale-[0.98] ${isActive ? 'ring-2 ring-blue-200 border-blue-300 shadow-sm' : ''}`}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${kpi.color}`}>
                 <Icon className="w-5 h-5" />
               </div>
               <div>
                 <p className="text-xl font-black text-gray-900">{kpi.value}</p>
-                <p className="text-xs text-gray-500">{kpi.label}</p>
+                <p className="text-xs text-gray-500">{t(kpi.labelKey)}</p>
               </div>
             </button>
           );
         })}
       </div>
 
-      {/* Tab nav */}
+      {/* Tab nav — horizontal, scrollable on narrow screens. */}
       <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto pb-px">
-        {TABS_CFG.map(t => {
-          const Icon = t.icon;
-          const isActive = tab === t.id;
+        {TABS_CFG.map(cfg => {
+          const Icon = cfg.icon;
+          const isActive = tab === cfg.id;
           return (
-            <button key={t.id} onClick={() => handleTabChange(t.id)}
+            <button key={cfg.id} onClick={() => handleTabChange(cfg.id)}
               className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors -mb-px ${
                 isActive ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}>
               <Icon className="w-4 h-4" />
-              {t.label}
-              {t.badge ? (
+              {t(cfg.labelKey)}
+              {cfg.badge ? (
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                  {t.id === 'alerts' ? activeAlerts : t.badge}
+                  {cfg.id === 'alerts' ? activeAlerts : cfg.badge}
                 </span>
               ) : null}
             </button>

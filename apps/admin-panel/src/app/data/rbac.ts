@@ -175,7 +175,7 @@ export const SIDEBAR_MODULES: SidebarModule[] = [
     children: [
       { key: 'security',           label: 'Центр безопасности',  href: '/security/center',         icon: Shield },
       { key: 'security.audit',     label: 'Журнал аудита',       href: '/security/audit',          icon: FileText },
-      { key: 'security.rbac',      label: 'Роли и права (RBAC)', href: '/security/rbac',           icon: ShieldCheck },
+      { key: 'security.rbac',      label: 'Роли и права',         href: '/security/rbac',           icon: ShieldCheck },
       { key: 'security.sessions',  label: 'Сессии и устройства', href: '/security/center', tab: 'sessions', icon: Monitor },
       { key: 'security.logins',    label: 'Подозрит. входы',      href: '/security/center', tab: 'logins',   icon: LogIn },
       { key: 'security.ip',        label: 'IP Access Rules',      href: '/security/center', tab: 'ip',       icon: Globe },

@@ -12,8 +12,9 @@
  * Built on the registry from data/rbac.ts (PREDEFINED_ROLES + SIDEBAR_MODULES
  * + BASE_VERBS + SPECIAL_PERMS).
  */
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Pencil, Copy, Trash2, Ban, CheckCircle2, X, Download,
   ShieldCheck, Shield, Users as UsersIcon, ChevronRight, ChevronDown,
@@ -28,6 +29,7 @@ import { exportToCsv } from '../../utils/downloads';
 import { audit as writeAudit } from '../../data/audit-store';
 import { useAuth } from '../../contexts/AuthContext';
 import { AccessDenied } from '../../components/rbac/AccessDenied';
+import { useI18n } from '../../i18n';
 
 type Tab = 'roles' | 'matrix' | 'assignments' | 'audit';
 
@@ -102,6 +104,8 @@ function nowStr(): string {
 
 export function RBACManagement() {
   const { hasPermission } = useAuth();
+  const { t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('roles');
   const [roles, setRoles] = useState<PredefinedRole[]>(PREDEFINED_ROLES);
   const [users, setUsers] = useState<AssignedUser[]>(INITIAL_USERS);
@@ -180,6 +184,21 @@ export function RBACManagement() {
     });
     setShowRoleEditor(true);
   }
+
+  /**
+   * Deep-link entry point: navigating here with `?action=create` (e.g. from
+   * the Security Center CTA) immediately opens the role editor and then
+   * strips the param so the modal doesn't reopen on accidental refresh.
+   */
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      openCreate();
+      const next = new URLSearchParams(searchParams);
+      next.delete('action');
+      setSearchParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   function openEdit(r: PredefinedRole) {
     setEditing({ ...r, permissions: [...r.permissions] });
@@ -310,23 +329,23 @@ export function RBACManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <ShieldCheck className="w-6 h-6 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">Роли и права (RBAC)</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{t('rbac.title')}</h1>
             <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider">
-              {roles.length} ролей
+              {roles.length} {t('rbac.rolesCount')}
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">Единый реестр ролей и permissions. Каждый раздел sidebar и каждое действие подвязаны сюда.</p>
+          <p className="text-sm text-gray-500 mt-0.5">{t('rbac.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={exportRolesCsv}
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm">
-            <Download className="w-4 h-4" />Экспорт CSV
+            <Download className="w-4 h-4" />{t('rbac.exportCsv')}
           </button>
           <button onClick={openCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold">
-            <Plus className="w-4 h-4" />Создать роль
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm">
+            <Plus className="w-4 h-4" />{t('rbac.createRole')}
           </button>
         </div>
       </div>
