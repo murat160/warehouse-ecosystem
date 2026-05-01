@@ -18,22 +18,75 @@ import {
   formatCurrency,
   type Order,
   type OrderStatus,
+  type PaymentStatus,
 } from '../../data/orders-mock';
 import { copyToClipboard } from '../../utils/clipboard';
 import { DocumentViewerModal, type DocumentRecord, type DocumentContent } from '../../components/ui/DocumentViewer';
+import { useI18n, type DictKey } from '../../i18n';
+import { useLocalize } from '../../i18n/transliterate';
 
 type Tab = 'summary' | 'items' | 'timeline' | 'logistics' | 'payments' | 'communications' | 'documents' | 'incidents';
 
-const tabs: { id: Tab; label: string; icon: any }[] = [
-  { id: 'summary', label: 'Сводка', icon: Package },
-  { id: 'items', label: 'Позиции', icon: Package },
-  { id: 'timeline', label: 'История', icon: History },
-  { id: 'logistics', label: 'Логистика', icon: MapPin },
-  { id: 'payments', label: 'Платежи', icon: CreditCard },
-  { id: 'communications', label: 'Коммуникации', icon: MessageSquare },
-  { id: 'documents', label: 'Документы', icon: FileText },
-  { id: 'incidents', label: 'Инциденты', icon: AlertCircle },
+/** Translatable status keys — same map shape as OrdersList. */
+const STATUS_KEYS: Record<OrderStatus, DictKey> = {
+  new: 'orders.status.new',
+  accepted: 'orders.status.accepted',
+  preparing: 'orders.status.preparing',
+  ready: 'orders.status.ready',
+  pickup_ready: 'orders.status.pickup_ready',
+  courier_assigned: 'orders.status.courier_assigned',
+  in_transit: 'orders.status.in_transit',
+  at_pvz: 'orders.status.at_pvz',
+  delivered: 'orders.status.delivered',
+  cancelled: 'orders.status.cancelled',
+  returned: 'orders.status.returned',
+};
+const PAYMENT_KEYS: Record<PaymentStatus, DictKey> = {
+  pending: 'orders.payment.pending',
+  paid: 'orders.payment.paid',
+  refunded: 'orders.payment.refunded',
+  partial_refund: 'orders.payment.partial_refund',
+};
+
+interface TabCfg { id: Tab; labelKey: DictKey; icon: any }
+const TABS_CFG: TabCfg[] = [
+  { id: 'summary',        labelKey: 'orderDetail.tab.summary',        icon: Package },
+  { id: 'items',          labelKey: 'orderDetail.tab.items',          icon: Package },
+  { id: 'timeline',       labelKey: 'orderDetail.tab.timeline',       icon: History },
+  { id: 'logistics',      labelKey: 'orderDetail.tab.logistics',      icon: MapPin },
+  { id: 'payments',       labelKey: 'orderDetail.tab.payments',       icon: CreditCard },
+  { id: 'communications', labelKey: 'orderDetail.tab.communications', icon: MessageSquare },
+  { id: 'documents',      labelKey: 'orderDetail.tab.documents',      icon: FileText },
+  { id: 'incidents',      labelKey: 'orderDetail.tab.incidents',      icon: AlertCircle },
 ];
+
+/**
+ * Banner subtitle text per status. Localised; the Cyrillic fragments coming
+ * from order.merchant / order.courierName / order.deliveryAddress are
+ * passed through transliteration before interpolation, so EN/TR/TK don't
+ * leak Cyrillic into the banner.
+ */
+function bannerDescription(
+  order: Order,
+  t: (k: DictKey, v?: Record<string, string|number>) => string,
+  loc: (s: string | null | undefined) => string,
+): string {
+  switch (order.status) {
+    case 'new':              return t('orderDetail.banner.new');
+    case 'accepted':         return `${t('orderDetail.banner.accepted')}: ${loc(order.merchant)}`;
+    case 'preparing':        return `${t('orderDetail.banner.preparing')}: ${loc(order.merchant)}`;
+    case 'ready':            return order.deliveryType === 'pickup'
+                                 ? `${t('orderDetail.banner.ready.pickup')} ${order.pickupCode ?? ''}`
+                                 : t('orderDetail.banner.ready');
+    case 'courier_assigned': return `${t('orderDetail.banner.courier_assigned')}: ${loc(order.courierName)}`;
+    case 'in_transit':       return `${t('orderDetail.banner.in_transit')} ${loc(order.courierName)} → ${loc(order.deliveryAddress) || loc(order.pvzName)}`;
+    case 'at_pvz':           return `${t('orderDetail.banner.at_pvz')}: ${loc(order.pvzName)} (${order.pvzCode}) • ${t('orderDetail.storageCell')}: ${order.storageCell} • ${t('orderDetail.pickupCode')}: ${order.pickupCode}`;
+    case 'delivered':        return t('orderDetail.banner.delivered');
+    case 'cancelled':        return `${t('orderDetail.banner.cancelled')}. ${loc(order.notes) || ''}`.trim();
+    case 'returned':         return t('orderDetail.banner.returned');
+    default:                 return '';
+  }
+}
 
 const statusBannerConfig: Partial<Record<OrderStatus, { bg: string; border: string; iconBg: string; iconColor: string; textColor: string; subtextColor: string }>> = {
   new: { bg: 'bg-blue-50', border: 'border-blue-200', iconBg: 'bg-blue-100', iconColor: 'text-blue-600', textColor: 'text-blue-900', subtextColor: 'text-blue-700' },
@@ -81,6 +134,8 @@ type LocalDoc     = { id: string; name: string; type: string; size: string; date
 type LocalIncident = { id: string; title: string; description: string; createdAt: string; status: 'open' | 'escalated' | 'closed' };
 
 export function OrderDetail() {
+  const { t } = useI18n();
+  const localize = useLocalize();
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -103,12 +158,12 @@ export function OrderDetail() {
     return (
       <div className="space-y-6">
         <Link to="/orders" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700">
-          <ArrowLeft className="w-4 h-4" /> К списку заказов
+          <ArrowLeft className="w-4 h-4" /> {t('orderDetail.backToList')}
         </Link>
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Заказ не найден</h2>
-          <p className="text-gray-500">Заказ с ID «{id}» не существует</p>
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">{t('orderDetail.notFound')}</h2>
+          <p className="text-gray-500">ID «{id}»</p>
         </div>
       </div>
     );
@@ -138,39 +193,39 @@ export function OrderDetail() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900 font-mono">{order.orderNumber}</h1>
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ORDER_STATUS_COLORS[order.status]}`}>
-                {ORDER_STATUS_LABELS[order.status]}
+                {t(STATUS_KEYS[order.status])}
               </span>
               {order.isOverdue && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                  <AlertCircle className="w-3 h-3" /> SLA просрочен
+                  <AlertCircle className="w-3 h-3" /> {t('orderDetail.slaOverdue')}
                 </span>
               )}
             </div>
             <p className="text-gray-500 mt-0.5">
-              <Link to={`/merchants/${order.merchantId}`} className="hover:text-blue-600">{order.merchant}</Link>
+              <Link to={`/merchants/${order.merchantId}`} className="hover:text-blue-600">{localize(order.merchant)}</Link>
               {' '} • {order.createdAt}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { if (order.customerPhone) window.location.href = `tel:${order.customerPhone}`; else toast.info('Телефон клиента не указан'); }}
+          <button onClick={() => { if (order.customerPhone) window.location.href = `tel:${order.customerPhone}`; else toast.info(t('orderDetail.toast.noPhone')); }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
             <Phone className="w-4 h-4" />
-            Позвонить
+            {t('orderDetail.actions.call')}
           </button>
           {!isTerminal && (
             <div style={{display:'contents'}}>
               <button onClick={() => { setEditNotes(savedNotes ?? order.notes ?? ''); setEditPanel(true); }}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                 <Edit className="w-4 h-4" />
-                Изменить
+                {t('orderDetail.actions.edit')}
               </button>
               <button
                 onClick={() => setShowCancelModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
               >
                 <XCircle className="w-4 h-4" />
-                Отменить
+                {t('orderDetail.actions.cancel')}
               </button>
             </div>
           )}
@@ -184,12 +239,12 @@ export function OrderDetail() {
             <Package className={`w-6 h-6 ${banner.iconColor}`} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className={`font-medium ${banner.textColor}`}>{ORDER_STATUS_LABELS[order.status]}</p>
-            <p className={`text-sm ${banner.subtextColor}`}>{getStatusBannerDescription(order)}</p>
+            <p className={`font-medium ${banner.textColor}`}>{t(STATUS_KEYS[order.status])}</p>
+            <p className={`text-sm ${banner.subtextColor}`}>{bannerDescription(order, t, localize)}</p>
           </div>
           {!isTerminal && (
             <div className="text-right flex-shrink-0">
-              <p className={`text-sm ${banner.subtextColor}`}>SLA до {order.slaDeadline}</p>
+              <p className={`text-sm ${banner.subtextColor}`}>{t('orderDetail.slaUntil')} {order.slaDeadline}</p>
             </div>
           )}
         </div>
@@ -200,22 +255,26 @@ export function OrderDetail() {
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
             <User className="w-4 h-4 text-gray-400" />
-            <p className="text-sm text-gray-500">Клиент</p>
+            <p className="text-sm text-gray-500">{t('orderDetail.customer')}</p>
           </div>
-          <p className="font-medium text-gray-900">{order.customerName}</p>
+          <p className="font-medium text-gray-900">{localize(order.customerName)}</p>
           <p className="text-sm text-gray-500">{order.customerPhone}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           {(() => {
             const DIcon = deliveryTypeIcons[order.deliveryType];
+            const deliveryLabelKey: DictKey =
+              order.deliveryType === 'delivery' ? 'orders.delivery.delivery' :
+              order.deliveryType === 'pickup'   ? 'orders.delivery.pickup'   :
+                                                   'orders.delivery.pvz';
             return (
               <div style={{display:'contents'}}>
                 <div className="flex items-center gap-2 mb-2">
                   <DIcon className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm text-gray-500">Доставка</p>
+                  <p className="text-sm text-gray-500">{t('orderDetail.delivery')}</p>
                 </div>
-                <p className="font-medium text-gray-900">{deliveryTypeLabels[order.deliveryType]}</p>
-                <p className="text-sm text-gray-500">{order.pvzName || order.deliveryAddress || 'Самовывоз из магазина'}</p>
+                <p className="font-medium text-gray-900">{t(deliveryLabelKey)}</p>
+                <p className="text-sm text-gray-500">{localize(order.pvzName) || localize(order.deliveryAddress) || t('orders.delivery.pickup')}</p>
               </div>
             );
           })()}
@@ -223,20 +282,20 @@ export function OrderDetail() {
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
             <CreditCard className="w-4 h-4 text-gray-400" />
-            <p className="text-sm text-gray-500">Оплата</p>
+            <p className="text-sm text-gray-500">{t('orderDetail.payment')}</p>
           </div>
           <p className={`font-medium ${PAYMENT_STATUS_COLORS[order.paymentStatus]}`}>
-            {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+            {t(PAYMENT_KEYS[order.paymentStatus])}
           </p>
-          <p className="text-sm text-gray-500">{order.paymentMethod}</p>
+          <p className="text-sm text-gray-500">{localize(order.paymentMethod)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
             <Package className="w-4 h-4 text-gray-400" />
-            <p className="text-sm text-gray-500">Итого</p>
+            <p className="text-sm text-gray-500">{t('orderDetail.total')}</p>
           </div>
           <p className="font-medium text-gray-900 text-lg">{formatCurrency(order.total)}</p>
-          <p className="text-sm text-gray-500">{order.itemsCount} поз. • {order.weight} кг</p>
+          <p className="text-sm text-gray-500">{order.itemsCount} {t('orders.itemsShort')} • {order.weight} kg</p>
         </div>
       </div>
 
@@ -244,7 +303,7 @@ export function OrderDetail() {
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="border-b border-gray-200 overflow-x-auto">
           <nav className="flex -mb-px">
-            {tabs.map((tab) => (
+            {TABS_CFG.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -255,7 +314,7 @@ export function OrderDetail() {
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             ))}
           </nav>
@@ -266,49 +325,49 @@ export function OrderDetail() {
           {activeTab === 'summary' && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Информация о заказе</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('orderDetail.tab.summary')}</h3>
                 <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                   <div>
-                    <dt className="text-sm text-gray-500">Номер заказа</dt>
+                    <dt className="text-sm text-gray-500">{t('orders.col.order')}</dt>
                     <dd className="font-medium text-gray-900 font-mono">{order.orderNumber}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">Создан</dt>
+                    <dt className="text-sm text-gray-500">{t('orderDetail.tab.timeline')}</dt>
                     <dd className="font-medium text-gray-900">{order.createdAt}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">Обновлён</dt>
+                    <dt className="text-sm text-gray-500">{t('common.refresh')}</dt>
                     <dd className="font-medium text-gray-900">{order.updatedAt}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">Продавец</dt>
+                    <dt className="text-sm text-gray-500">{t('orders.col.merchant')}</dt>
                     <dd>
                       <Link to={`/merchants/${order.merchantId}`} className="font-medium text-blue-600 hover:text-blue-700">
-                        {order.merchant}
+                        {localize(order.merchant)}
                       </Link>
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">SLA дедлайн</dt>
+                    <dt className="text-sm text-gray-500">SLA</dt>
                     <dd className={`font-medium ${order.isOverdue ? 'text-red-600' : 'text-gray-900'}`}>
                       {order.slaDeadline}
-                      {order.isOverdue && <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Просрочен</span>}
+                      {order.isOverdue && <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{t('orders.overdue')}</span>}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">Вес</dt>
-                    <dd className="font-medium text-gray-900">{order.weight} кг</dd>
+                    <dt className="text-sm text-gray-500">{t('orderDetail.weight')}</dt>
+                    <dd className="font-medium text-gray-900">{order.weight} kg</dd>
                   </div>
                   {order.deliveryAddress && (
                     <div className="md:col-span-2">
-                      <dt className="text-sm text-gray-500">Адрес доставки</dt>
-                      <dd className="font-medium text-gray-900">{order.deliveryAddress}</dd>
+                      <dt className="text-sm text-gray-500">{t('orderDetail.deliveryAddress')}</dt>
+                      <dd className="font-medium text-gray-900">{localize(order.deliveryAddress)}</dd>
                     </div>
                   )}
                   {(savedNotes ?? order.notes) && (
                     <div className="md:col-span-2">
-                      <dt className="text-sm text-gray-500">Примечания {savedNotes !== null && <span className="text-[10px] text-green-600 font-semibold ml-1">· изменено</span>}</dt>
-                      <dd className="font-medium text-gray-900 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200 whitespace-pre-wrap">{savedNotes ?? order.notes}</dd>
+                      <dt className="text-sm text-gray-500">{t('orderDetail.notes')}</dt>
+                      <dd className="font-medium text-gray-900 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200 whitespace-pre-wrap">{localize(savedNotes ?? order.notes)}</dd>
                     </div>
                   )}
                 </dl>
@@ -316,24 +375,24 @@ export function OrderDetail() {
 
               {/* Financial breakdown */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Финансовая сводка</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('orderDetail.totals')}</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Подытог</span>
+                    <span className="text-gray-500">{t('orderDetail.subtotal')}</span>
                     <span className="text-gray-900">{formatCurrency(order.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Доставка</span>
-                    <span className="text-gray-900">{order.deliveryFee === 0 ? 'Бесплатно' : formatCurrency(order.deliveryFee)}</span>
+                    <span className="text-gray-500">{t('orderDetail.delivery')}</span>
+                    <span className="text-gray-900">{order.deliveryFee === 0 ? '—' : formatCurrency(order.deliveryFee)}</span>
                   </div>
                   {order.discount > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Скидка</span>
+                      <span className="text-gray-500">{t('orderDetail.discount')}</span>
                       <span className="text-green-600">−{formatCurrency(order.discount)}</span>
                     </div>
                   )}
                   <div className="border-t border-gray-200 pt-2 flex justify-between">
-                    <span className="font-semibold text-gray-900">Итого</span>
+                    <span className="font-semibold text-gray-900">{t('orderDetail.total')}</span>
                     <span className="font-bold text-gray-900">{formatCurrency(order.total)}</span>
                   </div>
                 </div>

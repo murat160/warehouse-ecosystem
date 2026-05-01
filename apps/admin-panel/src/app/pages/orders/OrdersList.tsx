@@ -1,98 +1,190 @@
+/**
+ * OrdersList — translated to RU/EN/TR/TK via the i18n provider.
+ *
+ * Mock data (customer/merchant/courier names) is rendered through
+ * `useLocalize()`, which transliterates Cyrillic to the active alphabet
+ * for non-RU locales. This keeps the demo readable in EN/TR/TK without
+ * blowing up the existing mock store with localized objects.
+ *
+ * KPI cards are real toggle filters: clicking one applies the filter,
+ * clicking it again clears it. Only one KPI filter can be active at a
+ * time — overdue / active-only / by-status are mutually exclusive.
+ */
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { exportToCsv } from '../../utils/downloads';
-import { Search, Download, Eye, AlertCircle, Clock, Package, Truck, MapPin, ShoppingBag } from 'lucide-react';
+import {
+  Search, Download, Eye, AlertCircle, Clock, Package, Truck, MapPin,
+  ShoppingBag, X,
+} from 'lucide-react';
 import {
   ORDERS,
-  ORDER_STATUS_LABELS,
-  ORDER_STATUS_COLORS,
   formatCurrency,
   type OrderStatus,
   type DeliveryType,
 } from '../../data/orders-mock';
+import { useI18n, type DictKey } from '../../i18n';
+import { useLocalize } from '../../i18n/transliterate';
 
-const deliveryTypeLabels: Record<DeliveryType, string> = {
-  delivery: 'Доставка',
-  pickup: 'Самовывоз',
-  pvz: 'ПВЗ',
+const DELIVERY_KEYS: Record<DeliveryType, DictKey> = {
+  delivery: 'orders.delivery.delivery',
+  pickup:   'orders.delivery.pickup',
+  pvz:      'orders.delivery.pvz',
 };
-
-const deliveryTypeIcons: Record<DeliveryType, any> = {
+const DELIVERY_ICONS: Record<DeliveryType, any> = {
   delivery: Truck,
-  pickup: ShoppingBag,
-  pvz: MapPin,
+  pickup:   ShoppingBag,
+  pvz:      MapPin,
 };
+
+const STATUS_KEYS: Record<OrderStatus, DictKey> = {
+  new:              'orders.status.new',
+  accepted:         'orders.status.accepted',
+  preparing:        'orders.status.preparing',
+  ready:            'orders.status.ready',
+  pickup_ready:     'orders.status.pickup_ready',
+  courier_assigned: 'orders.status.courier_assigned',
+  in_transit:       'orders.status.in_transit',
+  at_pvz:           'orders.status.at_pvz',
+  delivered:        'orders.status.delivered',
+  cancelled:        'orders.status.cancelled',
+  returned:         'orders.status.returned',
+};
+const STATUS_COLORS: Record<OrderStatus, string> = {
+  new: 'bg-blue-100 text-blue-700',
+  accepted: 'bg-blue-100 text-blue-700',
+  preparing: 'bg-yellow-100 text-yellow-700',
+  ready: 'bg-green-100 text-green-700',
+  pickup_ready: 'bg-green-100 text-green-700',
+  courier_assigned: 'bg-purple-100 text-purple-700',
+  in_transit: 'bg-purple-100 text-purple-700',
+  at_pvz: 'bg-green-100 text-green-700',
+  delivered: 'bg-gray-100 text-gray-700',
+  cancelled: 'bg-red-100 text-red-700',
+  returned: 'bg-orange-100 text-orange-700',
+};
+
+/** What kind of KPI filter is currently in effect, if any. */
+type KpiFilter =
+  | { kind: 'none' }
+  | { kind: 'active' }
+  | { kind: 'overdue' }
+  | { kind: 'inDelivery' }    // courier_assigned + in_transit
+  | { kind: 'deliveredToday' };
 
 export function OrdersList() {
+  const { t } = useI18n();
+  const localize = useLocalize();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
-  const [overdueOnly, setOverdueOnly] = useState(false);
-  const [activeOnly, setActiveOnly]   = useState(false);
+  const [kpi, setKpi] = useState<KpiFilter>({ kind: 'none' });
+
+  /** Apply / toggle a KPI filter. Picking the same one twice clears it. */
+  function selectKpi(target: KpiFilter['kind']) {
+    setKpi(prev => prev.kind === target ? { kind: 'none' } : { kind: target } as KpiFilter);
+    // Picking a KPI clears the explicit status dropdown so the chip text
+    // matches what the user actually sees in the table.
+    setStatusFilter('all');
+  }
 
   const filteredOrders = useMemo(() => {
     return ORDERS.filter(order => {
       const q = searchQuery.toLowerCase();
+      // Customer name search must hit both Cyrillic source and the
+      // transliterated form, so EN-mode users typing "Ivanov" still find
+      // "Иванов".
+      const localizedName = localize(order.customerName).toLowerCase();
       const matchesSearch = !q ||
         order.orderNumber.toLowerCase().includes(q) ||
         order.customerName.toLowerCase().includes(q) ||
+        localizedName.includes(q) ||
         order.customerPhone.includes(searchQuery) ||
+        localize(order.merchant).toLowerCase().includes(q) ||
         order.merchant.toLowerCase().includes(q);
-      const matchesStatus  = statusFilter === 'all' || order.status === statusFilter;
-      const matchesOverdue = !overdueOnly || order.isOverdue;
-      const matchesActive  = !activeOnly  || !['delivered', 'cancelled', 'returned'].includes(order.status);
-      return matchesSearch && matchesStatus && matchesOverdue && matchesActive;
+      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+
+      let matchesKpi = true;
+      if (kpi.kind === 'active')          matchesKpi = !['delivered','cancelled','returned'].includes(order.status);
+      else if (kpi.kind === 'overdue')    matchesKpi = order.isOverdue;
+      else if (kpi.kind === 'inDelivery') matchesKpi = ['courier_assigned','in_transit'].includes(order.status);
+      else if (kpi.kind === 'deliveredToday') matchesKpi = order.status === 'delivered';
+
+      return matchesSearch && matchesStatus && matchesKpi;
     });
-  }, [searchQuery, statusFilter, overdueOnly, activeOnly]);
+  }, [searchQuery, statusFilter, kpi, localize]);
 
   const stats = useMemo(() => ({
-    active: ORDERS.filter(o => !['delivered', 'cancelled', 'returned'].includes(o.status)).length,
-    overdue: ORDERS.filter(o => o.isOverdue).length,
-    inDelivery: ORDERS.filter(o => ['courier_assigned', 'in_transit'].includes(o.status)).length,
+    active:         ORDERS.filter(o => !['delivered','cancelled','returned'].includes(o.status)).length,
+    overdue:        ORDERS.filter(o => o.isOverdue).length,
+    inDelivery:     ORDERS.filter(o => ['courier_assigned','in_transit'].includes(o.status)).length,
     deliveredToday: ORDERS.filter(o => o.status === 'delivered').length,
   }), []);
+
+  /**
+   * KPI card config. `kpiKey` decides the toggle. The card is fully
+   * keyboard-accessible (it's a real <button>), and its visual "active"
+   * state mirrors `kpi.kind`.
+   */
+  const KPI_CARDS: Array<{
+    kpiKey: KpiFilter['kind'];
+    labelKey: DictKey;
+    value: number;
+    color: string; bg: string; ring: string;
+  }> = [
+    { kpiKey: 'active',         labelKey: 'orders.kpi.active',         value: stats.active,         color: 'text-blue-600',   bg: 'bg-blue-50',    ring: 'ring-blue-300'   },
+    { kpiKey: 'overdue',        labelKey: 'orders.kpi.overdue',        value: stats.overdue,        color: 'text-red-600',    bg: 'bg-red-50',     ring: 'ring-red-300'    },
+    { kpiKey: 'inDelivery',     labelKey: 'orders.kpi.inDelivery',     value: stats.inDelivery,     color: 'text-purple-600', bg: 'bg-purple-50',  ring: 'ring-purple-300' },
+    { kpiKey: 'deliveredToday', labelKey: 'orders.kpi.deliveredToday', value: stats.deliveredToday, color: 'text-green-600',  bg: 'bg-green-50',   ring: 'ring-green-300'  },
+  ];
+
+  const activeKpiLabel = kpi.kind === 'none' ? null : t(KPI_CARDS.find(c => c.kpiKey === kpi.kind)!.labelKey);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Заказы</h1>
-          <p className="text-gray-500">Управление заказами и доставками</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('orders.title')}</h1>
+          <p className="text-gray-500">{t('orders.subtitle')}</p>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats / KPI cards — real toggle filters */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Активные',          value: stats.active,         color: 'text-blue-600',   bg: 'bg-blue-50',   action: 'active'    as const },
-          { label: 'Просрочки SLA',     value: stats.overdue,        color: 'text-red-600',    bg: 'bg-red-50',    action: 'overdue'   as const },
-          { label: 'В доставке',        value: stats.inDelivery,     color: 'text-purple-600', bg: 'bg-purple-50', action: 'status'    as const, filter: 'in_transit' as OrderStatus },
-          { label: 'Доставлено сегодня',value: stats.deliveredToday, color: 'text-green-600',  bg: 'bg-green-50',  action: 'status'    as const, filter: 'delivered'  as OrderStatus },
-        ].map(stat => {
-          const isActive =
-            (stat.action === 'active'  && activeOnly) ||
-            (stat.action === 'overdue' && overdueOnly) ||
-            (stat.action === 'status'  && stat.filter && statusFilter === stat.filter);
+        {KPI_CARDS.map(card => {
+          const isActive = kpi.kind === card.kpiKey;
+          const label = t(card.labelKey);
           return (
             <button
-              key={stat.label}
-              onClick={() => {
-                if (stat.action === 'active')  { setActiveOnly(v => !v); setOverdueOnly(false); setStatusFilter('all'); }
-                if (stat.action === 'overdue') { setOverdueOnly(v => !v); setActiveOnly(false); setStatusFilter('all'); }
-                if (stat.action === 'status' && stat.filter) {
-                  setStatusFilter(statusFilter === stat.filter ? 'all' : stat.filter);
-                  setActiveOnly(false); setOverdueOnly(false);
-                }
-              }}
-              className={`${stat.bg} p-4 rounded-lg border text-left transition-all cursor-pointer hover:shadow-md active:scale-[0.98] ${isActive ? 'ring-2 ring-offset-1 ring-current border-current' : 'border-gray-200 hover:border-gray-300'}`}
+              key={card.kpiKey}
+              onClick={() => selectKpi(card.kpiKey)}
+              aria-pressed={isActive}
+              aria-label={label}
+              className={`${card.bg} p-4 rounded-lg border text-left transition-all cursor-pointer hover:shadow-md focus:outline-none focus-visible:ring-2 ${card.ring} active:scale-[0.98] ${isActive ? `ring-2 ring-offset-1 ${card.ring} border-current` : 'border-gray-200 hover:border-gray-300'}`}
             >
-              <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
-              <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+              <p className="text-sm text-gray-500 mb-1">{label}</p>
+              <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
             </button>
           );
         })}
       </div>
+
+      {/* Active filter chip */}
+      {activeKpiLabel && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-sm">
+            <span className="font-semibold">{t('orders.activeFilter')}:</span>
+            <span>{activeKpiLabel}</span>
+            <button
+              onClick={() => setKpi({ kind: 'none' })}
+              aria-label={t('orders.clearFilter')}
+              className="p-0.5 rounded-full hover:bg-blue-100">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl border border-gray-200">
@@ -101,7 +193,7 @@ export function OrdersList() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Поиск по номеру заказа, клиенту, телефону..."
+              placeholder={t('orders.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -112,29 +204,29 @@ export function OrdersList() {
             onChange={(e) => setStatusFilter(e.target.value as OrderStatus | 'all')}
             className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">Все статусы</option>
-            {Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => (
-              <option key={status} value={status}>{label}</option>
+            <option value="all">{t('orders.allStatuses')}</option>
+            {(Object.keys(STATUS_KEYS) as OrderStatus[]).map(status => (
+              <option key={status} value={status}>{t(STATUS_KEYS[status])}</option>
             ))}
           </select>
           <button
             onClick={() => {
-              if (filteredOrders.length === 0) { toast.info('Нет заказов для экспорта'); return; }
+              if (filteredOrders.length === 0) { toast.info(t('toast.exportEmpty')); return; }
               exportToCsv(filteredOrders as any[], [
                 { key: 'id',            label: 'ID' },
-                { key: 'customerName',  label: 'Клиент' },
-                { key: 'customerPhone', label: 'Телефон' },
-                { key: 'merchant',      label: 'Продавец' },
-                { key: 'status',        label: 'Статус' },
-                { key: 'total',         label: 'Сумма' },
-                { key: 'createdAt',     label: 'Создан' },
+                { key: 'customerName',  label: t('orders.col.customer') },
+                { key: 'customerPhone', label: 'Phone' },
+                { key: 'merchant',      label: t('orders.col.merchant') },
+                { key: 'status',        label: t('orders.col.status') },
+                { key: 'total',         label: t('orders.col.total') },
+                { key: 'createdAt',     label: 'Created' },
               ], 'orders');
-              toast.success(`Скачан CSV: ${filteredOrders.length} заказов`);
+              toast.success(`${t('toast.exported')}: ${filteredOrders.length}`);
             }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Download className="w-5 h-5" />
-            Экспорт
+            {t('orders.export')}
           </button>
         </div>
       </div>
@@ -145,19 +237,19 @@ export function OrdersList() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Заказ</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Клиент</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Продавец</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Сумма</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SLA</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.order')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.customer')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.merchant')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.type')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.status')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.total')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('orders.col.sla')}</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t('orders.col.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredOrders.map((order) => {
-                const DeliveryIcon = deliveryTypeIcons[order.deliveryType];
+                const DeliveryIcon = DELIVERY_ICONS[order.deliveryType];
                 const mainImg = order.items[0]?.imageUrl;
                 const extraImgs = order.items.slice(1, 4);
                 const moreCount = order.items.length - 4;
@@ -165,22 +257,19 @@ export function OrdersList() {
                   <tr key={order.id} className={`hover:bg-gray-50 transition-colors ${order.isOverdue ? 'bg-red-50' : ''}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        {/* Product images */}
                         {mainImg && (
                           <div className="flex items-center shrink-0">
-                            {/* Main (biggest) image */}
                             <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-gray-50 shrink-0 z-10">
-                              <img src={mainImg} alt={order.items[0]?.name} className="w-full h-full object-cover" loading="lazy" />
+                              <img src={mainImg} alt={localize(order.items[0]?.name)} className="w-full h-full object-cover" loading="lazy" />
                             </div>
-                            {/* Extra images — smaller, overlapping */}
                             {extraImgs.map((item, idx) => (
                               <div
                                 key={item.id}
                                 className="w-6 h-6 rounded-md overflow-hidden border border-white shadow-sm bg-gray-100 -ml-2 shrink-0"
                                 style={{ zIndex: 9 - idx }}
-                                title={item.name}
+                                title={localize(item.name)}
                               >
-                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                                <img src={item.imageUrl} alt={localize(item.name)} className="w-full h-full object-cover" loading="lazy" />
                               </div>
                             ))}
                             {moreCount > 0 && (
@@ -190,7 +279,6 @@ export function OrdersList() {
                             )}
                           </div>
                         )}
-                        {/* Order info */}
                         <div>
                           <Link to={`/orders/${order.id}`} className="font-medium text-blue-600 hover:text-blue-700 font-mono text-sm">
                             {order.orderNumber}
@@ -201,44 +289,44 @@ export function OrdersList() {
                     </td>
                     <td className="px-6 py-4">
                       <div>
-                        <p className="font-medium text-gray-900">{order.customerName}</p>
+                        <p className="font-medium text-gray-900">{localize(order.customerName)}</p>
                         <p className="text-sm text-gray-500">{order.customerPhone.replace(/\d(?=\d{2})/g, (m, i) => i > 8 && i < 14 ? '*' : m)}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <Link to={`/merchants/${order.merchantId}`} className="text-sm text-gray-900 hover:text-blue-600">
-                        {order.merchant}
+                        {localize(order.merchant)}
                       </Link>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
                         <DeliveryIcon className="w-4 h-4 text-gray-400" />
                         <span className="text-sm text-gray-900">
-                          {deliveryTypeLabels[order.deliveryType]}
+                          {t(DELIVERY_KEYS[order.deliveryType])}
                         </span>
                       </div>
                       {order.pvzCode && (
                         <p className="text-xs text-gray-500 mt-0.5">{order.pvzCode}</p>
                       )}
                       {order.courierName && (
-                        <p className="text-xs text-gray-500 mt-0.5">{order.courierName}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{localize(order.courierName)}</p>
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ORDER_STATUS_COLORS[order.status]}`}>
-                        {ORDER_STATUS_LABELS[order.status]}
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[order.status]}`}>
+                        {t(STATUS_KEYS[order.status])}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-medium text-gray-900">{formatCurrency(order.total)}</p>
-                      <p className="text-sm text-gray-500">{order.itemsCount} поз.</p>
+                      <p className="text-sm text-gray-500">{order.itemsCount} {t('orders.itemsShort')}</p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1">
                         {order.isOverdue ? (
                           <div style={{display:'contents'}}>
                             <AlertCircle className="w-4 h-4 text-red-600" />
-                            <span className="text-sm text-red-600">Просрочен</span>
+                            <span className="text-sm text-red-600">{t('orders.overdue')}</span>
                           </div>
                         ) : order.status === 'delivered' || order.status === 'cancelled' ? (
                           <span className="text-sm text-gray-400">—</span>
@@ -256,7 +344,7 @@ export function OrdersList() {
                         className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       >
                         <Eye className="w-4 h-4" />
-                        Детали
+                        {t('orders.detail')}
                       </Link>
                     </td>
                   </tr>
@@ -266,7 +354,7 @@ export function OrdersList() {
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    Заказы не найдены
+                    {t('orders.empty')}
                   </td>
                 </tr>
               )}
