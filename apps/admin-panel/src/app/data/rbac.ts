@@ -20,6 +20,7 @@ import {
   Image as ImageIcon, Layers, Mail, Building2, ScanLine, Lock, Key,
   Globe, AlertTriangle, LogIn, Monitor, RotateCcw, Wallet, Plane, Receipt,
   HandCoins, Boxes, FileCheck2, GitBranch, Truck, BookOpen,
+  UserPlus, ListChecks, PlusCircle,
 } from 'lucide-react';
 
 // ─── Sidebar modules ──────────────────────────────────────────────────────────
@@ -63,10 +64,22 @@ export const SIDEBAR_MODULES: SidebarModule[] = [
   {
     key: 'users', label: 'Пользователи', href: '/users', icon: Users,
     children: [
-      { key: 'users',              label: 'Все пользователи',  href: '/users',              icon: Users, exact: true },
-      { key: 'users.invitations',  label: 'Приглашения',       href: '/users/invitations',  icon: Mail },
-      { key: 'users.teams',        label: 'Команды и отделы',  href: '/users/teams',        icon: Building2 },
-      { key: 'users.cabinets',     label: 'Кабинеты и доступ', href: '/users/cabinets',     icon: Layers },
+      { key: 'users',              label: 'Все пользователи',    href: '/users',                  icon: Users, exact: true },
+      // Deep-link to UsersList with the create-employee modal pre-opened.
+      { key: 'users.create',       label: 'Добавить сотрудника', href: '/users?action=create',    icon: UserPlus },
+      { key: 'users.invitations',  label: 'Приглашения',         href: '/users/invitations',      icon: Mail },
+      { key: 'users.teams',        label: 'Команды и отделы',    href: '/users/teams',            icon: Building2 },
+      { key: 'users.cabinets',     label: 'Кабинеты и доступ',   href: '/users/cabinets',         icon: Layers },
+    ],
+  },
+  // Tasks — distinct group; shown to anyone who can view it. Permissions are
+  // defined in rbac.ts via `tasks.view` etc. and granted to admin roles.
+  {
+    key: 'tasks', label: 'Задания', href: '/tasks', icon: ListChecks,
+    children: [
+      { key: 'tasks',         label: 'Все задания',       href: '/tasks',                 icon: ListChecks, exact: true },
+      { key: 'tasks.assign',  label: 'Назначить задание', href: '/tasks?action=assign',   icon: PlusCircle },
+      { key: 'tasks.mine',    label: 'Мои задания',       href: '/tasks/mine',            icon: Briefcase },
     ],
   },
   {
@@ -176,6 +189,8 @@ export const SIDEBAR_MODULES: SidebarModule[] = [
       { key: 'security',           label: 'Центр безопасности',  href: '/security/center',         icon: Shield },
       { key: 'security.audit',     label: 'Журнал аудита',       href: '/security/audit',          icon: FileText },
       { key: 'security.rbac',      label: 'Роли и права',         href: '/security/rbac',           icon: ShieldCheck },
+      // Deep-link: opens RBAC management with the create-role modal.
+      { key: 'security.rbac.create', label: 'Создать роль',        href: '/security/rbac?action=create', icon: PlusCircle },
       { key: 'security.sessions',  label: 'Сессии и устройства', href: '/security/center', tab: 'sessions', icon: Monitor },
       { key: 'security.logins',    label: 'Подозрит. входы',      href: '/security/center', tab: 'logins',   icon: LogIn },
       { key: 'security.ip',        label: 'IP Access Rules',      href: '/security/center', tab: 'ip',       icon: Globe },
@@ -407,6 +422,7 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
     permissions: [
       ...m('dashboard', 'view'),
       ...m('users', 'view', 'create', 'edit', 'block', 'unblock', 'assign'),
+      ...m('users.create', 'view'),
       ...m('users.invitations', 'view', 'create'),
       ...m('users.teams', 'view', 'edit'),
       ...m('users.cabinets', 'view', 'edit'),
@@ -421,6 +437,12 @@ export const PREDEFINED_ROLES: PredefinedRole[] = [
       ...m('reports', 'view', 'export'),
       ...m('approvals', 'view', 'approve', 'reject'),
       ...m('compliance', 'view'),
+      // Tasks: admin can see + assign
+      ...m('tasks', 'view', 'create', 'edit', 'delete', 'assign'),
+      ...m('tasks.assign', 'view'),
+      ...m('tasks.mine',   'view'),
+      // Allow opening Create Role deep link
+      ...m('security.rbac.create', 'view'),
     ],
   },
   {

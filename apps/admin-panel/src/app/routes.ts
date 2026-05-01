@@ -84,6 +84,8 @@ import { IntercompanyDebt, Setoff } from "./pages/foreign-delivery/IntercompanyS
 import {
   ForeignDocuments, AccountingExport, ForeignSettingsPage,
 } from "./pages/foreign-delivery/DocsExportSettings";
+// Tasks
+import { TasksList, MyTasks } from "./pages/tasks/TasksList";
 
 export const router = createBrowserRouter([
   {
@@ -175,6 +177,9 @@ export const router = createBrowserRouter([
       { path: "reports/accounting", Component: ReportsAccounting },
       { path: "reports/marketing",  Component: ReportsMarketing  },
       { path: "approvals", Component: ApprovalCenter },
+      // Tasks
+      { path: "tasks",      Component: TasksList },
+      { path: "tasks/mine", Component: MyTasks },
       { path: "support/tickets", Component: TicketsList },
       { path: "support/tickets/:id", Component: TicketDetail },
       { path: "security/audit", Component: AuditLog },

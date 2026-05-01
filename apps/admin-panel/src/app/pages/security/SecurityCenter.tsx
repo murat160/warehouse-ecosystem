@@ -1276,8 +1276,12 @@ export function SecurityCenter() {
         })}
       </div>
 
-      {/* Tab nav — horizontal, scrollable on narrow screens. */}
-      <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto pb-px">
+      {/* Tab nav — horizontal, scrollable on narrow screens. Sticky just below
+          the dashboard header (h-16 = 4rem) so it stays visible while the user
+          reads long tab content. `scroll-mt-20` lets KPI-card→tab navigation
+          land cleanly without the sticky header eating the underline. */}
+      <div className="sticky top-16 z-30 bg-gray-50/95 backdrop-blur-sm -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 scroll-mt-20">
+        <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto pb-px">
         {TABS_CFG.map(cfg => {
           const Icon = cfg.icon;
           const isActive = tab === cfg.id;
@@ -1296,6 +1300,7 @@ export function SecurityCenter() {
             </button>
           );
         })}
+        </div>
       </div>
 
       {/* Tab content */}

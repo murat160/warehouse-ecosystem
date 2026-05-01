@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../../utils/clipboard';
 import { exportToCsv } from '../../utils/downloads';
@@ -23,6 +24,7 @@ import { CreateEmployeeDrawer } from '../../components/users/CreateEmployeeDrawe
 import { UserAccessTab } from '../../components/users/UserAccessTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { audit } from '../../data/audit-store';
+import { useI18n } from '../../i18n';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -955,6 +957,7 @@ function UserDetailPanel({ user, onClose, onOpenChangeRole, onOpenSendEmail, onO
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function UsersList() {
+  const { t } = useI18n();
   const [users, setUsers] = useState<ManagedUser[]>(ALL_USERS_INITIAL);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -965,6 +968,22 @@ export function UsersList() {
   const [cabinetPreview, setCabinetPreview] = useState<ManagedUser | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
   const { impersonateUser } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  /**
+   * Deep-link entry: navigating to /users?action=create (e.g. from the new
+   * sidebar "Add employee" link or the Personal Cabinet) auto-opens the
+   * Create Employee drawer and strips the param.
+   */
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setShowCreateEmployee(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('action');
+      setSearchParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Modal states — all at root level to avoid transform clipping
   const [roleModal, setRoleModal] = useState<ManagedUser | null>(null);
@@ -1044,13 +1063,13 @@ export function UsersList() {
       <div className="px-6 py-5 border-b border-gray-100 bg-white shrink-0">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Пользователи</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Управление доступом и личными кабинетами · {stats.total} сотрудников</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t('users.title')}</h1>
+            <p className="text-sm text-gray-400 mt-0.5">{t('users.subtitle')} · {stats.total}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                if (filtered.length === 0) { toast.info('Нет пользователей для экспорта'); return; }
+                if (filtered.length === 0) { toast.info(t('toast.exportEmpty')); return; }
                 exportToCsv(filtered as any[], [
                   { key: 'id',        label: 'ID' },
                   { key: 'name',      label: 'Имя' },
@@ -1063,14 +1082,14 @@ export function UsersList() {
                   { key: 'lastLogin', label: 'Последний вход' },
                   { key: 'createdAt', label: 'Создан' },
                 ], 'users');
-                toast.success(`Экспортировано: ${filtered.length} пользователей`);
+                toast.success(`${t('toast.exported')}: ${filtered.length}`);
               }}
               className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              <Download className="w-4 h-4" />Экспорт
+              <Download className="w-4 h-4" />{t('users.export')}
             </button>
             <button onClick={() => setShowCreateEmployee(true)}
               className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors shadow-sm">
-              <Plus className="w-4 h-4" />Создать сотрудника
+              <Plus className="w-4 h-4" />{t('users.create')}
             </button>
           </div>
         </div>
@@ -1154,7 +1173,7 @@ export function UsersList() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-5 py-12 text-center">
                   <Users className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                  <p className="text-gray-400 font-medium">Пользователи не найдены</p>
+                  <p className="text-gray-400 font-medium">{t('users.empty')}</p>
                 </td></tr>
               ) : filtered.map(user => {
                 const sc = STATUS_CFG[user.status];

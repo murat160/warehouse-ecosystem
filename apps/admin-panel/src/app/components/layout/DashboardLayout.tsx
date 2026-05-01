@@ -56,6 +56,27 @@ const SIDEBAR_LABEL_KEYS: Record<string, DictKey> = {
   // Sidebar entry "Роли и права" (we deliberately dropped the legacy "(RBAC)"
   // suffix that broke layout on narrow sidebars).
   'Роли и права':                'sidebar.module.security.rbac',
+  // Children of "Пользователи"
+  'Все пользователи':            'sidebar.module.users.list',
+  'Приглашения':                 'sidebar.module.users.invitations',
+  'Добавить сотрудника':         'sidebar.module.users.create',
+  'Команды и отделы':            'sidebar.module.users.teams',
+  'Кабинеты и доступ':           'sidebar.module.users.cabinets',
+  // Children of "Безопасность"
+  'Центр безопасности':          'sidebar.module.security.center',
+  'Журнал аудита':               'sidebar.module.security.audit',
+  'Создать роль':                'sidebar.module.security.rbac.create',
+  'Сессии и устройства':         'sidebar.module.security.sessions',
+  'Подозрит. входы':             'sidebar.module.security.logins',
+  'IP Access Rules':             'sidebar.module.security.ip',
+  'Security Alerts':             'sidebar.module.security.alerts',
+  'Токены и ключи':              'sidebar.module.security.tokens',
+  'Политика паролей':            'sidebar.module.security.policies',
+  // New "Задания" group
+  'Задания':                     'sidebar.module.tasks',
+  'Все задания':                 'sidebar.module.tasks.list',
+  'Назначить задание':           'sidebar.module.tasks.assign',
+  'Мои задания':                 'sidebar.module.tasks.mine',
 };
 
 const SECTION_KEYS: Record<string, DictKey> = {
@@ -134,10 +155,36 @@ export function DashboardLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.permissions.join(',')]);
 
-  // Track expanded collapsible group
-  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  /**
+   * Sidebar groups use a Set<string> of expanded group `key`s. Multiple groups
+   * can be open at once — opening one no longer collapses the others, which
+   * was the source of the "sidebar jumps" complaint. Keyed by `item.key`
+   * (stable identifier) instead of `item.label`, so changing language doesn't
+   * collapse currently-open groups.
+   *
+   * Persisted in localStorage so a refresh keeps the operator's layout. Auto-
+   * expand for the active route ADDS to the set rather than replacing it.
+   */
+  const SIDEBAR_GROUPS_KEY = 'admin-panel.sidebar.expanded';
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    try {
+      const raw = window.localStorage.getItem(SIDEBAR_GROUPS_KEY);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* no-op */ }
+    return new Set<string>();
+  });
 
-  // Auto-expand the group whose child route is currently active.
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { window.localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify(Array.from(next))); } catch { /* no-op */ }
+      return next;
+    });
+  }
+
+  // Auto-expand the group whose child route is currently active. Add-only —
+  // never collapses other groups the user already opened.
   useEffect(() => {
     const path = location.pathname;
     const search = location.search;
@@ -148,8 +195,13 @@ export function DashboardLayout() {
         if (c.exact) return path === c.href;
         return path === c.href || path.startsWith(c.href + '/');
       });
-      if (hit && expandedGroup !== m.label) {
-        setExpandedGroup(m.label);
+      if (hit && !expandedGroups.has(m.key)) {
+        setExpandedGroups(prev => {
+          const next = new Set(prev);
+          next.add(m.key);
+          try { window.localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify(Array.from(next))); } catch { /* no-op */ }
+          return next;
+        });
         break;
       }
     }
@@ -191,7 +243,7 @@ export function DashboardLayout() {
    */
   function renderItem(item: SidebarModule, onLeafNav?: () => void) {
     const hasChildren = (item.children?.length ?? 0) > 0;
-    const isGroupExpanded = expandedGroup === item.label;
+    const isGroupExpanded = expandedGroups.has(item.key);
     const isGroupActive = hasChildren && item.children!.some(c => {
       if (c.tab) return location.pathname === c.href && location.search === `?tab=${c.tab}`;
       if (c.exact) return location.pathname === c.href;
@@ -203,7 +255,7 @@ export function DashboardLayout() {
         <div key={item.key}>
           <button
             type="button"
-            onClick={() => setExpandedGroup(isGroupExpanded ? null : item.label)}
+            onClick={() => toggleGroup(item.key)}
             aria-expanded={isGroupExpanded}
             title={isGroupExpanded ? t('sidebar.collapse') : t('sidebar.expand')}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm text-left ${
