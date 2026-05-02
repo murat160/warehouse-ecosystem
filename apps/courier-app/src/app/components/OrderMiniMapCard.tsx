@@ -1,37 +1,91 @@
-import { Clock, MapPin, Navigation, Package, Store, Wallet } from 'lucide-react';
+import { Check, CheckCircle2, Clock, MapPin, Navigation, Package, Store, Wallet, X } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { useT } from '../i18n';
 import { isCustomerInfoUnlocked } from '../store/CourierStore';
-import type { Order, OrderStatus } from '../store/types';
+import type { Order } from '../store/types';
 
-type Variant = 'offer' | 'to_pickup' | 'to_customer';
+export type MiniMapMode = 'offer' | 'active' | 'delivered';
 
 interface Props {
   order: Order;
-  pendingOffer?: boolean;
+  mode: MiniMapMode;
+  onDismiss?: () => void;
   className?: string;
-}
-
-function pickVariant(order: Order, isOffer: boolean): Variant {
-  if (isOffer) return 'offer';
-  return isCustomerInfoUnlocked(order.status) ? 'to_customer' : 'to_pickup';
 }
 
 function googleMapsHref(lat: number, lng: number) {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
 }
 
-export function OrderMiniMapCard({ order, pendingOffer = false, className = '' }: Props) {
+function durationLabel(start?: number, end?: number): string {
+  if (!start || !end) return '—';
+  const ms = Math.max(0, end - start);
+  const min = Math.round(ms / 60000);
+  return `${min}`;
+}
+
+export function OrderMiniMapCard({ order, mode, onDismiss, className = '' }: Props) {
   const t = useT();
-  const variant = pickVariant(order, pendingOffer);
+  const navigate = useNavigate();
+
+  // Delivered banner — congratulatory state
+  if (mode === 'delivered') {
+    const took = durationLabel(order.acceptedAt, order.deliveredAt);
+    return (
+      <div
+        className={`pointer-events-auto w-[200px] rounded-2xl shadow-lg overflow-hidden bg-white relative ${className}`}
+        data-testid="order-mini-map-card"
+      >
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/30 text-white flex items-center justify-center"
+            aria-label={t('common.close')}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-3 py-3 text-white">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wide">
+              {t('mini.title.delivered')}
+            </span>
+          </div>
+          <div className="mt-1 text-[12px] font-semibold opacity-95">
+            {t('order.number')} {order.number}
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-white/95 text-[11px]">
+            <Clock className="w-3 h-3" />
+            <span>{t('mini.delivered_in')} {took} {t('units.min')}</span>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate(`/earnings/order/${order.id}`)}
+          className="w-full flex items-center justify-center gap-1.5 h-9 bg-gray-900 text-white text-[12px] font-bold active:bg-gray-800"
+        >
+          <Wallet className="w-3.5 h-3.5" />
+          {t('mini.view_receipt')} · {order.payAmount.toFixed(2)} {order.payCurrency}
+        </button>
+      </div>
+    );
+  }
+
+  // Offer / active variants
+  const isOffer = mode === 'offer';
+  const unlocked = isCustomerInfoUnlocked(order.status);
+  const variant: 'offer' | 'to_pickup' | 'to_customer' = isOffer
+    ? 'offer'
+    : unlocked
+      ? 'to_customer'
+      : 'to_pickup';
 
   const titleKey =
     variant === 'offer' ? 'mini.title.offer'
     : variant === 'to_pickup' ? 'mini.title.to_pickup'
     : 'mini.title.to_customer';
 
-  const dest = variant === 'to_customer'
-    ? order.customer.location
-    : order.pickup.location;
+  const dest = variant === 'to_customer' ? order.customer.location : order.pickup.location;
 
   const accent =
     variant === 'offer' ? 'from-emerald-500 to-teal-600'
@@ -92,7 +146,10 @@ export function OrderMiniMapCard({ order, pendingOffer = false, className = '' }
             <Package className="w-3 h-3" />
             <span>{order.distanceKm.toFixed(1)} {t('units.km')}</span>
           </div>
-          <span className="font-semibold text-gray-900">{statusLabel(order.status, t)}</span>
+          <span className="font-semibold text-gray-900 truncate ml-2">
+            {variant === 'offer' && unlocked ? <Check className="w-3 h-3 inline" /> : null}
+            {t(`status.${order.status}`)}
+          </span>
         </div>
       </div>
 
@@ -107,8 +164,4 @@ export function OrderMiniMapCard({ order, pendingOffer = false, className = '' }
       </a>
     </div>
   );
-}
-
-function statusLabel(status: OrderStatus, t: (k: any) => string) {
-  return t(`status.${status}`);
 }

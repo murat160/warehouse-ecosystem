@@ -12,6 +12,7 @@ const SettingsPage           = lazy(() => import('./pages/SettingsPage').then(m 
 const InsurancePage          = lazy(() => import('./pages/InsurancePage').then(m => ({ default: m.InsurancePage })));
 const HelpPage               = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })));
 const ChatPage               = lazy(() => import('./pages/ChatPage').then(m => ({ default: m.ChatPage })));
+const ChatListPage           = lazy(() => import('./pages/ChatListPage').then(m => ({ default: m.ChatListPage })));
 const AnalyticsPage          = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const RewardsPage            = lazy(() => import('./pages/RewardsPage').then(m => ({ default: m.RewardsPage })));
 const StatisticsPage         = lazy(() => import('./pages/StatisticsPage').then(m => ({ default: m.StatisticsPage })));
@@ -65,6 +66,7 @@ const Settings         = () => Frame(<SettingsPage />);
 const Insurance        = () => Frame(<InsurancePage />);
 const Help             = () => Frame(<HelpPage />);
 const Chat             = () => Frame(<ChatPage />);
+const Chats            = () => Frame(<ChatListPage />);
 const Analytics        = () => Frame(<AnalyticsPage />);
 const Rewards          = () => Frame(<RewardsPage />);
 const Statistics       = () => Frame(<StatisticsPage />);
@@ -83,6 +85,7 @@ export const router = createMemoryRouter(
     { path: '/settings',                       Component: Settings },
     { path: '/insurance',                      Component: Insurance },
     { path: '/help',                           Component: Help },
+    { path: '/chats',                          Component: Chats },
     { path: '/chat/:chatId',                   Component: Chat },
     { path: '/support',                        Component: Support },
     { path: '/delivery-settings',              Component: DeliverySettings },

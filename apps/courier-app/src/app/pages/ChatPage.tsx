@@ -19,8 +19,32 @@ export function ChatPage() {
   const { state, sendMessage, markChannelViewed } = useCourierStore();
 
   const isSupport = chatId === 'support';
-  const channelKey = isSupport ? 'support' : `customer:${state.activeOrder?.id ?? 'none'}`;
-  const customerLocked = !isSupport && !isCustomerInfoUnlocked(state.activeOrder?.status);
+
+  // Resolve channelKey:
+  //  - 'support' is the always-on support channel
+  //  - 'customer' alone routes to the active customer chat
+  //  - anything containing ':' is already a stable channelKey (e.g. customer:ord_123)
+  const channelKey = isSupport
+    ? 'support'
+    : chatId.includes(':')
+      ? chatId
+      : state.activeOrder
+        ? `customer:${state.activeOrder.id}`
+        : `customer:none`;
+
+  // Resolve which order this customer chat belongs to (active or archived).
+  const customerOrderId = !isSupport
+    ? channelKey.startsWith('customer:') ? channelKey.slice('customer:'.length) : undefined
+    : undefined;
+  const liveOrder = !isSupport && state.activeOrder?.id === customerOrderId ? state.activeOrder : undefined;
+  const archivedOrder = !isSupport && !liveOrder ? state.history.find(o => o.id === customerOrderId) : undefined;
+  const customerOrder = liveOrder ?? archivedOrder;
+
+  // Locked = customer chat that has not yet reached pickup (privacy gate).
+  // Archived chats are always readable.
+  const customerLocked = !isSupport && !archivedOrder && !isCustomerInfoUnlocked(liveOrder?.status);
+  // Read-only = archived (delivered) — can read but not send new messages.
+  const readOnly = !isSupport && !!archivedOrder;
 
   const messages = useMemo(
     () => state.messages.filter(m => m.channelKey === channelKey).sort((a, b) => a.createdAt - b.createdAt),
@@ -42,7 +66,7 @@ export function ChatPage() {
   }, [messages.length]);
 
   function send() {
-    if (!text.trim() || customerLocked) return;
+    if (!text.trim() || customerLocked || readOnly) return;
     sendMessage(channelKey, { text: text.trim() });
     setText('');
   }
@@ -71,12 +95,16 @@ export function ChatPage() {
     setAttachOpen(false);
   }
 
-  const title = isSupport ? t('chat.support') : t('chat.customer');
+  const title = isSupport ? t('chat.support') : (customerOrder?.customer.name ?? t('chat.customer'));
 
   const initials = isSupport
     ? 'S'
-    : (state.activeOrder?.customer.name ?? '?').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+    : (customerOrder?.customer.name ?? '?').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
   const avatarBg = isSupport ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-orange-500';
+
+  // Order number is shown for customer chats once unlocked (picked_up+) or for archived chats.
+  const showOrderNumber = !isSupport && customerOrder
+    && (archivedOrder ? true : isCustomerInfoUnlocked(customerOrder.status));
 
   return (
     <div className="min-h-full flex flex-col bg-[linear-gradient(180deg,#F4F6F8_0%,#EAEFF3_100%)]">
@@ -88,23 +116,33 @@ export function ChatPage() {
           {initials || '?'}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-extrabold truncate">{title}</div>
+          <div className="text-[15px] font-extrabold truncate flex items-center gap-1.5">
+            <span className="truncate">{title}</span>
+            {showOrderNumber && customerOrder && (
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${archivedOrder ? 'bg-gray-100 text-gray-600' : 'bg-emerald-100 text-emerald-800'}`}>
+                {customerOrder.number}
+              </span>
+            )}
+          </div>
           <div className="text-xs text-gray-500 truncate flex items-center gap-1">
             {isSupport ? (
               <>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                 {t('courier.online')}
               </>
-            ) : state.activeOrder ? (
-              isCustomerInfoUnlocked(state.activeOrder.status)
-                ? state.activeOrder.customer.name
-                : t('privacy.unlock_after_pickup')
+            ) : archivedOrder ? (
+              <>
+                <Lock className="w-3 h-3" />
+                {t('chats.tab.closed')}
+              </>
+            ) : customerLocked ? (
+              t('privacy.unlock_after_pickup')
             ) : null}
           </div>
         </div>
-        {!isSupport && state.activeOrder && isCustomerInfoUnlocked(state.activeOrder.status) && (
+        {!isSupport && liveOrder && isCustomerInfoUnlocked(liveOrder.status) && (
           <a
-            href={`tel:${state.activeOrder.customer.phone}`}
+            href={`tel:${liveOrder.customer.phone}`}
             className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm active:bg-emerald-600"
           >
             <Phone className="w-5 h-5" />
@@ -142,6 +180,12 @@ export function ChatPage() {
             )}
           </div>
 
+          {readOnly ? (
+            <div className="bg-gray-100 border-t border-gray-200 px-3 py-3 text-center text-sm text-gray-600 pb-[max(12px,env(safe-area-inset-bottom))]">
+              <Lock className="w-4 h-4 inline mr-1 -mt-0.5" />
+              {t('chats.tab.closed')}
+            </div>
+          ) : (
           <div className="bg-white border-t border-gray-200 px-2 py-2 pb-[max(8px,env(safe-area-inset-bottom))]">
             <div className="flex items-end gap-2">
               <button
@@ -187,6 +231,7 @@ export function ChatPage() {
               </div>
             )}
           </div>
+          )}
         </>
       )}
     </div>

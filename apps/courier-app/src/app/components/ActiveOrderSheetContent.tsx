@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  AlertTriangle, ChevronRight, Lock, MapPin, MessageCircle, Navigation,
+  AlertTriangle, Check, ChevronRight, Clock, Lock, MapPin, MessageCircle, Navigation,
   Package, Phone, ShieldCheck, Store,
 } from 'lucide-react';
 import { useT } from '../i18n';
-import type { Order, OrderStatus } from '../store/types';
+import type { TKey } from '../i18n';
+import type { Order, OrderStatus, ProblemType } from '../store/types';
 import { isCustomerInfoUnlocked } from '../store/CourierStore';
 import { PackageCountModal } from './PackageCountModal';
-import { DeliveryProofModal } from './DeliveryProofModal';
+import { CustomerCodeModal } from './CustomerCodeModal';
 import { ProblemModal } from './ProblemModal';
 
 interface Props {
@@ -17,24 +18,45 @@ interface Props {
   isNearCustomer: boolean;
   onAdvance: (next: OrderStatus) => void;
   onPackageData: (count: number, photo?: string, comment?: string) => void;
-  onProof: (data: { photo?: string; code?: string; comment?: string }) => void;
-  onComplete: () => void;
-  onProblem: (data: { type: any; description: string; photos: string[]; videos: string[] }) => void;
+  onComplete: (code: string) => { ok: boolean; reason?: 'wrong_code' | 'no_active' };
+  onProblem: (data: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => void;
 }
 
+const TIMELINE: { status: OrderStatus; tk: TKey }[] = [
+  { status: 'accepted',             tk: 'timeline.step.accepted' },
+  { status: 'arrived_at_pickup',    tk: 'timeline.step.at_pickup' },
+  { status: 'picked_up',            tk: 'timeline.step.picked_up' },
+  { status: 'arrived_at_customer',  tk: 'timeline.step.at_customer' },
+  { status: 'delivered',            tk: 'timeline.step.delivered' },
+];
+
+const STATUS_RANK: Record<OrderStatus, number> = {
+  available: 0,
+  accepted: 1,
+  going_to_pickup: 1,
+  arrived_at_pickup: 2,
+  package_count_required: 2,
+  picked_up: 3,
+  going_to_customer: 3,
+  arrived_at_customer: 4,
+  delivered: 5,
+  problem: 0,
+  support_required: 0,
+};
+
 export function ActiveOrderSheetContent({
-  order, isNearPickup, isNearCustomer, onAdvance, onPackageData, onProof, onComplete, onProblem,
+  order, isNearPickup, isNearCustomer, onAdvance, onPackageData, onComplete, onProblem,
 }: Props) {
   const t = useT();
   const navigate = useNavigate();
   const [pkgOpen, setPkgOpen] = useState(false);
-  const [proofOpen, setProofOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
   const [problemOpen, setProblemOpen] = useState(false);
 
   const unlocked = isCustomerInfoUnlocked(order.status);
   const customerChannelKey = `customer:${order.id}`;
-
   const phase: 'pickup' | 'customer' = unlocked ? 'customer' : 'pickup';
+  const currentRank = STATUS_RANK[order.status] ?? 0;
 
   const primary = (() => {
     switch (order.status) {
@@ -75,7 +97,7 @@ export function ActiveOrderSheetContent({
         return {
           label: t('active.deliver'),
           enabled: true,
-          onClick: () => setProofOpen(true),
+          onClick: () => setCodeOpen(true),
         };
       case 'problem':
       case 'support_required':
@@ -116,6 +138,36 @@ export function ActiveOrderSheetContent({
               {t('privacy.order_number_after_pickup')}
             </span>
           )}
+        </div>
+
+        {/* Status timeline */}
+        <div className="rounded-2xl border border-gray-100 p-3 mb-2 bg-white">
+          <div className="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-2">
+            {t('timeline.title')}
+          </div>
+          <ol className="flex items-start justify-between">
+            {TIMELINE.map((step, i) => {
+              const stepRank = i + 1;
+              const reached = currentRank >= stepRank;
+              const isLast = i === TIMELINE.length - 1;
+              return (
+                <li key={step.status} className="flex-1 flex flex-col items-center text-center">
+                  <div className="w-full flex items-center">
+                    <div className={`flex-1 h-[2px] ${i === 0 ? 'invisible' : reached ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center mx-1 ${
+                      reached ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'
+                    }`}>
+                      {reached ? <Check className="w-3.5 h-3.5" /> : <Clock className="w-3 h-3" />}
+                    </div>
+                    <div className={`flex-1 h-[2px] ${isLast ? 'invisible' : currentRank > stepRank ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                  </div>
+                  <div className={`text-[10px] mt-1 font-semibold leading-tight ${reached ? 'text-gray-900' : 'text-gray-400'}`}>
+                    {t(step.tk)}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
         </div>
 
         {/* Pickup card — always visible */}
@@ -230,6 +282,17 @@ export function ActiveOrderSheetContent({
           </div>
         )}
 
+        {/* Code reminder once at customer */}
+        {order.status === 'arrived_at_customer' && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 mb-2 flex items-start gap-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-[13px] font-extrabold text-emerald-900">{t('proof.ask_customer')}</p>
+              <p className="text-[12px] text-emerald-800/90">{t('code.hint')}</p>
+            </div>
+          </div>
+        )}
+
         {/* Cancel hint */}
         <div className="rounded-2xl bg-gray-50 p-3 mb-2 flex items-start gap-2">
           <ShieldCheck className="w-5 h-5 text-gray-500 mt-0.5" />
@@ -287,10 +350,14 @@ export function ActiveOrderSheetContent({
           setPkgOpen(false);
         }}
       />
-      <DeliveryProofModal
-        open={proofOpen}
-        onClose={() => setProofOpen(false)}
-        onConfirm={(d) => { onProof(d); onComplete(); setProofOpen(false); }}
+      <CustomerCodeModal
+        open={codeOpen}
+        onClose={() => setCodeOpen(false)}
+        onConfirm={(code) => {
+          const res = onComplete(code);
+          if (res.ok) setCodeOpen(false);
+          return res;
+        }}
       />
       <ProblemModal
         open={problemOpen}

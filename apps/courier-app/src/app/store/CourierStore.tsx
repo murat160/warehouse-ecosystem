@@ -1,9 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import type {
-  ChatMessage, CourierProfile, CourierSettings, Order, OrderStatus, ProblemReport, ProblemType,
+  ChatMessage, ChatThread, CourierProfile, CourierSettings, Order, OrderStatus, ProblemReport, ProblemType,
 } from './types';
 import { DEFAULT_SETTINGS, TRANSITIONS } from './types';
 import { audit } from '../lib/audit';
+
+const DELIVERED_BANNER_MS = 8000;
+
+function generateCustomerCode(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
 
 // ─── Mock seed ────────────────────────────────────────────────
 
@@ -66,6 +72,9 @@ interface State {
   messages: ChatMessage[];
   settings: CourierSettings;
   initialized: boolean;
+  /** Most-recently delivered order — drives the right-top "Delivered" mini card. */
+  lastDelivered: Order | null;
+  lastDeliveredAt: number | null;
 }
 
 type Action =
@@ -74,11 +83,12 @@ type Action =
   | { type: 'LOGOUT' }
   | { type: 'SET_ONLINE'; online: boolean }
   | { type: 'SET_OFFER'; offer: Order | null }
-  | { type: 'ACCEPT_OFFER' }
+  | { type: 'ACCEPT_OFFER'; customerCode: string }
   | { type: 'TRANSITION'; status: OrderStatus }
   | { type: 'SET_PACKAGE_DATA'; count: number; photo?: string; comment?: string }
   | { type: 'SET_PROOF'; photo?: string; code?: string; comment?: string }
-  | { type: 'COMPLETE_ORDER' }
+  | { type: 'COMPLETE_ORDER'; code: string }
+  | { type: 'CLEAR_LAST_DELIVERED' }
   | { type: 'ADD_PROBLEM'; problem: ProblemReport }
   | { type: 'ADD_MESSAGE'; message: ChatMessage }
   | { type: 'MARK_MESSAGES_VIEWED'; channelKey: string }
@@ -96,6 +106,8 @@ const initialState: State = {
   messages: [],
   settings: DEFAULT_SETTINGS,
   initialized: false,
+  lastDelivered: null,
+  lastDeliveredAt: null,
 };
 
 const STORAGE_KEY = 'courier.state.v1';
@@ -110,6 +122,7 @@ function loadFromStorage(): Partial<State> | null {
 
 function saveToStorage(state: State) {
   try {
+    // We deliberately persist messages — chat history (active + closed) survives reload.
     const persisted: Partial<State> = {
       authenticated: state.authenticated,
       courier: state.courier,
@@ -118,11 +131,88 @@ function saveToStorage(state: State) {
       history: state.history.slice(-50),
       earningsToday: state.earningsToday,
       problems: state.problems.slice(-30),
-      messages: state.messages.slice(-200),
+      messages: state.messages.slice(-500),
       settings: state.settings,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch {}
+}
+
+// ─── Chat threads helper ──────────────────────────────────────
+
+function buildChatThreads(state: State): { active: ChatThread[]; closed: ChatThread[] } {
+  const lastByChannel = new Map<string, ChatMessage>();
+  const unreadByChannel = new Map<string, number>();
+  for (const m of state.messages) {
+    const cur = lastByChannel.get(m.channelKey);
+    if (!cur || cur.createdAt < m.createdAt) lastByChannel.set(m.channelKey, m);
+    if (m.from !== 'courier' && m.status !== 'viewed') {
+      unreadByChannel.set(m.channelKey, (unreadByChannel.get(m.channelKey) ?? 0) + 1);
+    }
+  }
+
+  const summary = (m?: ChatMessage): string | undefined => {
+    if (!m) return undefined;
+    if (m.text) return m.text;
+    if (m.photoUrl) return '🖼';
+    if (m.videoUrl) return '🎬';
+    return undefined;
+  };
+
+  const support: ChatThread = {
+    channelKey: 'support',
+    kind: 'support',
+    title: 'support',
+    orderId: undefined,
+    orderNumber: undefined,
+    lastMessageText: summary(lastByChannel.get('support')),
+    lastMessageAt: lastByChannel.get('support')?.createdAt,
+    unread: unreadByChannel.get('support') ?? 0,
+    locked: false,
+    closed: false,
+  };
+
+  const active: ChatThread[] = [support];
+  const closed: ChatThread[] = [];
+
+  if (state.activeOrder) {
+    const key = `customer:${state.activeOrder.id}`;
+    const isLocked = !['picked_up', 'going_to_customer', 'arrived_at_customer'].includes(state.activeOrder.status);
+    active.push({
+      channelKey: key,
+      kind: 'customer',
+      title: state.activeOrder.customer.name,
+      orderId: state.activeOrder.id,
+      orderNumber: state.activeOrder.number,
+      lastMessageText: summary(lastByChannel.get(key)),
+      lastMessageAt: lastByChannel.get(key)?.createdAt,
+      unread: unreadByChannel.get(key) ?? 0,
+      locked: isLocked,
+      closed: false,
+    });
+  }
+
+  for (const o of state.history) {
+    const key = `customer:${o.id}`;
+    const last = lastByChannel.get(key);
+    if (!last) continue; // skip orders that never had a customer chat
+    closed.push({
+      channelKey: key,
+      kind: 'customer',
+      title: o.customer.name,
+      orderId: o.id,
+      orderNumber: o.number,
+      lastMessageText: summary(last),
+      lastMessageAt: last.createdAt,
+      unread: unreadByChannel.get(key) ?? 0,
+      locked: false,
+      closed: true,
+    });
+  }
+
+  active.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
+  closed.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
+  return { active, closed };
 }
 
 function reducer(state: State, action: Action): State {
@@ -160,6 +250,7 @@ function reducer(state: State, action: Action): State {
         ...state.pendingOffer,
         status: 'accepted',
         acceptedAt: Date.now(),
+        customerCode: action.customerCode,
       };
       return { ...state, activeOrder: accepted, pendingOffer: null };
     }
@@ -210,19 +301,32 @@ function reducer(state: State, action: Action): State {
 
     case 'COMPLETE_ORDER': {
       if (!state.activeOrder) return state;
+      // Refuse without a matching customer code — courier cannot finalize unilaterally.
+      if (!state.activeOrder.customerCode || action.code !== state.activeOrder.customerCode) {
+        audit('store', 'order.complete.rejected', {
+          reason: 'wrong_code', orderId: state.activeOrder.id,
+        });
+        return state;
+      }
       const completed: Order = {
         ...state.activeOrder,
         status: 'delivered',
         deliveredAt: Date.now(),
         earnings: state.activeOrder.payAmount,
+        proofCode: action.code,
       };
       return {
         ...state,
         activeOrder: null,
         history: [completed, ...state.history],
         earningsToday: state.earningsToday + completed.earnings!,
+        lastDelivered: completed,
+        lastDeliveredAt: Date.now(),
       };
     }
+
+    case 'CLEAR_LAST_DELIVERED':
+      return { ...state, lastDelivered: null, lastDeliveredAt: null };
 
     case 'ADD_PROBLEM':
       return { ...state, problems: [action.problem, ...state.problems] };
@@ -260,13 +364,17 @@ interface Api {
   transition: (s: OrderStatus) => void;
   setPackageData: (count: number, photo?: string, comment?: string) => void;
   setProof: (data: { photo?: string; code?: string; comment?: string }) => void;
-  completeOrder: () => void;
+  /** Validates the customer code before flipping to delivered. Returns ok=false on mismatch. */
+  completeOrder: (code: string) => { ok: boolean; reason?: 'wrong_code' | 'no_active' };
+  clearLastDelivered: () => void;
   reportProblem: (input: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => ProblemReport;
   sendMessage: (channelKey: string, msg: { text?: string; photoUrl?: string; videoUrl?: string }) => ChatMessage;
   markChannelViewed: (channelKey: string) => void;
   channelKeyForActiveCustomer: () => string | null;
   updateSettings: (patch: Partial<CourierSettings>) => void;
   unreadCount: (channelKey: string) => number;
+  /** Build a list of chat threads (active and closed) for the chat list page. */
+  chatThreads: () => { active: ChatThread[]; closed: ChatThread[] };
 }
 
 const Ctx = createContext<Api | null>(null);
@@ -284,6 +392,15 @@ export function CourierStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state.initialized) saveToStorage(state);
   }, [state]);
+
+  // Auto-clear the "Delivered" right-top mini card after the banner timeout.
+  useEffect(() => {
+    if (!state.lastDeliveredAt) return;
+    const elapsed = Date.now() - state.lastDeliveredAt;
+    const remaining = Math.max(0, DELIVERED_BANNER_MS - elapsed);
+    const timer = window.setTimeout(() => dispatch({ type: 'CLEAR_LAST_DELIVERED' }), remaining);
+    return () => window.clearTimeout(timer);
+  }, [state.lastDeliveredAt]);
 
   // Seed support response on first login
   useEffect(() => {
@@ -319,8 +436,14 @@ export function CourierStoreProvider({ children }: { children: ReactNode }) {
     },
     acceptOffer: () => {
       if (!state.pendingOffer) return;
-      audit(state.courier?.id ?? 'unknown', 'order.accept', { id: state.pendingOffer.id });
-      dispatch({ type: 'ACCEPT_OFFER' });
+      const code = state.pendingOffer.customerCode ?? generateCustomerCode();
+      audit(state.courier?.id ?? 'unknown', 'order.accept', { id: state.pendingOffer.id, codeIssued: true });
+      // Demo aid: in a real app this code would only live in the customer's phone
+      // — without a backend the courier needs a way to test the flow, so we log it.
+      if (typeof console !== 'undefined') {
+        console.info('[demo] customer confirmation code for order', state.pendingOffer.number, '=', code);
+      }
+      dispatch({ type: 'ACCEPT_OFFER', customerCode: code });
       dispatch({ type: 'TRANSITION', status: 'going_to_pickup' });
     },
     declineOffer: (reason: string) => {
@@ -347,10 +470,18 @@ export function CourierStoreProvider({ children }: { children: ReactNode }) {
     setProof: ({ photo, code, comment }) => {
       dispatch({ type: 'SET_PROOF', photo, code, comment });
     },
-    completeOrder: () => {
-      if (state.activeOrder) audit(state.courier?.id ?? 'unknown', 'order.delivered', { id: state.activeOrder.id });
-      dispatch({ type: 'COMPLETE_ORDER' });
+    completeOrder: (code: string) => {
+      if (!state.activeOrder) return { ok: false, reason: 'no_active' as const };
+      if (!state.activeOrder.customerCode || code !== state.activeOrder.customerCode) {
+        audit(state.courier?.id ?? 'unknown', 'order.complete.wrong_code', { id: state.activeOrder.id });
+        dispatch({ type: 'COMPLETE_ORDER', code }); // reducer will reject + log; dispatch for symmetry
+        return { ok: false, reason: 'wrong_code' as const };
+      }
+      audit(state.courier?.id ?? 'unknown', 'order.delivered', { id: state.activeOrder.id, codeUsed: true });
+      dispatch({ type: 'COMPLETE_ORDER', code });
+      return { ok: true };
     },
+    clearLastDelivered: () => dispatch({ type: 'CLEAR_LAST_DELIVERED' }),
     reportProblem: (input) => {
       const problem: ProblemReport = {
         id: `prb_${Date.now()}`,
@@ -415,6 +546,7 @@ export function CourierStoreProvider({ children }: { children: ReactNode }) {
     },
     unreadCount: (channelKey) =>
       state.messages.filter(m => m.channelKey === channelKey && m.from !== 'courier' && m.status !== 'viewed').length,
+    chatThreads: () => buildChatThreads(state),
   }), [state]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

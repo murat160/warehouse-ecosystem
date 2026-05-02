@@ -123,6 +123,20 @@ export type TKey =
   | 'menu.analytics' | 'menu.rewards' | 'menu.statistics' | 'menu.news' | 'menu.delivery_settings'
   // common extras
   | 'common.coming_soon' | 'common.toast.saved'
+  // customer confirmation code
+  | 'code.title' | 'code.subtitle' | 'code.label' | 'code.placeholder' | 'code.invalid'
+  | 'code.confirm' | 'code.hint' | 'code.confirmed_at'
+  // chat list
+  | 'chats.title' | 'chats.subtitle' | 'chats.tab.active' | 'chats.tab.closed'
+  | 'chats.empty_active' | 'chats.empty_closed' | 'chats.last_message' | 'chats.unread'
+  | 'chats.locked' | 'chats.support_always' | 'chats.customer_after_pickup'
+  // timeline
+  | 'timeline.title' | 'timeline.step.accepted' | 'timeline.step.at_pickup'
+  | 'timeline.step.picked_up' | 'timeline.step.at_customer' | 'timeline.step.delivered'
+  // mini delivered
+  | 'mini.title.delivered' | 'mini.delivered_in' | 'mini.view_receipt'
+  // proof / confirmation extra
+  | 'proof.code_required' | 'proof.code_help' | 'proof.ask_customer'
 
 export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
   ru: {
@@ -453,6 +467,42 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
 
     'common.coming_soon': 'Скоро',
     'common.toast.saved': 'Сохранено',
+
+    'code.title': 'Код подтверждения от клиента',
+    'code.subtitle': 'Без правильного кода нельзя завершить доставку',
+    'code.label': 'Введите код, который назвал клиент',
+    'code.placeholder': '0000',
+    'code.invalid': 'Неверный код. Попросите клиента продиктовать ещё раз.',
+    'code.confirm': 'Подтвердить и завершить',
+    'code.hint': 'Код из 4 цифр виден клиенту в его приложении',
+    'code.confirmed_at': 'Подтверждено',
+
+    'chats.title': 'Чаты',
+    'chats.subtitle': 'Все ваши переписки',
+    'chats.tab.active': 'Активные',
+    'chats.tab.closed': 'Архив',
+    'chats.empty_active': 'Активных чатов нет',
+    'chats.empty_closed': 'Архивных чатов нет',
+    'chats.last_message': 'Последнее',
+    'chats.unread': 'непрочитано',
+    'chats.locked': 'Заблокировано до получения заказа',
+    'chats.support_always': 'Поддержка доступна всегда',
+    'chats.customer_after_pickup': 'Клиент — после получения заказа',
+
+    'timeline.title': 'Этапы',
+    'timeline.step.accepted': 'Заказ принят',
+    'timeline.step.at_pickup': 'На точке забора',
+    'timeline.step.picked_up': 'Заказ забран',
+    'timeline.step.at_customer': 'На месте у клиента',
+    'timeline.step.delivered': 'Доставлен',
+
+    'mini.title.delivered': 'Доставлено',
+    'mini.delivered_in': 'за',
+    'mini.view_receipt': 'Чек',
+
+    'proof.code_required': 'Введите код клиента',
+    'proof.code_help': 'Клиент видит 4-значный код в своём приложении',
+    'proof.ask_customer': 'Попросите клиента продиктовать код',
   },
 
   tk: {
@@ -783,6 +833,42 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
 
     'common.coming_soon': 'Tiz wagtda',
     'common.toast.saved': 'Saklandy',
+
+    'code.title': 'Müşderiniň tassyklama kody',
+    'code.subtitle': 'Dogry kod bolmasa eltip berişi tamamlap bolmaýar',
+    'code.label': 'Müşderiniň aýdan kodyny giriziň',
+    'code.placeholder': '0000',
+    'code.invalid': 'Nädogry kod. Müşderiden ýene aýtmagyny soraň.',
+    'code.confirm': 'Tassykla we tamamla',
+    'code.hint': '4 sanly kody müşderi öz programmasynda görýär',
+    'code.confirmed_at': 'Tassyklandy',
+
+    'chats.title': 'Söhbetler',
+    'chats.subtitle': 'Ähli ýazyşmalaryňyz',
+    'chats.tab.active': 'Aktiw',
+    'chats.tab.closed': 'Arhiw',
+    'chats.empty_active': 'Aktiw söhbet ýok',
+    'chats.empty_closed': 'Arhiw söhbet ýok',
+    'chats.last_message': 'Soňky',
+    'chats.unread': 'okalmadyk',
+    'chats.locked': 'Sargyt alynýança ýapyk',
+    'chats.support_always': 'Goldaw hemişe elýeterli',
+    'chats.customer_after_pickup': 'Müşderi — sargyt alanyňyzdan soň',
+
+    'timeline.title': 'Tapgyrlar',
+    'timeline.step.accepted': 'Sargyt kabul edildi',
+    'timeline.step.at_pickup': 'Almak nokadynda',
+    'timeline.step.picked_up': 'Sargyt alyndy',
+    'timeline.step.at_customer': 'Müşderiniň ýerinde',
+    'timeline.step.delivered': 'Eltildi',
+
+    'mini.title.delivered': 'Eltildi',
+    'mini.delivered_in': 'sarp',
+    'mini.view_receipt': 'Çek',
+
+    'proof.code_required': 'Müşderiniň kodyny giriziň',
+    'proof.code_help': 'Müşderi 4 sanly kody öz programmasynda görýär',
+    'proof.ask_customer': 'Müşderiden kody aýtmagyny soraň',
   },
 
   tr: {
@@ -1113,6 +1199,42 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
 
     'common.coming_soon': 'Yakında',
     'common.toast.saved': 'Kaydedildi',
+
+    'code.title': 'Müşterinin onay kodu',
+    'code.subtitle': 'Doğru kod olmadan teslimat tamamlanmaz',
+    'code.label': 'Müşterinin söylediği kodu girin',
+    'code.placeholder': '0000',
+    'code.invalid': 'Geçersiz kod. Müşteriden tekrar söylemesini isteyin.',
+    'code.confirm': 'Onayla ve tamamla',
+    'code.hint': '4 haneli kodu müşteri kendi uygulamasında görür',
+    'code.confirmed_at': 'Onaylandı',
+
+    'chats.title': 'Sohbetler',
+    'chats.subtitle': 'Tüm yazışmalarınız',
+    'chats.tab.active': 'Aktif',
+    'chats.tab.closed': 'Arşiv',
+    'chats.empty_active': 'Aktif sohbet yok',
+    'chats.empty_closed': 'Arşiv sohbet yok',
+    'chats.last_message': 'Son',
+    'chats.unread': 'okunmamış',
+    'chats.locked': 'Sipariş alınana kadar kilitli',
+    'chats.support_always': 'Destek her zaman açık',
+    'chats.customer_after_pickup': 'Müşteri — siparişten sonra',
+
+    'timeline.title': 'Aşamalar',
+    'timeline.step.accepted': 'Sipariş kabul edildi',
+    'timeline.step.at_pickup': 'Alış noktasında',
+    'timeline.step.picked_up': 'Sipariş alındı',
+    'timeline.step.at_customer': 'Müşteride',
+    'timeline.step.delivered': 'Teslim edildi',
+
+    'mini.title.delivered': 'Teslim edildi',
+    'mini.delivered_in': 'içinde',
+    'mini.view_receipt': 'Fiş',
+
+    'proof.code_required': 'Müşteri kodunu girin',
+    'proof.code_help': 'Müşteri 4 haneli kodu kendi uygulamasında görür',
+    'proof.ask_customer': 'Müşteriden kodu söylemesini isteyin',
   },
 
   en: {
@@ -1443,5 +1565,41 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
 
     'common.coming_soon': 'Coming soon',
     'common.toast.saved': 'Saved',
+
+    'code.title': 'Customer confirmation code',
+    'code.subtitle': 'Delivery cannot complete without the correct code',
+    'code.label': 'Enter the code the customer told you',
+    'code.placeholder': '0000',
+    'code.invalid': 'Invalid code. Ask the customer to say it again.',
+    'code.confirm': 'Confirm and complete',
+    'code.hint': 'The 4-digit code is shown to the customer in their app',
+    'code.confirmed_at': 'Confirmed',
+
+    'chats.title': 'Chats',
+    'chats.subtitle': 'All your conversations',
+    'chats.tab.active': 'Active',
+    'chats.tab.closed': 'Archive',
+    'chats.empty_active': 'No active chats',
+    'chats.empty_closed': 'No archived chats',
+    'chats.last_message': 'Last',
+    'chats.unread': 'unread',
+    'chats.locked': 'Locked until pickup',
+    'chats.support_always': 'Support is always available',
+    'chats.customer_after_pickup': 'Customer — after pickup',
+
+    'timeline.title': 'Timeline',
+    'timeline.step.accepted': 'Order accepted',
+    'timeline.step.at_pickup': 'At pickup',
+    'timeline.step.picked_up': 'Picked up',
+    'timeline.step.at_customer': 'At customer',
+    'timeline.step.delivered': 'Delivered',
+
+    'mini.title.delivered': 'Delivered',
+    'mini.delivered_in': 'in',
+    'mini.view_receipt': 'Receipt',
+
+    'proof.code_required': 'Enter customer code',
+    'proof.code_help': 'The customer sees a 4-digit code in their app',
+    'proof.ask_customer': 'Ask the customer to say the code',
   },
 };

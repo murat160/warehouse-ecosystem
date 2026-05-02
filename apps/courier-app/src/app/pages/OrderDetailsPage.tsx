@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, MapPin, Package, Phone, Receipt, Store, Wallet } from 'lucide-react';
+import { ArrowLeft, MapPin, MessageCircle, Package, Phone, Receipt, ShieldCheck, Store, Wallet } from 'lucide-react';
 import { useT } from '../i18n';
 import { useCourierStore } from '../store/CourierStore';
 
@@ -37,9 +37,16 @@ export function OrderDetailsPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
-          <h1 className="text-[18px] font-extrabold">{order.number}</h1>
+          <h1 className="text-[18px] font-extrabold">{t('order.number')} {order.number}</h1>
           <p className="text-xs text-gray-500">{t(`status.${order.status}`)}</p>
         </div>
+        <button
+          onClick={() => navigate(`/chat/customer:${order.id}`)}
+          className="w-10 h-10 rounded-full bg-sky-500 text-white flex items-center justify-center"
+          aria-label={t('chat.customer')}
+        >
+          <MessageCircle className="w-4 h-4" />
+        </button>
       </header>
 
       <div className="px-4 pt-3 space-y-3 pb-8">
@@ -128,6 +135,24 @@ export function OrderDetailsPage() {
             </div>
           )}
         </section>
+
+        {/* Customer confirmation marker — proofCode is set only when the courier
+            entered the right code at handover, so its presence proves the customer
+            confirmed the delivery. */}
+        {order.proofCode && (
+          <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3">
+            <ShieldCheck className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-extrabold text-emerald-900">{t('code.confirmed_at')}</div>
+              <div className="text-sm text-emerald-800 mt-0.5">
+                {t('order.number')} {order.number} · {t('code.confirm')}
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-emerald-200 text-emerald-900 font-extrabold tracking-widest text-sm">
+              ••••
+            </span>
+          </section>
+        )}
       </div>
     </div>
   );

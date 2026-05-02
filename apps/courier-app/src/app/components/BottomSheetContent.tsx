@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { ChevronRight, History, MessageCircle, Wallet } from 'lucide-react';
+import { Calendar, ChevronRight, History, MessageCircle, MessagesSquare, Wallet } from 'lucide-react';
 import { useT } from '../i18n';
 import { useCourierStore } from '../store/CourierStore';
 import { OfferSheetContent } from './OfferSheetContent';
@@ -14,8 +14,7 @@ interface Props {
   isNearCustomer: boolean;
   onAdvance: (next: OrderStatus) => void;
   onPackageData: (count: number, photo?: string, comment?: string) => void;
-  onProof: (data: { photo?: string; code?: string; comment?: string }) => void;
-  onComplete: () => void;
+  onComplete: (code: string) => { ok: boolean; reason?: 'wrong_code' | 'no_active' };
   onProblem: (data: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => void;
   onAccept: () => void;
 }
@@ -37,7 +36,6 @@ export function BottomSheetContent(props: Props) {
         isNearCustomer={props.isNearCustomer}
         onAdvance={props.onAdvance}
         onPackageData={props.onPackageData}
-        onProof={props.onProof}
         onComplete={props.onComplete}
         onProblem={props.onProblem}
       />
@@ -77,9 +75,11 @@ export function BottomSheetContent(props: Props) {
         <div className="mb-3 px-5">
           <h3 className="text-[16px] font-extrabold text-[#1F2430] mb-2">{t('map.quick_links')}</h3>
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <Link icon={<History className="w-5 h-5" />} label={t('courier.history')} onClick={() => navigate('/history')} />
+            <Link icon={<History className="w-5 h-5" />} label={t('map.previous_task')} onClick={() => navigate('/history')} />
             <Link icon={<Wallet className="w-5 h-5" />} label={t('courier.earnings')} onClick={() => navigate('/earnings')} />
-            <Link icon={<MessageCircle className="w-5 h-5" />} label={t('chat.support')} onClick={() => navigate('/chat/support')} />
+            <Link icon={<Calendar className="w-5 h-5" />} label={t('map.scheduled_offline')} onClick={() => navigate('/delivery-settings')} />
+            <Link icon={<MessagesSquare className="w-5 h-5" />} label={t('chats.title')} onClick={() => navigate('/chats')} />
+            <Link icon={<MessageCircle className="w-5 h-5" />} label={t('map.support_service')} onClick={() => navigate('/chat/support')} />
           </div>
         </div>
       </div>

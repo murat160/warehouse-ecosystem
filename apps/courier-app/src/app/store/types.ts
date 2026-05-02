@@ -81,10 +81,28 @@ export interface Order {
   proofPhotoDataUrl?: string;
   proofCode?: string;
   proofComment?: string;
+  /** 4-digit code that the customer sees in their app and dictates to the courier on handover. */
+  customerCode?: string;
   acceptedAt?: number;
   pickedUpAt?: number;
   deliveredAt?: number;
   earnings?: number;
+}
+
+export interface ChatThread {
+  channelKey: string;
+  kind: 'support' | 'customer';
+  title: string;
+  subtitle?: string;
+  orderId?: string;
+  orderNumber?: string;
+  lastMessageText?: string;
+  lastMessageAt?: number;
+  unread: number;
+  /** customer chat is locked until pickup */
+  locked: boolean;
+  /** customer chat is closed once order is delivered */
+  closed: boolean;
 }
 
 export type ProblemType =

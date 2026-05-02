@@ -22,7 +22,7 @@ export function CourierMap() {
   const navigate = useNavigate();
   const {
     state, setOnline, acceptOffer, declineOffer, transition,
-    setPackageData, setProof, completeOrder, reportProblem,
+    setPackageData, completeOrder, reportProblem, clearLastDelivered,
   } = useCourierStore();
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -81,8 +81,7 @@ export function CourierMap() {
 
   const handleAdvance = (s: OrderStatus) => transition(s);
   const handlePackageData = (count: number, photo?: string, comment?: string) => setPackageData(count, photo, comment);
-  const handleProof = (d: { photo?: string; code?: string; comment?: string }) => setProof(d);
-  const handleComplete = () => completeOrder();
+  const handleComplete = (code: string) => completeOrder(code);
   const handleProblem = (d: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => reportProblem(d);
 
   const phaseForMap: 'pickup' | 'on_way' | 'delivered' = state.activeOrder
@@ -91,6 +90,10 @@ export function CourierMap() {
     : 'pickup';
 
   const offerOrActive = state.activeOrder ?? state.pendingOffer;
+  // Show the right-top "Delivered" mini card briefly after completeOrder.
+  const miniOrder = offerOrActive ?? state.lastDelivered;
+  const miniMode: 'offer' | 'active' | 'delivered' =
+    state.activeOrder ? 'active' : state.pendingOffer ? 'offer' : 'delivered';
 
   return (
     <div className="relative w-full h-full bg-gray-100 overflow-hidden">
@@ -129,12 +132,13 @@ export function CourierMap() {
         <LanguageSwitcher />
       </div>
 
-      {/* Right-top mini route card — appears as soon as there's an offer or active order. */}
-      {offerOrActive && (
+      {/* Right-top mini route card — visible during offer / active / and ~8s after delivered. */}
+      {miniOrder && (
         <div className="absolute top-[68px] right-3 z-30 pointer-events-none">
           <OrderMiniMapCard
-            order={offerOrActive}
-            pendingOffer={!state.activeOrder}
+            order={miniOrder}
+            mode={miniMode}
+            onDismiss={miniMode === 'delivered' ? clearLastDelivered : undefined}
           />
         </div>
       )}
@@ -193,7 +197,6 @@ export function CourierMap() {
               isNearCustomer={isNearCustomer}
               onAdvance={handleAdvance}
               onPackageData={handlePackageData}
-              onProof={handleProof}
               onComplete={handleComplete}
               onProblem={handleProblem}
               onAccept={handleAccept}
