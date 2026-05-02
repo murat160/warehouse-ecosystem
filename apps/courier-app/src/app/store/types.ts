@@ -126,10 +126,24 @@ export interface AuditEntry {
   meta?: Record<string, unknown>;
 }
 
+export type Vehicle = 'walk' | 'bike' | 'scooter' | 'car';
+
 export interface CourierSettings {
   notifications: boolean;
+  sound: boolean;
+  vibration: boolean;
+  autoAccept: boolean;
+  vehicle: Vehicle;
+  maxDistanceKm: number;
+  minPayoutPln: number;
 }
 
 export const DEFAULT_SETTINGS: CourierSettings = {
   notifications: true,
+  sound: true,
+  vibration: true,
+  autoAccept: false,
+  vehicle: 'scooter',
+  maxDistanceKm: 5,
+  minPayoutPln: 15,
 };

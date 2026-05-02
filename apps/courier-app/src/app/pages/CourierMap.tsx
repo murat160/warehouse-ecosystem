@@ -6,6 +6,7 @@ import { useT } from '../i18n';
 import { useCourierStore } from '../store/CourierStore';
 import { CourierMapView, type RouteInfo } from '../components/CourierMapView';
 import { FloatingButtons } from '../components/FloatingButtons';
+import { OrderMiniMapCard } from '../components/OrderMiniMapCard';
 import { Drawer } from '../components/Drawer';
 import { BottomSheetContent } from '../components/BottomSheetContent';
 import { DeclineModal } from '../components/DeclineModal';
@@ -127,6 +128,16 @@ export function CourierMap() {
       <div className="absolute top-4 right-[72px] z-30">
         <LanguageSwitcher />
       </div>
+
+      {/* Right-top mini route card — appears as soon as there's an offer or active order. */}
+      {offerOrActive && (
+        <div className="absolute top-[68px] right-3 z-30 pointer-events-none">
+          <OrderMiniMapCard
+            order={offerOrActive}
+            pendingOffer={!state.activeOrder}
+          />
+        </div>
+      )}
 
       {variant === 'offer' && (
         <DeclineButton

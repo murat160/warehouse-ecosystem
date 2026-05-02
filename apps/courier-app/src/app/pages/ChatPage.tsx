@@ -73,24 +73,39 @@ export function ChatPage() {
 
   const title = isSupport ? t('chat.support') : t('chat.customer');
 
+  const initials = isSupport
+    ? 'S'
+    : (state.activeOrder?.customer.name ?? '?').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  const avatarBg = isSupport ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-orange-500';
+
   return (
-    <div className="min-h-full flex flex-col bg-[#F0F2F5]">
-      <header className="bg-white px-3 py-3 flex items-center gap-3 shadow-sm">
+    <div className="min-h-full flex flex-col bg-[linear-gradient(180deg,#F4F6F8_0%,#EAEFF3_100%)]">
+      <header className="bg-white px-3 py-3 flex items-center gap-2 shadow-sm">
         <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full active:bg-gray-100 flex items-center justify-center">
           <ArrowLeft className="w-5 h-5" />
         </button>
+        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarBg} text-white text-sm font-extrabold flex items-center justify-center flex-shrink-0`}>
+          {initials || '?'}
+        </div>
         <div className="flex-1 min-w-0">
           <div className="text-[15px] font-extrabold truncate">{title}</div>
-          {!isSupport && state.activeOrder && (
-            <div className="text-xs text-gray-500 truncate">
-              {isCustomerInfoUnlocked(state.activeOrder.status) ? state.activeOrder.customer.name : t('privacy.unlock_after_pickup')}
-            </div>
-          )}
+          <div className="text-xs text-gray-500 truncate flex items-center gap-1">
+            {isSupport ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                {t('courier.online')}
+              </>
+            ) : state.activeOrder ? (
+              isCustomerInfoUnlocked(state.activeOrder.status)
+                ? state.activeOrder.customer.name
+                : t('privacy.unlock_after_pickup')
+            ) : null}
+          </div>
         </div>
         {!isSupport && state.activeOrder && isCustomerInfoUnlocked(state.activeOrder.status) && (
           <a
             href={`tel:${state.activeOrder.customer.phone}`}
-            className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center"
+            className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm active:bg-emerald-600"
           >
             <Phone className="w-5 h-5" />
           </a>

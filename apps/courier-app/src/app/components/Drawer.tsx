@@ -1,6 +1,6 @@
 import {
   X, User, Wallet, History, Shield, Settings, MessageCircle,
-  HelpCircle, ChevronRight,
+  HelpCircle, ChevronRight, BarChart3, Gift, TrendingUp, Newspaper, Bike, LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useT } from '../i18n';
@@ -15,19 +15,25 @@ interface DrawerProps {
 export function Drawer({ isOpen, onClose }: DrawerProps) {
   const navigate = useNavigate();
   const t = useT();
-  const { state } = useCourierStore();
+  const { state, logout } = useCourierStore();
 
   const items = [
-    { icon: User,           label: t('courier.profile'),    path: '/profile' },
-    { icon: Wallet,         label: t('courier.earnings'),   path: '/earnings' },
-    { icon: History,        label: t('courier.history'),    path: '/history' },
-    { icon: Shield,         label: t('courier.documents'),  path: '/insurance' },
-    { icon: Settings,       label: t('courier.settings'),   path: '/settings' },
-    { icon: MessageCircle,  label: t('chat.support'),       path: '/chat/support' },
-    { icon: HelpCircle,     label: t('settings.about'),     path: '/help' },
+    { icon: User,           label: t('courier.profile'),       path: '/profile' },
+    { icon: History,        label: t('courier.history'),       path: '/history' },
+    { icon: Wallet,         label: t('courier.earnings'),      path: '/earnings' },
+    { icon: BarChart3,      label: t('menu.analytics'),        path: '/analytics' },
+    { icon: Gift,           label: t('menu.rewards'),          path: '/rewards' },
+    { icon: TrendingUp,     label: t('menu.statistics'),       path: '/statistics' },
+    { icon: Shield,         label: t('courier.documents'),     path: '/insurance' },
+    { icon: Settings,       label: t('courier.settings'),      path: '/settings' },
+    { icon: Bike,           label: t('menu.delivery_settings'), path: '/delivery-settings' },
+    { icon: Newspaper,      label: t('menu.news'),             path: '/news' },
+    { icon: HelpCircle,     label: t('settings.about'),        path: '/help' },
+    { icon: MessageCircle,  label: t('support.title'),         path: '/support' },
   ];
 
   const go = (path: string) => { navigate(path); onClose(); };
+  const handleLogout = () => { logout(); onClose(); navigate('/login', { replace: true }); };
 
   return (
     <>
@@ -70,10 +76,19 @@ export function Drawer({ isOpen, onClose }: DrawerProps) {
             <div className="p-4">
               <LanguageSwitcher variant="list" />
             </div>
+            <div className="px-4 pb-4">
+              <button
+                onClick={handleLogout}
+                className="w-full h-12 rounded-2xl bg-white border border-rose-200 text-rose-600 font-bold flex items-center justify-center gap-2 active:bg-rose-50"
+              >
+                <LogOut className="w-4 h-4" />
+                {t('courier.logout')}
+              </button>
+            </div>
           </div>
 
           <div className="px-5 py-4 border-t border-gray-100">
-            <p className="text-xs text-gray-400">v0.2.0 · Express Courier</p>
+            <p className="text-xs text-gray-400">v0.3.0 · Express Courier</p>
           </div>
         </div>
       </div>
