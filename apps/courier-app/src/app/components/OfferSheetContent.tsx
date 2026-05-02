@@ -27,18 +27,32 @@ export function OfferSheetContent({ order, onAccept }: Props) {
         </div>
 
         <div className="mb-2">
-          <h1 className="text-[32px] font-extrabold text-[#1F2430] leading-none mb-1">
-            {totalPay} {order.payCurrency}
-          </h1>
-          <p className="text-[11px] text-gray-500 mb-1.5">{t('offer.payment')}</p>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-[#FFC107] flex items-center justify-center">
-              <Star className="w-2.5 h-2.5 text-white fill-white" />
-            </div>
-            <span className="text-[13px] font-extrabold text-[#1F2430]">
-              +{order.bonus} {t('offer.bonus')}
-            </span>
+          <div className="flex items-end justify-between gap-2 mb-1">
+            <h1 className="text-[32px] font-extrabold text-[#1F2430] leading-none">
+              {totalPay} {order.payCurrency}
+            </h1>
+            {/* Reward / star badge — visible only when the order is bonus-eligible. */}
+            {order.bonus > 0 && (
+              <div
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 border border-amber-200"
+                title={t('bonus.eligible')}
+              >
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                <span className="text-[13px] font-extrabold text-amber-900 leading-none">
+                  +{order.bonus}
+                </span>
+                <span className="text-[10px] uppercase tracking-wide font-bold text-amber-700 leading-none">
+                  {t('bonus.star')}
+                </span>
+              </div>
+            )}
           </div>
+          <p className="text-[11px] text-gray-500">{t('offer.payment')}</p>
+          {order.bonus > 0 && (
+            <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
+              {t('bonus.points')}: +{order.bonus}
+            </p>
+          )}
         </div>
 
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-3 mb-3 flex items-start gap-2">

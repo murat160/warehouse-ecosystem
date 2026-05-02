@@ -17,6 +17,7 @@ interface Props {
   onComplete: (code: string) => { ok: boolean; reason?: 'wrong_code' | 'no_active' };
   onProblem: (data: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => void;
   onAccept: () => void;
+  onToggleCheck: (itemId: string) => void;
 }
 
 export function BottomSheetContent(props: Props) {
@@ -38,6 +39,7 @@ export function BottomSheetContent(props: Props) {
         onPackageData={props.onPackageData}
         onComplete={props.onComplete}
         onProblem={props.onProblem}
+        onToggleCheck={props.onToggleCheck}
       />
     );
   }

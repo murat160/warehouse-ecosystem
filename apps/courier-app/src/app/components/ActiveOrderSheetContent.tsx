@@ -7,10 +7,11 @@ import {
 import { useT } from '../i18n';
 import type { TKey } from '../i18n';
 import type { Order, OrderStatus, ProblemType } from '../store/types';
-import { isCustomerInfoUnlocked } from '../store/CourierStore';
+import { allRequiredChecked, checklistStageForStatus, isCustomerInfoUnlocked } from '../store/CourierStore';
 import { PackageCountModal } from './PackageCountModal';
 import { CustomerCodeModal } from './CustomerCodeModal';
 import { ProblemModal } from './ProblemModal';
+import { ChecklistBlock } from './ChecklistBlock';
 
 interface Props {
   order: Order;
@@ -20,6 +21,7 @@ interface Props {
   onPackageData: (count: number, photo?: string, comment?: string) => void;
   onComplete: (code: string) => { ok: boolean; reason?: 'wrong_code' | 'no_active' };
   onProblem: (data: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => void;
+  onToggleCheck: (itemId: string) => void;
 }
 
 const TIMELINE: { status: OrderStatus; tk: TKey }[] = [
@@ -45,7 +47,7 @@ const STATUS_RANK: Record<OrderStatus, number> = {
 };
 
 export function ActiveOrderSheetContent({
-  order, isNearPickup, isNearCustomer, onAdvance, onPackageData, onComplete, onProblem,
+  order, isNearPickup, isNearCustomer, onAdvance, onPackageData, onComplete, onProblem, onToggleCheck,
 }: Props) {
   const t = useT();
   const navigate = useNavigate();
@@ -58,45 +60,59 @@ export function ActiveOrderSheetContent({
   const phase: 'pickup' | 'customer' = unlocked ? 'customer' : 'pickup';
   const currentRank = STATUS_RANK[order.status] ?? 0;
 
+  // Stage-aware checklist gate: each stage has its own required items and the
+  // primary CTA is locked until all of them are ticked.
+  const stage = checklistStageForStatus(order.status);
+  const checklist = order.checklist ?? [];
+  const checksDone = allRequiredChecked(checklist, stage);
+
   const primary = (() => {
     switch (order.status) {
       case 'accepted':
       case 'going_to_pickup':
         return {
           label: t('active.arrived_pickup'),
-          enabled: isNearPickup,
-          hint: !isNearPickup ? t('active.too_far_pickup') : undefined,
+          enabled: isNearPickup && checksDone,
+          hint: !isNearPickup
+            ? t('active.too_far_pickup')
+            : !checksDone ? t('check.complete_to_continue') : undefined,
           onClick: () => onAdvance('arrived_at_pickup'),
         };
       case 'arrived_at_pickup':
         return {
           label: t('active.confirm_packages'),
-          enabled: true,
+          enabled: checksDone,
+          hint: !checksDone ? t('check.complete_to_continue') : undefined,
           onClick: () => { onAdvance('package_count_required'); setPkgOpen(true); },
         };
       case 'package_count_required':
         return {
           label: t('active.confirm_packages'),
-          enabled: true,
+          enabled: checksDone,
+          hint: !checksDone ? t('check.complete_to_continue') : undefined,
           onClick: () => setPkgOpen(true),
         };
       case 'picked_up':
         return {
           label: t('active.go_to_customer'),
-          enabled: true,
+          enabled: checksDone,
+          hint: !checksDone ? t('check.complete_to_continue') : undefined,
           onClick: () => onAdvance('going_to_customer'),
         };
       case 'going_to_customer':
         return {
           label: t('active.arrived_customer'),
-          enabled: isNearCustomer,
-          hint: !isNearCustomer ? t('active.too_far_customer') : undefined,
+          enabled: isNearCustomer && checksDone,
+          hint: !isNearCustomer
+            ? t('active.too_far_customer')
+            : !checksDone ? t('check.complete_to_continue') : undefined,
           onClick: () => onAdvance('arrived_at_customer'),
         };
       case 'arrived_at_customer':
         return {
           label: t('active.deliver'),
-          enabled: true,
+          enabled: checksDone,
+          hint: !checksDone ? t('check.complete_to_continue') : undefined,
           onClick: () => setCodeOpen(true),
         };
       case 'problem':
@@ -169,6 +185,11 @@ export function ActiveOrderSheetContent({
             })}
           </ol>
         </div>
+
+        {/* Stage-aware checklist: items must be ticked before primary CTA enables. */}
+        {stage && checklist.length > 0 && (
+          <ChecklistBlock items={checklist} stage={stage} onToggle={onToggleCheck} />
+        )}
 
         {/* Pickup card — always visible */}
         <div className="rounded-2xl border border-gray-100 p-3 mb-2 bg-gradient-to-br from-white to-emerald-50/30">

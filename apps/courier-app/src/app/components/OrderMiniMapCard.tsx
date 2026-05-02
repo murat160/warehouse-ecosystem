@@ -1,4 +1,4 @@
-import { Check, CheckCircle2, Clock, MapPin, Navigation, Package, Store, Wallet, X } from 'lucide-react';
+import { Check, CheckCircle2, Clock, MapPin, Navigation, Package, Star, Store, Wallet, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useT } from '../i18n';
 import { isCustomerInfoUnlocked } from '../store/CourierStore';
@@ -97,7 +97,7 @@ export function OrderMiniMapCard({ order, mode, onDismiss, className = '' }: Pro
       className={`pointer-events-auto w-[200px] rounded-2xl shadow-lg overflow-hidden bg-white ${className}`}
       data-testid="order-mini-map-card"
     >
-      <div className={`bg-gradient-to-br ${accent} px-3 py-2 text-white`}>
+      <div className={`bg-gradient-to-br ${accent} px-3 py-2 text-white relative`}>
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse" />
           <span className="text-[11px] font-extrabold uppercase tracking-wide">{t(titleKey)}</span>
@@ -109,6 +109,15 @@ export function OrderMiniMapCard({ order, mode, onDismiss, className = '' }: Pro
           <Clock className="w-3.5 h-3.5" />
           <span>{order.etaMinutes} {t('units.min')}</span>
         </div>
+        {order.bonus > 0 && (
+          <div
+            className="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-extrabold leading-none shadow"
+            title={t('bonus.eligible')}
+          >
+            <Star className="w-3 h-3 fill-amber-950" />
+            +{order.bonus}
+          </div>
+        )}
       </div>
 
       <div className="px-3 py-2 space-y-1.5">

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import type {
-  ChatMessage, ChatThread, CourierProfile, CourierSettings, Order, OrderStatus, ProblemReport, ProblemType,
+  ChatMessage, ChatThread, ChecklistItem, ChecklistStage, CourierProfile, CourierSettings,
+  Order, OrderStatus, ProblemReport, ProblemType,
 } from './types';
 import { DEFAULT_SETTINGS, TRANSITIONS } from './types';
 import { audit } from '../lib/audit';
@@ -9,6 +10,61 @@ const DELIVERED_BANNER_MS = 8000;
 
 function generateCustomerCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+// ─── Checklist seeds ─────────────────────────────────────────
+// Items per stage. All required by default — UI gates the primary CTA on completion.
+const CHECKLIST_SEEDS: Record<ChecklistStage, { id: string; labelKey: string }[]> = {
+  go_pickup: [
+    { id: 'helmet',      labelKey: 'check.go_pickup.helmet' },
+    { id: 'route',       labelKey: 'check.go_pickup.route_clear' },
+    { id: 'bag_clean',   labelKey: 'check.go_pickup.bag_clean' },
+  ],
+  at_pickup: [
+    { id: 'greeted',     labelKey: 'check.at_pickup.greeted' },
+    { id: 'order_ready', labelKey: 'check.at_pickup.order_ready' },
+    { id: 'bag_intact',  labelKey: 'check.at_pickup.bag_intact' },
+  ],
+  picked_up: [
+    { id: 'bag_secured',     labelKey: 'check.picked_up.bag_secured' },
+    { id: 'address_checked', labelKey: 'check.picked_up.address_checked' },
+    { id: 'heading_out',     labelKey: 'check.picked_up.heading_out' },
+  ],
+  at_customer: [
+    { id: 'knocked',          labelKey: 'check.at_customer.knocked' },
+    { id: 'contents_complete', labelKey: 'check.at_customer.contents_complete' },
+    { id: 'code_asked',       labelKey: 'check.at_customer.code_asked' },
+  ],
+};
+
+function buildChecklist(stage: ChecklistStage): ChecklistItem[] {
+  return CHECKLIST_SEEDS[stage].map(seed => ({
+    ...seed,
+    required: true,
+    checked: false,
+    stage,
+  }));
+}
+
+/** Active checklist stage for the current order status. */
+export function checklistStageForStatus(status: OrderStatus | undefined): ChecklistStage | null {
+  switch (status) {
+    case 'accepted':
+    case 'going_to_pickup':       return 'go_pickup';
+    case 'arrived_at_pickup':
+    case 'package_count_required': return 'at_pickup';
+    case 'picked_up':
+    case 'going_to_customer':     return 'picked_up';
+    case 'arrived_at_customer':   return 'at_customer';
+    default: return null;
+  }
+}
+
+export function allRequiredChecked(items: ChecklistItem[] | undefined, stage: ChecklistStage | null): boolean {
+  if (!stage || !items) return true;
+  const stageItems = items.filter(i => i.stage === stage && i.required);
+  if (stageItems.length === 0) return true;
+  return stageItems.every(i => i.checked);
 }
 
 // ─── Mock seed ────────────────────────────────────────────────
@@ -89,6 +145,8 @@ type Action =
   | { type: 'SET_PROOF'; photo?: string; code?: string; comment?: string }
   | { type: 'COMPLETE_ORDER'; code: string }
   | { type: 'CLEAR_LAST_DELIVERED' }
+  | { type: 'TOGGLE_CHECK'; itemId: string }
+  | { type: 'ENSURE_STAGE_CHECKLIST'; stage: ChecklistStage }
   | { type: 'ADD_PROBLEM'; problem: ProblemReport }
   | { type: 'ADD_MESSAGE'; message: ChatMessage }
   | { type: 'MARK_MESSAGES_VIEWED'; channelKey: string }
@@ -251,6 +309,8 @@ function reducer(state: State, action: Action): State {
         status: 'accepted',
         acceptedAt: Date.now(),
         customerCode: action.customerCode,
+        // Seed the first stage checklist immediately on accept.
+        checklist: buildChecklist('go_pickup'),
       };
       return { ...state, activeOrder: accepted, pendingOffer: null };
     }
@@ -265,9 +325,15 @@ function reducer(state: State, action: Action): State {
         });
         return state;
       }
+      // Lazily attach the checklist for the new stage so the UI always has one.
+      const newStage = checklistStageForStatus(action.status);
+      const existing = state.activeOrder.checklist ?? [];
+      const checklist = newStage && !existing.some(i => i.stage === newStage)
+        ? [...existing, ...buildChecklist(newStage)]
+        : existing;
       return {
         ...state,
-        activeOrder: { ...state.activeOrder, status: action.status },
+        activeOrder: { ...state.activeOrder, status: action.status, checklist },
       };
     }
 
@@ -328,6 +394,34 @@ function reducer(state: State, action: Action): State {
     case 'CLEAR_LAST_DELIVERED':
       return { ...state, lastDelivered: null, lastDeliveredAt: null };
 
+    case 'TOGGLE_CHECK': {
+      if (!state.activeOrder?.checklist) return state;
+      return {
+        ...state,
+        activeOrder: {
+          ...state.activeOrder,
+          checklist: state.activeOrder.checklist.map(i =>
+            i.id === action.itemId ? { ...i, checked: !i.checked } : i,
+          ),
+        },
+      };
+    }
+
+    case 'ENSURE_STAGE_CHECKLIST': {
+      if (!state.activeOrder) return state;
+      const existing = state.activeOrder.checklist ?? [];
+      // Don't duplicate items if they already exist for this stage.
+      const hasStage = existing.some(i => i.stage === action.stage);
+      if (hasStage) return state;
+      return {
+        ...state,
+        activeOrder: {
+          ...state.activeOrder,
+          checklist: [...existing, ...buildChecklist(action.stage)],
+        },
+      };
+    }
+
     case 'ADD_PROBLEM':
       return { ...state, problems: [action.problem, ...state.problems] };
 
@@ -375,6 +469,10 @@ interface Api {
   unreadCount: (channelKey: string) => number;
   /** Build a list of chat threads (active and closed) for the chat list page. */
   chatThreads: () => { active: ChatThread[]; closed: ChatThread[] };
+  /** Toggle one checklist item on the active order. */
+  toggleCheck: (itemId: string) => void;
+  /** Lazily ensure the checklist for a stage exists (creates if missing). */
+  ensureStageChecklist: (stage: ChecklistStage) => void;
 }
 
 const Ctx = createContext<Api | null>(null);
@@ -547,6 +645,12 @@ export function CourierStoreProvider({ children }: { children: ReactNode }) {
     unreadCount: (channelKey) =>
       state.messages.filter(m => m.channelKey === channelKey && m.from !== 'courier' && m.status !== 'viewed').length,
     chatThreads: () => buildChatThreads(state),
+    toggleCheck: (itemId: string) => {
+      audit(state.courier?.id ?? 'unknown', 'order.check.toggle', { itemId });
+      dispatch({ type: 'TOGGLE_CHECK', itemId });
+    },
+    ensureStageChecklist: (stage: ChecklistStage) =>
+      dispatch({ type: 'ENSURE_STAGE_CHECKLIST', stage }),
   }), [state]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

@@ -22,7 +22,7 @@ export function CourierMap() {
   const navigate = useNavigate();
   const {
     state, setOnline, acceptOffer, declineOffer, transition,
-    setPackageData, completeOrder, reportProblem, clearLastDelivered,
+    setPackageData, completeOrder, reportProblem, clearLastDelivered, toggleCheck,
   } = useCourierStore();
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -83,6 +83,7 @@ export function CourierMap() {
   const handlePackageData = (count: number, photo?: string, comment?: string) => setPackageData(count, photo, comment);
   const handleComplete = (code: string) => completeOrder(code);
   const handleProblem = (d: { type: ProblemType; description: string; photos: string[]; videos: string[] }) => reportProblem(d);
+  const handleToggleCheck = (itemId: string) => toggleCheck(itemId);
 
   const phaseForMap: 'pickup' | 'on_way' | 'delivered' = state.activeOrder
     ? (['accepted','going_to_pickup','arrived_at_pickup','package_count_required'].includes(state.activeOrder.status) ? 'pickup'
@@ -185,8 +186,11 @@ export function CourierMap() {
         <DrawerPrimitive.Portal>
           <DrawerPrimitive.Content
             data-vaul-drawer-direction="bottom"
-            className="fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-3xl bg-white shadow-[0_-12px_30px_rgba(0,0,0,0.15)] outline-none mx-auto w-full max-w-[420px]"
-            style={{ maxHeight: '95vh', '--drawer-snap-h': typeof snap === 'number' ? `${snap * 100}vh` : '55vh' } as React.CSSProperties}
+            className="fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-3xl bg-white shadow-[0_-12px_30px_rgba(0,0,0,0.15)] outline-none mx-auto w-full max-w-[440px]"
+            style={{
+              maxHeight: '95dvh',
+              '--drawer-snap-h': typeof snap === 'number' ? `${snap * 100}dvh` : '55dvh',
+            } as React.CSSProperties}
           >
             <DrawerPrimitive.Title className="sr-only">{t('app.title')}</DrawerPrimitive.Title>
             <DrawerPrimitive.Description className="sr-only">{t('app.title')}</DrawerPrimitive.Description>
@@ -200,6 +204,7 @@ export function CourierMap() {
               onComplete={handleComplete}
               onProblem={handleProblem}
               onAccept={handleAccept}
+              onToggleCheck={handleToggleCheck}
             />
           </DrawerPrimitive.Content>
         </DrawerPrimitive.Portal>

@@ -83,6 +83,8 @@ export interface Order {
   proofComment?: string;
   /** 4-digit code that the customer sees in their app and dictates to the courier on handover. */
   customerCode?: string;
+  /** Required pre-flight checklist for the current stage. CTA stays disabled until all required items are ticked. */
+  checklist?: ChecklistItem[];
   acceptedAt?: number;
   pickedUpAt?: number;
   deliveredAt?: number;
@@ -165,3 +167,15 @@ export const DEFAULT_SETTINGS: CourierSettings = {
   maxDistanceKm: 5,
   minPayoutPln: 15,
 };
+
+/** Wolt-style mandatory acknowledgement on each active-order stage. */
+export type ChecklistStage = 'go_pickup' | 'at_pickup' | 'picked_up' | 'at_customer';
+
+export interface ChecklistItem {
+  id: string;
+  /** TKey rendered by the UI — labels live in i18n, not in the store. */
+  labelKey: string;
+  required: boolean;
+  checked: boolean;
+  stage: ChecklistStage;
+}

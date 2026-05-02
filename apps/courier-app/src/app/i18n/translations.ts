@@ -137,6 +137,14 @@ export type TKey =
   | 'mini.title.delivered' | 'mini.delivered_in' | 'mini.view_receipt'
   // proof / confirmation extra
   | 'proof.code_required' | 'proof.code_help' | 'proof.ask_customer'
+  // stage checklist
+  | 'check.title' | 'check.required_hint' | 'check.complete_to_continue'
+  | 'check.go_pickup.helmet' | 'check.go_pickup.route_clear' | 'check.go_pickup.bag_clean'
+  | 'check.at_pickup.greeted' | 'check.at_pickup.order_ready' | 'check.at_pickup.bag_intact'
+  | 'check.picked_up.bag_secured' | 'check.picked_up.address_checked' | 'check.picked_up.heading_out'
+  | 'check.at_customer.knocked' | 'check.at_customer.contents_complete' | 'check.at_customer.code_asked'
+  // bonus / reward
+  | 'bonus.points' | 'bonus.star' | 'bonus.eligible'
 
 export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
   ru: {
@@ -503,6 +511,26 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
     'proof.code_required': 'Введите код клиента',
     'proof.code_help': 'Клиент видит 4-значный код в своём приложении',
     'proof.ask_customer': 'Попросите клиента продиктовать код',
+
+    'check.title': 'Контрольный чек-лист',
+    'check.required_hint': 'Отметьте все пункты, чтобы продолжить',
+    'check.complete_to_continue': 'Завершите чек-лист, чтобы продолжить',
+    'check.go_pickup.helmet': 'Шлем и сумка готовы',
+    'check.go_pickup.route_clear': 'Маршрут проверен',
+    'check.go_pickup.bag_clean': 'Сумка чистая и тёплая/холодная',
+    'check.at_pickup.greeted': 'Поздоровался с персоналом, назвал номер заказа',
+    'check.at_pickup.order_ready': 'Заказ готов и упакован',
+    'check.at_pickup.bag_intact': 'Упаковка не повреждена',
+    'check.picked_up.bag_secured': 'Сумка надёжно закрыта',
+    'check.picked_up.address_checked': 'Адрес клиента сверен',
+    'check.picked_up.heading_out': 'Выехал к клиенту',
+    'check.at_customer.knocked': 'Позвонил/постучал клиенту',
+    'check.at_customer.contents_complete': 'Передал заказ полностью',
+    'check.at_customer.code_asked': 'Спросил код у клиента',
+
+    'bonus.points': 'Бонусные баллы',
+    'bonus.star': 'Бонус',
+    'bonus.eligible': 'Заказ с бонусом',
   },
 
   tk: {
@@ -869,6 +897,26 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
     'proof.code_required': 'Müşderiniň kodyny giriziň',
     'proof.code_help': 'Müşderi 4 sanly kody öz programmasynda görýär',
     'proof.ask_customer': 'Müşderiden kody aýtmagyny soraň',
+
+    'check.title': 'Barlag sanawy',
+    'check.required_hint': 'Dowam etmek üçin ähli punktlary belläň',
+    'check.complete_to_continue': 'Dowam etmek üçin sanawy tamamlaň',
+    'check.go_pickup.helmet': 'Şlem we sumka taýýar',
+    'check.go_pickup.route_clear': 'Marşrut barlandy',
+    'check.go_pickup.bag_clean': 'Sumka arassa we yssy/sowuk',
+    'check.at_pickup.greeted': 'Işgär bilen salamlaşdym, sargyt belgisini aýtdym',
+    'check.at_pickup.order_ready': 'Sargyt taýýar we gaplanan',
+    'check.at_pickup.bag_intact': 'Gap zaýalanmadyk',
+    'check.picked_up.bag_secured': 'Sumka berk ýapyk',
+    'check.picked_up.address_checked': 'Müşderiniň salgysy barlandy',
+    'check.picked_up.heading_out': 'Müşderä ugradym',
+    'check.at_customer.knocked': 'Müşderä jaň etdim/gapyny kakdym',
+    'check.at_customer.contents_complete': 'Sargydy doly berdim',
+    'check.at_customer.code_asked': 'Müşderiden kody soradym',
+
+    'bonus.points': 'Bonus baly',
+    'bonus.star': 'Bonus',
+    'bonus.eligible': 'Bonusly sargyt',
   },
 
   tr: {
@@ -1235,6 +1283,26 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
     'proof.code_required': 'Müşteri kodunu girin',
     'proof.code_help': 'Müşteri 4 haneli kodu kendi uygulamasında görür',
     'proof.ask_customer': 'Müşteriden kodu söylemesini isteyin',
+
+    'check.title': 'Kontrol listesi',
+    'check.required_hint': 'Devam etmek için tüm maddeleri işaretleyin',
+    'check.complete_to_continue': 'Devam etmek için listeyi tamamlayın',
+    'check.go_pickup.helmet': 'Kask ve çanta hazır',
+    'check.go_pickup.route_clear': 'Rota kontrol edildi',
+    'check.go_pickup.bag_clean': 'Çanta temiz ve sıcak/soğuk',
+    'check.at_pickup.greeted': 'Personeli selamladım, sipariş numarasını söyledim',
+    'check.at_pickup.order_ready': 'Sipariş hazır ve paketlenmiş',
+    'check.at_pickup.bag_intact': 'Paket sağlam',
+    'check.picked_up.bag_secured': 'Çanta güvenli şekilde kapalı',
+    'check.picked_up.address_checked': 'Müşteri adresi kontrol edildi',
+    'check.picked_up.heading_out': 'Müşteriye yola çıktım',
+    'check.at_customer.knocked': 'Müşteriyi aradım/kapıyı çaldım',
+    'check.at_customer.contents_complete': 'Siparişi eksiksiz teslim ettim',
+    'check.at_customer.code_asked': 'Müşteriden kodu istedim',
+
+    'bonus.points': 'Bonus puanları',
+    'bonus.star': 'Bonus',
+    'bonus.eligible': 'Bonuslu sipariş',
   },
 
   en: {
@@ -1601,5 +1669,25 @@ export const TRANSLATIONS: Record<Lang, Record<TKey, string>> = {
     'proof.code_required': 'Enter customer code',
     'proof.code_help': 'The customer sees a 4-digit code in their app',
     'proof.ask_customer': 'Ask the customer to say the code',
+
+    'check.title': 'Pre-flight checklist',
+    'check.required_hint': 'Tick every item to continue',
+    'check.complete_to_continue': 'Complete the checklist to continue',
+    'check.go_pickup.helmet': 'Helmet and bag ready',
+    'check.go_pickup.route_clear': 'Route reviewed',
+    'check.go_pickup.bag_clean': 'Bag clean and hot/cold-ready',
+    'check.at_pickup.greeted': 'Greeted staff, gave order number',
+    'check.at_pickup.order_ready': 'Order ready and packed',
+    'check.at_pickup.bag_intact': 'Packaging intact',
+    'check.picked_up.bag_secured': 'Bag securely closed',
+    'check.picked_up.address_checked': 'Customer address checked',
+    'check.picked_up.heading_out': 'On my way to customer',
+    'check.at_customer.knocked': 'Called / knocked at customer',
+    'check.at_customer.contents_complete': 'Handed over the full order',
+    'check.at_customer.code_asked': 'Asked the customer for the code',
+
+    'bonus.points': 'Bonus points',
+    'bonus.star': 'Bonus',
+    'bonus.eligible': 'Bonus order',
   },
 };

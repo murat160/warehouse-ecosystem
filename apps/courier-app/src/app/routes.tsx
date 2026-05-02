@@ -32,9 +32,15 @@ function LoadingScreen() {
 }
 
 function MobileFrame({ children }: { children: ReactNode }) {
+  // No max-h: on tall desktop screens the previous 900px cap clipped the bottom
+  // sheet and made the map look cropped. Use the full viewport height (with
+  // safe-area inset) and a phone-shaped max-width.
   return (
-    <div className="min-h-screen w-full bg-gray-900 flex items-center justify-center">
-      <div className="relative w-full max-w-[420px] h-screen max-h-[900px] bg-white overflow-hidden shadow-2xl md:rounded-3xl">
+    <div className="min-h-[100dvh] w-full bg-gray-900 flex items-stretch md:items-center justify-center">
+      <div
+        className="relative w-full max-w-[440px] bg-white overflow-hidden shadow-2xl md:rounded-3xl"
+        style={{ height: '100dvh' }}
+      >
         <Suspense fallback={<LoadingScreen />}>{children}</Suspense>
       </div>
     </div>
