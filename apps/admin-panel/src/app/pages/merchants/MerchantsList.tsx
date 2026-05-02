@@ -17,6 +17,12 @@ import {
   getStatusConfig, getRiskConfig, getTypeLabel, formatCurrency, formatNumber, formatTime, getFulfillmentLabel,
 } from '../../data/merchants-mock';
 import { toast } from 'sonner';
+import { PreciseLocationPicker } from '../../components/location/PreciseLocationPicker';
+import {
+  emptyLocation, isLocationUsable, assertCanActivate,
+  type Location,
+} from '../../data/location';
+import { useI18n } from '../../i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,10 +61,16 @@ function useEscClose(onClose: () => void) {
 
 // ─── Create Seller Modal ──────────────────────────────────────────────────────
 
-const STEPS = ['Основное', 'Контакты', 'Тарифы', 'Итог'];
+/**
+ * 5-step wizard. Step 2 ("Точка") is the new map step — required when the
+ * operator picks status='active'. For status='pending' the location step
+ * is encouraged but not blocking, since pending sellers don't go live.
+ */
+const STEPS = ['Основное', 'Контакты', 'Точка', 'Тарифы', 'Итог'];
 
 function CreateSellerModal({ onClose, onCreated }: { onClose: () => void; onCreated: (s: SellerSummary) => void }) {
   useEscClose(onClose);
+  const { t } = useI18n();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
@@ -76,7 +88,10 @@ function CreateSellerModal({ onClose, onCreated }: { onClose: () => void; onCrea
   const [cities, setCities] = useState('');
   const [regions, setRegions] = useState('');
 
-  // Step 2 — Tariffs
+  // Step 2 — Location (new)
+  const [sellerLocation, setSellerLocation] = useState<Location>(emptyLocation());
+
+  // Step 3 — Tariffs
   const [taxId, setTaxId]       = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [commission, setCommission] = useState('12');
@@ -94,6 +109,14 @@ function CreateSellerModal({ onClose, onCreated }: { onClose: () => void; onCrea
       if (!cities.trim()) return 'Укажите хотя бы один город';
     }
     if (step === 2) {
+      // Activation gate: if the operator chose status='active', a confirmed
+      // location is mandatory. Pending/paused sellers can still proceed.
+      if (status === 'active') {
+        const err = assertCanActivate(sellerLocation, 'seller');
+        if (err) return t(err as any);
+      }
+    }
+    if (step === 3) {
       if (!taxId.trim()) return 'Укажите ИНН';
       const comm = parseFloat(commission);
       if (isNaN(comm) || comm < 0 || comm > 50) return 'Комиссия от 0 до 50%';
@@ -313,8 +336,21 @@ function CreateSellerModal({ onClose, onCreated }: { onClose: () => void; onCrea
               </div>
             )}
 
-            {/* ── STEP 2: Tariffs ── */}
+            {/* ── STEP 2: Precise location ── */}
             {step === 2 && (
+              <div style={{display:'contents'}}>
+                <PreciseLocationPicker
+                  value={sellerLocation}
+                  onChange={setSellerLocation}
+                  mode="seller"
+                  cityHint={cities.split(',')[0]?.trim()}
+                  required={status === 'active'}
+                />
+              </div>
+            )}
+
+            {/* ── STEP 3: Tariffs ── */}
+            {step === 3 && (
               <div style={{display:'contents'}}>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -355,8 +391,8 @@ function CreateSellerModal({ onClose, onCreated }: { onClose: () => void; onCrea
               </div>
             )}
 
-            {/* ── STEP 3: Summary ── */}
-            {step === 3 && (
+            {/* ── STEP 4: Summary ── */}
+            {step === 4 && (
               <div className="space-y-4">
                 <div className="flex items-center gap-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white shrink-0">

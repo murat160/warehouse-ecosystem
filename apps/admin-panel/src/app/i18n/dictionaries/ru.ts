@@ -314,6 +314,43 @@ export const ru = {
 
   // Currency code (rendered alongside numeric amount)
   'currency.code':                 '₽',
+
+  // ── Location picker (used in seller / pickup point / warehouse forms) ──
+  'location.title':                  'Адрес и точка на карте',
+  'location.subtitle':               'Поставьте маркер точно у двери / входа',
+  'location.field.fullAddress':      'Полный адрес',
+  'location.field.postalCode':       'Индекс',
+  'location.field.country':          'Страна',
+  'location.field.city':             'Город',
+  'location.field.district':         'Район',
+  'location.field.street':           'Улица',
+  'location.field.building':         'Дом',
+  'location.field.entranceHint':     'Подсказка входа (этаж, дверь, ориентир)',
+  'location.field.lat':              'Широта',
+  'location.field.lng':              'Долгота',
+  'location.search.placeholder':     'Введите адрес для поиска…',
+  'location.search.button':          'Найти по адресу',
+  'location.search.searching':       'Поиск…',
+  'location.search.notFound':        'Адрес не найден',
+  'location.search.tip':             'Подсказка: можно сразу кликнуть по карте, адрес подтянется автоматически.',
+  'location.confirm':                'Подтвердить точку',
+  'location.confirmed':              'Точка подтверждена',
+  'location.reset':                  'Сбросить точку',
+  'location.openExternal':           'Открыть на карте',
+  'location.status.not_set':         'Точка не указана',
+  'location.status.found_by_address':'Найдено по адресу',
+  'location.status.adjusted_manually':'Исправлено вручную',
+  'location.status.confirmed':       'Точка подтверждена',
+  'location.warning.notConfirmed':   'Точка не подтверждена. Курьер не сможет приехать к точному входу.',
+  'location.warning.movedAfterConfirm':'Маркер передвинут — подтвердите точку заново.',
+  'location.help.clickMap':          'Кликните по карте, чтобы поставить маркер.',
+  'location.help.dragMarker':        'Перетащите маркер прямо ко входу.',
+  'location.help.reverseGeocoding':  'Подтягиваем адрес по координатам…',
+  'location.error.seller_not_confirmed':    'Нельзя активировать продавца без подтверждённой точки. Курьер не сможет приехать к точному входу.',
+  'location.error.pvz_not_confirmed':       'Нельзя активировать ПВЗ без подтверждённой точки. Клиент не сможет найти пункт выдачи.',
+  'location.error.warehouse_not_confirmed': 'Нельзя активировать склад без подтверждённой точки. Складской курьер не сможет построить маршрут.',
+  'location.coordsLabel':             'Координаты',
+  'location.savedAt':                 'Сохранено',
 } as const;
 
 /** Type derived from `ru` — every other dictionary must implement this exact shape. */

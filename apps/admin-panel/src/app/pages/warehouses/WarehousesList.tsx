@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Search, Plus, Warehouse, Package, TrendingUp, AlertCircle, X } from 'lucide-react';
+import { PreciseLocationPicker } from '../../components/location/PreciseLocationPicker';
+import {
+  emptyLocation, isLocationUsable, assertCanActivate,
+  type Location,
+} from '../../data/location';
+import { useI18n } from '../../i18n';
 
 interface WarehouseData {
   id: string;
@@ -15,6 +21,8 @@ interface WarehouseData {
   inboundToday: number;
   outboundToday: number;
   pickingInProgress: number;
+  /** Confirmed coordinates of the warehouse gate / dock entrance. */
+  location?: Location;
 }
 
 const warehouses: WarehouseData[] = [
@@ -24,9 +32,11 @@ const warehouses: WarehouseData[] = [
 ];
 
 export function WarehousesList() {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', code: '', city: '', type: 'warehouse', capacity: '5000' });
+  const [whLocation, setWhLocation] = useState<Location>(emptyLocation());
   const [extraWarehouses, setExtraWarehouses] = useState<WarehouseData[]>([]);
 
   const allWarehouses = [...extraWarehouses, ...warehouses];
@@ -116,12 +126,13 @@ export function WarehousesList() {
         ))}
       </div>
 
-      {/* Add Warehouse Modal */}
+      {/* Add Warehouse Modal — basic info + precise map point in a single
+          scrollable form (warehouses don't have a multi-step wizard) */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
               <h2 className="font-bold text-gray-900">Добавить склад</h2>
               <button onClick={() => setShowAddModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
@@ -180,16 +191,36 @@ export function WarehousesList() {
                   />
                 </div>
               </div>
-              <div className="flex gap-3 pt-2">
+
+              {/* New: precise map point — required to activate. */}
+              <div className="pt-3 border-t border-gray-100">
+                <PreciseLocationPicker
+                  value={whLocation}
+                  onChange={setWhLocation}
+                  mode="warehouse"
+                  cityHint={addForm.city}
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
                 <button onClick={() => setShowAddModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50 transition-colors">Отмена</button>
                 <button
                   onClick={() => {
                     if (!addForm.name || !addForm.code || !addForm.city) { toast.error('Заполните обязательные поля'); return; }
+                    // Activation gate: warehouses can never go straight to
+                    // active without a confirmed coordinate. Operators that
+                    // need a draft should switch status='maintenance'.
+                    const err = assertCanActivate(whLocation, 'warehouse');
+                    if (err) {
+                      toast.error(t(err as any));
+                      return;
+                    }
                     const newWh: WarehouseData = {
                       id: `wh-${Date.now()}`,
                       code: addForm.code,
                       name: addForm.name,
-                      city: addForm.city,
+                      city: whLocation.city || addForm.city,
                       type: addForm.type as WarehouseData['type'],
                       status: 'active',
                       capacity: Number(addForm.capacity) || 5000,
@@ -197,11 +228,13 @@ export function WarehousesList() {
                       inboundToday: 0,
                       outboundToday: 0,
                       pickingInProgress: 0,
+                      location: whLocation,
                     };
                     setExtraWarehouses(prev => [newWh, ...prev]);
                     setShowAddModal(false);
                     setAddForm({ name: '', code: '', city: '', type: 'warehouse', capacity: '5000' });
-                    toast.success('Склад создан', { description: `${newWh.code} — ${newWh.name} добавлен в систему` });
+                    setWhLocation(emptyLocation());
+                    toast.success('Склад создан', { description: `${newWh.code} — ${newWh.name}` });
                   }}
                   className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
                 >
